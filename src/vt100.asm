@@ -4589,7 +4589,7 @@ accum_bits:	dad	h		; shift HL left, clearing bit 0 of L
 ; in the nvr_bits array, including the complete C1, C2, C3 for each NVR latch byte.
 ;
 set_nvr_addr:	lda	nvr_addr
-set_nvr_addr_a:	mvi	b,-1		; The address seems to be broken up into tens and units
+set_nvr_addr_a:	mvi	b,-1		; The address is broken up into tens and units
 addr_tens:	inr	b
 		sui	0ah
 		jp	addr_tens
