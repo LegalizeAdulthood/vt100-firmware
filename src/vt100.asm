@@ -977,7 +977,7 @@ normal_mapping:	mov	a,d		; A <- character map
 		jz	not_uk_enc
 		cpi	23h		; Only difference between UK and ASCII is '#', 023h
 		jnz	not_uk_enc	; So leave everything else untouched
-		mvi	c,1eh		; '#' becomes '£', at ROM glyph 01eh (TM Table 4-6-18, p.4-78)
+		mvi	c,1eh		; '#' becomes '£', at ROM glyph 01eh (TM Figure 4-6-18, p.4-78)
 not_uk_enc:	lda	char_rvid	; A <- 0 = normal video, 80h = reverse video
 		ora	c
 		mov	c,a		; C <- ROM glyph + normal/reverse video bit
