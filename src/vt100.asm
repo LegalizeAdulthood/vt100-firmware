@@ -1,7 +1,7 @@
 ;
 ;  DZ80 V3.4.1 8080 Disassembly of VT100.bin
 ;  Initial disassembly: 2021-12-03 08:56
-;  Last updated:        2022-02-28 21:27
+;  Last updated:        2022-08-09 11:00
 ;
 ;  Comments by Paul Flo Williams <paul@frixxon.co.uk>,
 ;  released under Creative Commons Attribution 4.0 International licence.
@@ -749,7 +749,7 @@ key_scan_col7:	db	 0b9h, 0b3h, 0b6h, 0adh,    0,  '/',  'm',  20h,  'v',  'c',  
 vertical_int:	push	psw
 		push	h
 		push	d
-		call	shuffle		; think this is line shuffle
+		call	shuffle		; finalise shuffle, if ready
 		push	b
 		mvi	a,9		; "clear vertical frequency interrupt"
 		out	iow_dc012
@@ -5764,7 +5764,10 @@ iow_brightness	equ	42h
 ;
 ;	Not defined in TM - this from print set MP-00633-00.
 ;	Bit 4 is not connected. TM §4.2.7 says it was intended to disable receiver interrupts,
-;		though it isn't used.
+;		though it isn't used. In the earliest print set available, this drives a signal
+;		called BV2 REC INT ENA H, which is ANDed with the "Receive Ready" BV3 REC FLAG H
+;		signal from the PUSART.
+;
 ;	Bit 5 drives BV2 /SPDS (active low), which goes to the EIA connector as "speed select"
 ;	Other modem signals are driven by PUSART command words.
 ;
