@@ -21,11 +21,13 @@
 
 #include "coverage.h"
 #include "er1400.h"
-#include "vt100-charset-rom.h"
+
+uint8_t chargen[2048];
+uint8_t alt_chargen[2048];
 
 int opt_coverage = 0;
 
-FILE *logmem;
+//FILE *logmem;
 
 const char *c0_names[32] = {
     "NUL",  "SOH",  "STX",  "ETX",  "EOT",  "ENQ",  "ACK",  "BEL",
@@ -46,6 +48,10 @@ unsigned long next_vbi = 46080;
 unsigned long next_reci = 0;
 unsigned long next_kbdi = 0;
 unsigned long next_cov = 10000;
+// Absolute number of cycles when we last drew the screen. Used at the beginning of execution
+// when we'd like to know about the keyboard LEDs, but there haven't been any video interrrupts
+// yet.
+unsigned long last_screen = 0;
 unsigned long command_pause = 10000000;
 // With plain text, autowrap and jump scrolling, rx_gap can be reduced to 3000 cycles (1ms) without ever
 // exhausting the receive buffer (and causing the terminal to send XOFF).
@@ -152,7 +158,7 @@ static uint8_t rb(void *userdata __attribute__ ((unused)), uint16_t addr) {
 }
 
 static void wb(void* userdata __attribute__ ((unused)), uint16_t addr, uint8_t val) {
-    fprintf(logmem, "W %04x %02x\n", (unsigned int)addr, (unsigned int)val);
+    //fprintf(logmem, "W %04x %02x\n", (unsigned int)addr, (unsigned int)val);
     memory[addr] = val;
 }
 
@@ -554,11 +560,10 @@ static uint16_t dma_rw(const i8080 *c, uint16_t addr) {
 // and terminal starts sending XOFFs when you think it's just displaying characters. There can
 // also be a display before operations like clearing the screen too.
 //
-// Dealing with the alternate character ROM is missed out, as this has no effect on code coverage.
-//
 #define GL_ATTR_BLINK(c) (((c) & 1) == 0)
 #define GL_ATTR_UNDERSCORE(c) (((c) & 2) == 0)
 #define GL_ATTR_BOLD(c) (((c) & 4) == 0)
+#define GL_ATTR_ALT(c) (((c) & 8) == 0)
 
 #define GL_BASE_ATTR(c) (((c) & 0x80) != 0)
 
@@ -576,23 +581,16 @@ static void sdl_screen(const i8080 *c, SDL_Renderer *rend)
     int xo = 20; // room for symbols on left?
     int yo = 0;
     int margin = 6;
-    SDL_Color black  = {   0,   0,   0, 255 };
-    SDL_Color dull_green = { 0, 64, 0, 255 };
-    SDL_Color grey50 = { 128, 128, 128, 255 };
-    SDL_Color grey75 = { 192, 192, 192, 255 };
-    SDL_Color white  = { 255, 255, 255, 255 };
-    SDL_Color orange = { 226,  87,  20, 255 };
+    SDL_Color black  =      {   0,   0,   0, 255 };
+    SDL_Color dull_orange = {  57,  22,   5, 255 };
+    SDL_Color grey50 =      { 128, 128, 128, 255 };
+    SDL_Color grey75 =      { 192, 192, 192, 255 };
+    SDL_Color white  =      { 255, 255, 255, 255 };
+    SDL_Color orange =      { 226,  87,  20, 255 };
 
     SDL_Rect wholescr = { 0, 0, xo + 10 * 80 + 2 * margin, yo + SCREEN_LINES * 20 + 40 };
     SDL_SetRenderDrawColor(rend, black.r, black.g, black.b, black.a);
     SDL_RenderFillRect(rend, &wholescr);
-
-    // If we want to shade where the raster will be drawn, use these three lines
-    if (0) {
-        SDL_Rect raster = { xo, yo, 10 * 80 + 2 * margin, SCREEN_LINES * 20 + 2 * margin };
-        SDL_SetRenderDrawColor(rend, dull_green.r, dull_green.g, dull_green.b, dull_green.a);
-        SDL_RenderFillRect(rend, &raster);
-    }
 
     SDL_SetRenderDrawColor(rend, black.r, black.g, black.b, black.a);
     SDL_Rect statarea = { 0, yo + SCREEN_LINES * 20 + 2 * margin, xo + 10 * 80, 40 };
@@ -634,10 +632,13 @@ static void sdl_screen(const i8080 *c, SDL_Renderer *rend)
 
     int dots_per_char = 10;
     int chars_per_line = 80;
+    double column_scale = 1.0;
 
+    // Perform rather crude scaling of x-axis for 132 columns
     if (dc011_132_columns) {
         dots_per_char = 9;
         chars_per_line = 132;
+        column_scale = (10 * 80) / (9 * 132);
     }
         
     uint16_t addr = 0x2000; // Video RAM always starts here 
@@ -645,6 +646,15 @@ static void sdl_screen(const i8080 *c, SDL_Renderer *rend)
     uint8_t next_line_attr = dmad >> 12;
     addr = 0x2000 | (dmad & 0xfff);
 
+    // Order of processing for glyphs is:
+    // 1. Retrieve bits
+    // 2. Copy lowest bit twice more for 80 columns, once more for 132 columns
+    // 3. Apply dot stretching. Photo evidence is that this is done before double-width expansion
+    //    on the VT100, unlike VT220, where expansion took place before dot stretching and could
+    //    therefore reveal more detail.
+    // 4. Double up the 9 or 10 bits, if necessary.
+    // 5. Apply to screen at given intensity, reversing as necessary and applying scan 9 underline
+    //
     while (y < SCREEN_LINES * 20) {
         // Whenever the scan count comes back round to zero, we need to DMA a new line of data
         // from video RAM. If we are jump scrolling, this will always occur every ten scan lines,
@@ -675,6 +685,13 @@ static void sdl_screen(const i8080 *c, SDL_Renderer *rend)
             next_line_attr = dmad >> 12;
             addr = 0x2000 | (dmad & 0xfff);
 
+            if (nchline == 255) {
+                SDL_Rect raster = { xo + margin, yo + margin, 10 * 80, SCREEN_LINES * 20 };
+                SDL_SetRenderDrawColor(rend, dull_orange.r, dull_orange.g, dull_orange.b, dull_orange.a);
+                SDL_RenderFillRect(rend, &raster);
+                break;
+            }
+
             // FIXME give up if no terminator found
             // Annotate line attributes
             char width_ch[4] = { 'B', 'T', '2', '1' };
@@ -686,7 +703,6 @@ static void sdl_screen(const i8080 *c, SDL_Renderer *rend)
 
         // Now we've got a new line of characters, if necessary, get onto processing the next scan line
         int x = 0;
-        int last_dot = 0; // for dot stretching (although, perhaps this should be determined by field colour?)
         uint8_t nbuf = 0; // offset into character buffer
         // Every glyph on this screen will produce the same number of pixels
         int numpix = dots_per_char;
@@ -696,7 +712,7 @@ static void sdl_screen(const i8080 *c, SDL_Renderer *rend)
         // comes from the previous character, so we prime the dots with a single zero and then only process
         // the first 9 dots (single width) or 19 dots (double width) from each subsequent character.
         uint32_t clocked_dots = 0;
-        while (x < dots_per_char * chars_per_line) { // if we find it necessary to visualise 132-column mode, this will change
+        while (x < dots_per_char * chars_per_line) {
             uint8_t glyph_base = 0;
             uint8_t glyph_attr = 0xff;
 
@@ -712,24 +728,20 @@ static void sdl_screen(const i8080 *c, SDL_Renderer *rend)
                 glyph_scan = glyph_scan / 2; // so we will fetch each of the first five scans twice
             else if ((line_attr & lnat_size_mask) == lnat_size_bottom)
                 glyph_scan = glyph_scan / 2 + 5; // fetch each of the second five scans twice
-            uint32_t glyph_dots = chargen[10 * glyph_code + glyph_scan];
+            uint32_t glyph_dots = 0;
+            if (GL_ATTR_ALT(glyph_attr))
+                glyph_dots = alt_chargen[16 * glyph_code | ((glyph_scan - 1) & 0xf)];
+            else
+                glyph_dots = chargen[16 * glyph_code | ((glyph_scan - 1) & 0xf)];
             // TM says underscore is on scanline 9 (1-based), so 8 for us. Confirmed by screen shots, showing
             // underscore directly below baseline of characters.
             // Need to duplicate the right-hand dot for line-joining, twice
             glyph_dots = (glyph_dots << 1) | (glyph_dots & 1); //  9 bits
             if (!dc011_132_columns)
                 glyph_dots = (glyph_dots << 1) | (glyph_dots & 1); // 10 bits
-            // Now forcing underscore after dot replication so we can try to not make
-            // it go beyond this character (too much). This effect is most visible when
-            // we have reverse and underscore. Perhaps the sequence should be revisited
-            // when dot stretching is moved earlier in the path, as it seems from screenshots
-            // that the VT100 performs this before double-width processing (so it always loses
-            // detail.)
-            if (glyph_scan == 8 &&
-                    ( GL_ATTR_UNDERSCORE(glyph_attr) ||
-                        (!dc012_basic_attribute_reverse && GL_BASE_ATTR(glyph_base))
-                    ) )
-                glyph_dots = 0x3fe; // force underscore - note missing least significant bit
+
+            // Dot stretching. The effect of this does not extend beyond the bits we already have.
+            glyph_dots |= glyph_dots >> 1;
 
             if ((line_attr & lnat_size_mask) != lnat_size_single) {
                 for (uint32_t glyph_mask = 1 << (dots_per_char - 1); glyph_mask != 0; glyph_mask >>= 1)
@@ -738,6 +750,13 @@ static void sdl_screen(const i8080 *c, SDL_Renderer *rend)
             else {
                 clocked_dots = (clocked_dots << numpix) | glyph_dots;
             }
+
+            // Force underscore, if necessary. This overrides the last dot from previous character,
+            // so that underscores are continuous. It also doesn't provide a last dot of one to the
+            // next character, so that underscore does not trail beyond a reversed field.
+            if (glyph_scan == 8 &&
+                    ( GL_ATTR_UNDERSCORE(glyph_attr) || (!dc012_basic_attribute_reverse && GL_BASE_ATTR(glyph_base)) ))
+                clocked_dots = 0x1ffffe;
 
             // Now send dots to screen with appropriate intensity, dot stretching and possible inversion
             // All the dots of a glyph will be sent with same intensity
@@ -757,24 +776,22 @@ static void sdl_screen(const i8080 *c, SDL_Renderer *rend)
                 intensity = white;
             SDL_SetRenderDrawColor(rend, intensity.r, intensity.g, intensity.b, intensity.a);
             int xoff = 0;
+            // Multiple attributes are involved in reversing bits in this cell. Let's work them out:
+            // 1. Reverse field (black on white characters)
+            // 2. If the base attribute means reverse and the base attribute is set
+            // 3. BUT - if (2) is true and the attribute is ALSO blink and the blink flip-flop is true, that reverses again.
+            // As these are constant for a given character position, resolve them ahread of time, so we can XON with each
+            // bit coming through:
+            int reverse = dc012_reverse_field ^ // (1)
+                    (dc012_basic_attribute_reverse && GL_BASE_ATTR(glyph_base)) ^ // (2)
+                    ( (dc012_basic_attribute_reverse && GL_BASE_ATTR(glyph_base)) &&    // (3)
+                        GL_ATTR_BLINK(glyph_attr) && dc012_blink_ff );                  // (3)
+                    
+            // Now draw all the bits except bit 0, which is reserved for the next character
             for (int bv = 1 << numpix; bv > 1; bv >>= 1) {
-                int ch_dot = (clocked_dots & bv) != 0;
-                // Now apply dot stretching
-                int dot = ch_dot | last_dot;
-                last_dot = ch_dot;
-                // And potentially reverse because of character or field attributes
-                dot = dot ^ (dc012_basic_attribute_reverse && GL_BASE_ATTR(glyph_base)) ^ dc012_reverse_field;
-                // Flick again if we are reversed and blink and blink ff
-                if ((dc012_basic_attribute_reverse && GL_BASE_ATTR(glyph_base)) && GL_ATTR_BLINK(glyph_attr) && dc012_blink_ff)
-                    dot = !dot;
-                if (dot && y >= 0) {
-                    if (dc011_132_columns) {
-                        SDL_RenderDrawPoint(rend, xo + margin + 0.67 * (x + xoff), yo + y + margin);
-                    }
-                    else {
-                        SDL_RenderDrawPoint(rend, xo + x + xoff + margin, yo + y + margin);
-                    }
-                }
+                int dot = ((clocked_dots & bv) != 0) ^ reverse;
+                if (dot && y >= 0)
+                    SDL_RenderDrawPoint(rend, xo + margin + column_scale * (x + xoff), yo + y + margin);
                 ++xoff;
             }
             x += numpix;
@@ -1079,36 +1096,46 @@ int parse_pause(char *cmd) {
 
 void coverage_read_sym(const char *fname) {
     FILE *symf = fopen(fname, "r");
-    uint16_t symaddr;
-    char symname[50];
-    for (int i = 0; i < 0x2000; ++i)
-        symtable[i] = 0;
-    while (fscanf(symf, "%4hx %s\n", &symaddr, symname) == 2) {
-        if (symaddr < 0x3000) {
-            symtable[symaddr] = malloc(strlen(symname) + 1);
-            if (symtable[symaddr])
-                strcpy(symtable[symaddr], symname);
+    if (symf) {
+        uint16_t symaddr;
+        char symname[50];
+        for (int i = 0; i < 0x2000; ++i)
+            symtable[i] = 0;
+        while (fscanf(symf, "%4hx %s\n", &symaddr, symname) == 2) {
+            if (symaddr < 0x3000) {
+                symtable[symaddr] = malloc(strlen(symname) + 1);
+                if (symtable[symaddr])
+                    strcpy(symtable[symaddr], symname);
+            }
         }
+        fclose(symf);
     }
-    fclose(symf);
+    else {
+        fprintf(stderr, "Warning: missing coverage symbols: %s\n", fname);
+    }
 }
 
 // Read the symbol table of equates
 void coverage_read_equ(const char *fname) {
     FILE *equf = fopen(fname, "r");
-    uint16_t symaddr;
-    char symname[50];
-    for (int i = 0; i < 0x1000; ++i)
-        equtable[i] = 0;
-    while (fscanf(equf, "%4hx %s\n", &symaddr, symname) == 2) {
-        if (symaddr >= equoffset && symaddr < equoffset + 0x1000) {
-            symaddr -= equoffset; // table offset
-            equtable[symaddr] = malloc(strlen(symname) + 1);
-            if (equtable[symaddr])
-                strcpy(equtable[symaddr], symname);
+    if (equf) {
+        uint16_t symaddr;
+        char symname[50];
+        for (int i = 0; i < 0x1000; ++i)
+            equtable[i] = 0;
+        while (fscanf(equf, "%4hx %s\n", &symaddr, symname) == 2) {
+            if (symaddr >= equoffset && symaddr < equoffset + 0x1000) {
+                symaddr -= equoffset; // table offset
+                equtable[symaddr] = malloc(strlen(symname) + 1);
+                if (equtable[symaddr])
+                    strcpy(equtable[symaddr], symname);
+            }
         }
+        fclose(equf);
     }
-    fclose(equf);
+    else {
+        fprintf(stderr, "Warning: missing coverage equates: %s\n", fname);
+    }
 }
 
 // One or both of the report_* booleans may be true. If they are both true,
@@ -1309,12 +1336,14 @@ static inline void run_test(i8080* const c, const char* filename, const char *te
         exit(1);
     }
 
-    coverage_read_sym("../../vt100.sym");
-    coverage_read_equ("../../vt100.equ");
+    coverage_read_sym("vt100.sym");
+    coverage_read_equ("vt100.equ");
 
     watch_init();
 
     test_finished = 0;
+
+    sdl_screen(c, scr_renderer);
 
     while (!test_finished) {
 
@@ -1348,6 +1377,11 @@ static inline void run_test(i8080* const c, const char* filename, const char *te
             //sdl_screen(c, scr_renderer);
             vbi = true;
             next_vbi += vbi_cycles;
+        }
+
+        if (c->cyc - last_screen > 100000) {
+            sdl_screen(c, scr_renderer);
+            last_screen = c->cyc;
         }
 
         if (next_reci != 0 && !reci && c->cyc > next_reci) {
@@ -1634,15 +1668,34 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    logmem = fopen("logmem.txt", "w");
+    //logmem = fopen("logmem.txt", "w");
 
     i8080 cpu;
     char testfile[255];
     if (argc > 1)
         strcpy(testfile, argv[1]);
     else
-        strcpy(testfile, "vt100-tests.txt"); 
+        strcpy(testfile, "t/vt100-tests.txt"); 
   
+    FILE *charf = fopen("../bin/23-018E2.bin", "rb");
+    if (charf) {
+        fread(chargen, 1, 2048, charf);
+        fclose(charf);
+    }
+    else {
+        fprintf(stderr, "Missing chargen ROM ../bin/23-018E2.bin\n");
+    }
+
+    charf = fopen("alt-chargen.bin", "rb");
+    if (charf) {
+        fread(alt_chargen, 1, 2048, charf);
+        fclose(charf);
+    }
+    else {
+        fprintf(stderr, "Missing alt chargen ROM alt-chargen.bin\n");
+        memset(alt_chargen, 0xff, 2048);
+    }
+
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         fprintf(stderr, "Could not init: %s\n", SDL_GetError());
     }
@@ -1654,14 +1707,14 @@ int main(int argc, char *argv[]) {
         SDL_SetWindowTitle(cov_window, "Awnty Coverage");
     }
 
-    int screen_scale = 2;
+    int screen_scale = 1;
     if (SDL_CreateWindowAndRenderer(screen_scale * (20 + 10 * 80 + 2 * 6), screen_scale * (0 + SCREEN_LINES * 20 + 40 + 2 * 6), 0, &scr_window, &scr_renderer) < 0) {
         fprintf(stderr, "Could not create window: %s\n", SDL_GetError());
     }
     SDL_SetWindowTitle(scr_window, "Awnty Screen");
     SDL_RenderSetScale(scr_renderer, screen_scale, screen_scale);
 
-    run_test(&cpu, "../../VT100.final.bin", testfile);
+    run_test(&cpu, "../bin/vt100.bin", testfile);
 
     free(memory);
     free(cpu.coverage);
