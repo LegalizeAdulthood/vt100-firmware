@@ -1,0 +1,2 @@
+serial 1b,"[6n"
+pause 1000000

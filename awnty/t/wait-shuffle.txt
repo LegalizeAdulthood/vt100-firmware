@@ -1,0 +1,8 @@
+# Try to provoke shuffle while smooth scroll is in progress (11ad-11be)
+# smooth scrolling
+serial 1b,"<" ANSI mode
+serial 1b,"[?4h",1b,"[24;1H","X"
+serial 0a,0a,0a,0a,0a,0a,0a,0a,0a,0a,0a,0a,0a,0a
+serial 1b,"#3" # provokes wait_for_x
+serial 0a,0a,0a,0a,0a,0a,0a,0a,0a,0a,0a,0a,0a,0a
+pause 10000000

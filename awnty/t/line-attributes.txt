@@ -1,0 +1,18 @@
+pause 1000000
+serial 1b,"#5abcdefghijklmnopqrstuvwxyz",7b,7c,7d,7e
+serial 0d,0a
+serial 1b,"#3abcdefghijklmnopqrstuvwxyz",7b,7c,7d,7e
+serial 0d,0a
+serial 1b,"#4abcdefghijklmnopqrstuvwxyz",7b,7c,7d,7e
+serial 0d,0a
+serial 1b,"#6abcdefghijklmnopqrstuvwxyz",7b,7c,7d,7e
+serial 0d,0a,1b,"(0"
+serial 1b,"#5abcdefghijklmnopqrstuvwxyz",7b,7c,7d,7e
+serial 0d,0a
+serial 1b,"#3abcdefghijklmnopqrstuvwxyz",7b,7c,7d,7e
+serial 0d,0a
+serial 1b,"#4abcdefghijklmnopqrstuvwxyz",7b,7c,7d,7e
+serial 0d,0a
+serial 1b,"#6abcdefghijklmnopqrstuvwxyz",7b,7c,7d,7e
+pause 10000000
+

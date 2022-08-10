@@ -1,0 +1,14 @@
+missing avo
+reset
+pause 5000000
+key 7b SETUP
+key 38 SETUP B
+# Default is block cursor, so move to switch block 1 position 4
+key 10 RIGHT
+key 10 RIGHT 1-1
+key 10 RIGHT 1-2
+key 10 RIGHT 1-3 screen dark/light
+key 10 RIGHT 1-4 cursor underline/block
+key 37 TOGGLE 1/0
+key 7b SETUP
+pause 10000000

@@ -1,0 +1,59 @@
+pause 1000000
+serial 1b,"[?4h",1b,"[?3l"
+serial "01",0d,0a
+serial "02",0d,0a
+serial "03",0d,0a
+serial "04",0d,0a
+serial "05",0d,0a
+serial "06",0d,0a
+serial "07",0d,0a
+serial "08",0d,0a
+serial "09",0d,0a
+serial "10",0d,0a
+serial 1b,"#3"," Terminals used to be able to",0d,0a
+serial 1b,"#4"," Terminals used to be able to",0d,0a
+serial 1b,"#3"," scroll smoothly.",0d,0a
+serial 1b,"#4"," scroll smoothly.",0d,0a
+serial "15",0d,0a
+serial "16",0d,0a
+serial "17",0d,0a
+serial "18",0d,0a
+serial "19",0d,0a
+serial "20",0d,0a
+serial "21",0d,0a
+serial "22",0d,0a
+serial "23",0d,0a
+serial "24",0d,0a
+rxgap 100000
+serial "25",0d,0a
+serial "26",0d,0a
+serial "27",0d,0a
+serial "28",0d,0a
+serial "29",0d,0a
+serial "30",0d,0a
+serial "31",0d,0a
+serial "32",0d,0a
+serial "33",0d,0a
+serial "34",0d,0a
+serial "35",0d,0a
+serial "36",0d,0a
+serial "37",0d,0a
+serial "38",0d,0a
+serial "39",0d,0a
+pause 100000
+serial 1b,"[0;0H","-",0d
+pause 100000
+serial "x",0d
+pause 100000
+serial 1b,"#4"," Which made some people nauseous :-)",1b,"M",0d
+serial 1b,"#3"," Which made some people nauseous :-)",1b,"M"
+serial 1b,"M"
+serial 1b,"M"
+serial 1b,"M"
+serial 1b,"M"
+serial 1b,"M"
+serial 1b,"M"
+serial 1b,"M"
+serial 1b,"M"
+pause 10000000
+

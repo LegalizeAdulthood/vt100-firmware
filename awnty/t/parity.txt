@@ -1,0 +1,6 @@
+poke 21a9,e0 # even parity
+poke 21aa,f0 # fake STP to get maximum report length
+pause 1000000
+serial 41,42,43,44
+serial 1b, "[x" // DECREQTPARM
+pause 1000000

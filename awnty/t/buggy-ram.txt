@@ -1,0 +1,9 @@
+pause 10000000
+bug ram
+key 7b SETUP
+key 35 0 (reset)
+# should see 5 on LEDs
+pause 10000000
+nobug ram
+reset
+pause 10000000

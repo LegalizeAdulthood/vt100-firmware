@@ -1,0 +1,48 @@
+switches
+pause 100000
+key 7b SETUP
+pause 1000000
+key 7b SETUP
+pause 1000000
+log "Try receiving XOFF followed by XON"
+log " - XOFF"
+serial 13
+pause 100000
+log " - XON"
+serial 11
+pause 100000
+log "Try sending XOFF followed by XON"
+key 7c,5a Ctrl/S
+pause 100000
+key 7c,0a Ctrl/Q
+pause 100000
+pause 100000
+log "Send XOFF, XOFF, XON"
+key 7c,5a Ctrl/S
+pause 100000
+key 7c,5a Ctrl/S
+pause 100000
+key 7c,0a Ctrl/Q
+pause 100000
+pause 1000000
+log "Now press Ctrl/S to send XOFF, then press NO SCROLL"
+key 7c,5a Ctrl/S
+pause 100000
+pause 100000
+key 6a NO SCROLL
+pause 100000
+pause 100000
+key 6a NO SCROLL
+pause 100000
+pause 100000
+key 7c,0a Ctrl/Q
+pause 100000
+pause 10000000
+keygap 0
+rxgap 1000
+serial "1234567890123456789012345678901234567890"
+serial "1234567890123456789012345678901234567890"
+key 6a NO SCROLL
+pause 10000000
+key 6a NO SCROLL
+pause 10000000

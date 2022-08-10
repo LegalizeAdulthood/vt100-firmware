@@ -1,0 +1,100 @@
+keygap 10
+serial 1b,"[20h", 1b, "[?2l", 1b, ">" // VT52 mode, numeric
+serial "VT52 mode, numeric"
+pause 100000
+# arrows
+key 10
+key 20
+key 22
+key 30
+# func keys
+key 32
+key 42
+key 31
+key 41
+# keypad numbers
+key 43
+key 53
+key 52
+key 71
+key 63
+key 62
+key 72
+key 40
+key 50
+key 70
+key 51 # return
+pause 10000
+serial 1b,"=" // application mode
+# arrows
+key 10
+key 20
+key 22
+key 30
+# func keys
+key 32
+key 42
+key 31
+key 41
+# keypad numbers
+key 43
+key 53
+key 52
+key 71
+key 63
+key 62
+key 72
+key 40
+key 50
+key 70
+key 51 # return
+pause 10000
+serial 1b,"<",1b,">" // ANSI mode, numeric
+# arrows
+key 10
+key 20
+key 22
+key 30
+# func keys
+key 32
+key 42
+key 31
+key 41
+# keypad numbers
+key 43
+key 53
+key 52
+key 71
+key 63
+key 62
+key 72
+key 40
+key 50
+key 70
+key 51 # return
+pause 10000
+serial 1b,"=" // application mode
+# arrows
+key 10
+key 20
+key 22
+key 30
+# func keys
+key 32
+key 42
+key 31
+key 41
+# keypad numbers
+key 43
+key 53
+key 52
+key 71
+key 63
+key 62
+key 72
+key 40
+key 50
+key 70
+pause 20000
+key 51
+

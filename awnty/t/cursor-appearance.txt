@@ -1,0 +1,28 @@
+key 7b SETUP
+pause 5000000
+key 38 SETUP B
+pause 5000000
+key 10 RIGHT
+key 10 RIGHT 1-1
+key 10 RIGHT 1-2
+key 10 RIGHT 1-3
+key 10 RIGHT 1-4 cursor underline/block
+pause 5000000
+key 37 TOGGLE 1/0
+pause 5000000
+key 37 TOGGLE 1/0
+pause 5000000
+key 37 TOGGLE 1/0
+pause 5000000
+key 37 TOGGLE 1/0
+pause 5000000
+key 37 TOGGLE 1/0
+pause 5000000
+key 37 TOGGLE 1/0
+pause 5000000
+key 37 TOGGLE 1/0
+pause 5000000
+key 7b SETUP
+pause 1000000
+serial "A",08
+pause 10000000

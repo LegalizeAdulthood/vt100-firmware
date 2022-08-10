@@ -1,0 +1,49 @@
+local
+# Go through shift table
+key 7d,03 SHIFT DEL (perhaps no output?)
+pause 10000
+key 7d,35 SHIFT 0
+pause 10000
+key 7d,1a SHIFT 1
+pause 10000
+key 7d,39 SHIFT 2
+pause 10000
+key 7d,29 SHIFT 3
+pause 10000
+key 7d,28 SHIFT 4
+pause 10000
+key 7d,38 SHIFT 5
+pause 10000
+key 7d,37 SHIFT 6
+pause 10000
+key 7d,27 SHIFT 7
+pause 10000
+key 7d,36 SHIFT 8
+pause 10000
+key 7d,26 SHIFT 9
+pause 10000
+key 7d,25 SHIFT -
+pause 10000
+key 7d,34 SHIFT =
+pause 10000
+key 7d,24 SHIFT `
+pause 10000
+key 7d,15 SHIFT [
+pause 10000
+key 7d,14 SHIFT ]
+pause 10000
+key 7d,56 SHIFT ;
+pause 10000
+key 7d,75 SHIFT /
+pause 10000
+key 7d,55 SHIFT '
+pause 10000
+key 7d,66 SHIFT ,
+pause 10000
+key 7d,65 SHIFT .
+pause 10000
+key 7d,45 SHIFT /
+pause 10000
+key 7d,77 SHIFT SP
+pause 10000
+covrw 044b,2e

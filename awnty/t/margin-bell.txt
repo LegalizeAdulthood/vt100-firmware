@@ -1,0 +1,12 @@
+poke 21a7,f0 # margin bell
+serial 1b,"[?3l" # 80 column mode
+pause 1000000
+serial 1b,"[23;70Hx" # close to margin
+pause 1000000
+local
+key 1a "1"
+key 39 "2"
+key 29 "3"
+key 28 "4"
+log "Finished",0d,0a
+pause 10000000

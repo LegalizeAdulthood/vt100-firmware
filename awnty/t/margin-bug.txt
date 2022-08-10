@@ -1,0 +1,30 @@
+# This tests a bug in curpos_action, which, with origin mode off,
+# constrains cursor moves to other lines to the right margin of the
+# current line, which can be seen by moving from a double-width
+# line to a single-width line
+serial 1b,"[?3;6l" # 80 column mode and origin mode off (absolute mode)
+pause 100000
+serial 1b,"#5" # row 1 is single width
+serial 0a
+serial 1b,"#6" # row 2 is double width
+pause 1000000
+serial 1b,"[2;50H"
+serial 1b,"[6n" # curpos report (constrained to column 40, correctly)
+pause 1000000
+# move from double width line to single width, find that cursor column
+# is constrained by margin of double width line
+serial 1b,"[3;50H"
+serial 1b,"[6n" # curpos report (incorrectly constrained to column 40)
+pause 1000000
+# try again, and will move
+serial 1b,"[3;50H" # same sequence again
+serial 1b,"[6n" # curpos report (this time, unconstrained)
+pause 1000000
+# however ...
+serial 1b,"[2;50H"
+serial 1b,"[6n" # curpos report (constrained to column 40, correctly)
+# move from double width line to single width line (row 1, which is
+# internally row 0), and that will be unconstrained
+pause 1000000
+serial 1b,"[1;50H"
+serial 1b,"[6n" # curpos report (this time, unconstrained)

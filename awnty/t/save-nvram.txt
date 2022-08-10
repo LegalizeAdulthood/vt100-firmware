@@ -1,0 +1,7 @@
+pause 1000000
+key 7b SETUP
+pause 1000000
+key 7d,5a SHIFT S
+pause 10000000
+key 7b SETUP
+pause 10000000

@@ -1,0 +1,21 @@
+pause 1000000
+watch 2140,1 # char_action
+watch 2174,1 # report_action
+# Seeing what happens when keys are pressed
+key 4a 'A'
+pause 1000000
+local
+key 4a 'A'
+pause 1000000
+online
+key 4a 'A'
+pause 1000000
+local
+pause 10000
+key 2a ESC
+key 7d,7a Z
+pause 1000000
+online
+pause 10000
+key 2a ESC
+key 7d,7a Z

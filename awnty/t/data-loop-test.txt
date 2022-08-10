@@ -1,0 +1,8 @@
+have loopback
+pause 1000000 # allow to power up normally
+serial 1b,"[2;2y"
+pause 1000000
+# Now check without loopback to see failure
+missing loopback
+serial 1b,"[2;2y"
+pause 1000000

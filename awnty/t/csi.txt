@@ -1,0 +1,55 @@
+watch 214b # num_params
+watch 207d # inter
+watch 207e # final
+watch 2130 # params
+watch 2131
+watch 2132
+watch 2133
+watch 2134
+watch 2135
+watch 2136
+watch 2137
+watch 2138
+watch 2139
+watch 213a
+watch 213b
+watch 213c
+watch 213d
+watch 213e
+watch 213f
+online
+log "in ANSI mode if 21a7 & 20 == 20"
+dump 21a7,1
+serial "x"
+dump 2140,2
+serial 1b
+pause 10000
+dump 2140,2
+serial "["
+pause 10000
+dump 2140,2
+serial "9"
+pause 10000
+dump 2140,2
+serial "!"
+pause 10000
+dump 2140,2
+serial "p"
+pause 10000
+dump 2140,2
+serial "x"
+pause 100000
+pause 100000
+serial 1b,"[1;2;3;4;5;6;7;8;9;10;11;12;13;14;15"
+dump 2140,2
+dump 214b,1
+pause 100000
+serial "l"
+dump 2140,2
+dump 214b,1
+pause 100000
+serial 1b,"[1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16l"
+pause 100000
+covrw 2130,10
+dump 2130,10
+pause 100000

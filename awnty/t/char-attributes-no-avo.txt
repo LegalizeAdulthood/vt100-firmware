@@ -1,0 +1,40 @@
+missing avo
+reset
+pause 1000000
+serial 1b,"#5        "
+serial 1b,"[0;1m","bold "
+serial 1b,"[0;4m","underscore "
+serial 1b,"[0;5m","blink "
+serial 1b,"[0;7m","reverse"
+serial 0d,0a,0a,1b,"[m"
+serial "bd +    ",1b,"[1m","bold ",1b,"[0;1;4m","underscore "
+serial 1b,"[0;1;5m","blink "
+serial 1b,"[0;1;7m","reverse"
+serial 0d,0a,0a,1b,"[m"
+serial "un +    ",1b,"[0;1;4m", "bold ",1b,"[0;4m","underscore "
+serial 1b,"[0;4;5m","blink "
+serial 1b,"[0;4;7m","reverse"
+serial 0d,0a,0a,1b,"[m"
+serial "bd + un +   ",1b,"[0;1;4m","underscore "
+serial 1b,"[0;1;4;5m","blink "
+serial 1b,"[0;1;4;7m","reverse"
+serial 0d,0a,0a,1b,"[m"
+serial "bk +        ",1b,"[0;4;5m","underscore "
+serial 1b,"[0;5m","blink "
+serial 1b,"[0;5;7m","reverse"
+serial 0d,0a,0a,1b,"[m"
+serial "bd + bk +   ",1b,"[0;1;4;5m","underscore "
+serial 1b,"[0;1;5m","blink "
+serial 1b,"[0;1;5;7m","reverse"
+serial 0d,0a,0a,1b,"[m"
+pause 1000000
+key 7b SETUP
+key 38 SETUP B
+key 10 RIGHT
+key 10 RIGHT 1-1
+key 10 RIGHT 1-2
+key 10 RIGHT 1-3
+key 10 RIGHT 1-4 cursor underline/block
+key 37 TOGGLE 1/0
+key 7b
+pause 10000000

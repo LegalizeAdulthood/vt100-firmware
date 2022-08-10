@@ -1,0 +1,5 @@
+pause 1000000 // allow to power up normally
+bug nvr
+key 7b SETUP
+key 35 0 (reset)
+pause 10000000 // allow to power up, should be error code

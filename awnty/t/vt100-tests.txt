@@ -1,0 +1,800 @@
+watch 2050
+watch 2153
+keygap 10
+pause 1000000
+online
+serial "VT52 mode", 0a
+# ANSI mode
+serial 1b, "<"
+serial 1b, "#8" // alignment (21 to here)
+pause 1000000
+serial 1b,"[2J"
+# erase in line
+serial 1b,"[0K"
+serial 1b,"[1K"
+serial 1b,"[2K"
+serial "ANSI mode"
+serial 1b, "[DD", 1b, "[BB", 1b, "[CC", 1b, "[?7h"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+serial 1b, "#3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+# already scrolled up, so now scroll down
+serial 1b, "[H", 1b, "M", 1b, "M", 1b, "M", 1b, "M", 1b, "M", 1b, "M", 1b, "M", 1b, "M"
+serial 1b, "[?3l"
+pause 10000000
+serial 1b, "[?7h", 1b, "[?6h", 1b, "[3;12r"
+pause 10000000
+serial 1b, "[H",
+serial " 3#############################################",0d,0a
+serial " 4#############################################",0d,0a
+serial " 5#############################################",0d,0a
+serial " 6#############################################",0d,0a
+serial " 7#############################################",0d,0a
+serial " 8#############################################",0d,0a
+serial " 9#############################################",0d,0a
+serial "10#############################################",0d,0a
+serial "11#############################################",0d,0a
+serial "12#############################################",0d,0a
+serial "13#############################################",0d,0a
+serial 1b, "7"
+pause 10000
+serial 1b, "8"
+serial 1b, "[1;4;5;7;0m"
+serial 1b, "[c"
+pause 1000000
+serial 1b, "#3", 1b, "#4", 1b, "#6", 1b, "#5"
+serial 1b, "[1q"
+pause 1000000
+key 7b SETUP
+key 1a // 1 (nothing)
+key 28 // 4 LINE/LOCAL
+key 28 // 4 LINE/LOCAL
+key 77 SPACE
+key 77 SPACE
+key 77 SPACE
+key 77 SPACE
+key 77 SPACE
+key 77 SPACE
+key 77 SPACE
+key 39 SET TAB
+key 30 UP ARROW
+key 22 DOWN ARROW
+key 29 CLEAR ALL TABS
+key 37 TOGGLE 1/0 (won't work)
+#
+# Now toggle through every SETUP B feature
+key 38 SETUP B
+key 29 CLEAR ALL TABS (won't work)
+key 10 RIGHT
+key 20 LEFT  (so we get to try it!)
+key 10 RIGHT
+key 10 RIGHT 1-1
+key 37 TOGGLE 1/0 scroll jump/smooth
+key 37 TOGGLE 1/0
+key 10 RIGHT 1-2
+key 37 TOGGLE 1/0 autorepeat
+key 37 TOGGLE 1/0
+key 10 RIGHT 1-3 screen dark/light
+key 37 TOGGLE 1/0
+key 37 TOGGLE 1/0
+key 10 RIGHT 1-4 cursor underline/block
+key 37 TOGGLE 1/0
+key 37 TOGGLE 1/0
+key 10 RIGHT gap1 (nothing)
+key 37 TOGGLE 1/0
+key 37 TOGGLE 1/0
+key 10 RIGHT gap2
+key 10 RIGHT gap3
+key 10 RIGHT gap4
+key 10 RIGHT 2-1 margin bell
+key 37 TOGGLE 1/0
+key 37 TOGGLE 1/0
+key 10 RIGHT 2-2 keyclick
+key 37 TOGGLE 1/0
+key 37 TOGGLE 1/0
+key 10 RIGHT 2-3 ansi/vt52
+key 37 TOGGLE 1/0
+key 37 TOGGLE 1/0
+key 10 RIGHT 2-4 auto xon/xoff
+key 37 TOGGLE 1/0
+key 37 TOGGLE 1/0
+key 10 RIGHT gap1
+key 10 RIGHT gap2
+key 10 RIGHT gap3
+key 10 RIGHT gap4
+key 10 RIGHT 3-1 pound/hash
+key 37 TOGGLE 1/0
+key 37 TOGGLE 1/0
+key 10 RIGHT 3-2 wrap around
+key 37 TOGGLE 1/0
+key 37 TOGGLE 1/0
+key 10 RIGHT 3-3 new line
+key 37 TOGGLE 1/0
+key 37 TOGGLE 1/0
+key 10 RIGHT 3-4 interlace
+key 37 TOGGLE 1/0
+key 37 TOGGLE 1/0
+key 10 RIGHT gap1
+key 10 RIGHT gap2
+key 10 RIGHT gap3
+key 10 RIGHT gap4
+key 10 RIGHT 4-1 parity sense
+key 37 TOGGLE 1/0
+key 37 TOGGLE 1/0
+key 10 RIGHT 4-2 parity off/on
+key 37 TOGGLE 1/0
+key 37 TOGGLE 1/0
+key 10 RIGHT 4-3 bits per char
+key 37 TOGGLE 1/0
+key 37 TOGGLE 1/0
+key 10 RIGHT 4-4 power 50/60
+key 37 TOGGLE 1/0
+pause 1000
+key 37 TOGGLE 1/0
+pause 1000
+key 10 RIGHT gap
+key 7d,4a SHIFT A
+key 75 /
+key 78 V
+key 78 V
+key 78 V
+key 78 V
+key 78 V
+key 78 V
+key 78 V
+key 78 V
+key 78 V
+key 78 V
+key 78 V
+key 78 V
+key 78 V
+key 78 V
+key 78 V
+key 78 V
+key 78 V
+key 78 V
+key 78 V
+key 78 V
+key 75 /
+key 27 7 CHANGE TX SPEED
+key 27 7 CHANGE TX SPEED
+key 27 7 CHANGE TX SPEED
+key 27 7 CHANGE TX SPEED
+key 27 7 CHANGE TX SPEED
+key 27 7 CHANGE TX SPEED
+key 27 7 CHANGE TX SPEED
+key 27 7 CHANGE TX SPEED
+key 27 7 CHANGE TX SPEED
+key 27 7 CHANGE TX SPEED
+key 27 7 CHANGE TX SPEED
+key 27 7 CHANGE TX SPEED
+key 27 7 CHANGE TX SPEED
+key 27 7 CHANGE TX SPEED
+key 27 7 CHANGE TX SPEED
+key 27 7 CHANGE TX SPEED
+key 36 8 CHANGE RX SPEED
+key 36 8 CHANGE RX SPEED
+key 36 8 CHANGE RX SPEED
+key 36 8 CHANGE RX SPEED
+key 36 8 CHANGE RX SPEED
+key 36 8 CHANGE RX SPEED
+key 36 8 CHANGE RX SPEED
+key 36 8 CHANGE RX SPEED
+key 36 8 CHANGE RX SPEED
+key 36 8 CHANGE RX SPEED
+key 36 8 CHANGE RX SPEED
+key 36 8 CHANGE RX SPEED
+key 36 8 CHANGE RX SPEED
+key 36 8 CHANGE RX SPEED
+key 36 8 CHANGE RX SPEED
+key 36 8 CHANGE RX SPEED
+key 38 SETUP A
+key 26 9 80/132 columns
+pause 100000
+key 26 9 80/132 columns
+key 7d,5a SHIFT S
+pause 1000000
+key 7b SETUP
+local
+# Go through shift table
+key 7d,35 SHIFT 0
+key 7d,1a SHIFT 1
+key 7d,39 SHIFT 2
+key 7d,29 SHIFT 3
+key 7d,28 SHIFT 4
+key 7d,38 SHIFT 5
+key 7d,37 SHIFT 6
+key 7d,27 SHIFT 7
+key 7d,36 SHIFT 8
+key 7d,26 SHIFT 9
+key 7d,25 SHIFT -
+key 7d,34 SHIFT =
+key 7d,24 SHIFT `
+key 7d,15 SHIFT [
+key 7d,14 SHIFT ]
+key 7d,56 SHIFT ;
+key 7d,75 SHIFT /
+key 7d,55 SHIFT '
+key 7d,66 SHIFT ,
+key 7d,65 SHIFT .
+key 7d,45 SHIFT /
+key 7d,77 SHIFT SP
+# local mode
+key 03
+key 04
+key 05
+key 06
+key 07
+key 08
+key 09
+key 0a
+key 11
+key 14
+key 15
+key 16
+key 17
+key 18
+key 19
+key 1a
+key 20
+key 22
+key 23
+key 24
+key 25
+key 26
+key 27
+key 28
+key 29
+key 2a
+key 30
+key 31
+key 32
+key 33
+key 34
+key 35
+key 36
+key 37
+key 38
+key 39
+key 3a
+key 40
+key 41
+key 42
+key 43
+key 44
+key 45
+key 46
+key 47
+key 48
+key 49
+key 4a
+key 50
+key 51
+key 52
+key 53
+key 54
+key 55
+key 56
+key 57
+key 58
+key 59
+key 5a
+key 60
+key 61
+key 62
+key 63
+key 64
+key 65
+key 66
+key 67
+key 68
+key 69
+key 6a
+key 6a (NO SCROLL twice, to undo any effects)
+key 70
+key 71
+key 72
+key 73
+key 74
+key 75
+key 76
+key 77
+key 78
+key 79
+key 7a
+# designations (needs online)
+online
+serial 1b, "(0", 1b, "(A", 1b, ")0", 1b, ")A"
+serial 1b, "(B", 1b, "(1", 1b, "(2", 1b, "(A"
+serial 1b, "[2q"
+pause 1000000
+serial 1b, "[?1;3;4;5;6;7;8;9h"
+serial 1b, "[3q'
+serial 1b, "[?1;3;4;5;6;7;8;9l"
+pause 1000000
+serial 00,01,02,03,04,05,06,07,08,09,0a,0b,0c,0d,0e,0f
+serial 10,11,12,13,14,15,16,17,18,19,1a,1b,1c,1d,1e,1f
+serial 1b, "[4q"
+serial 1b, "[?2l" // VT52 mode
+serial 1b, "A", 1b, "B", 1b, "C", 1b, "D", 1b, "F", 1b, "G"
+pause 100000
+serial 1b, "H", 1b, "I", 1b, "J", 1b, "K", 1b, "Y  X"
+pause 100000
+log SHOULD PRODUCE VT52 IDENT REPORT
+serial 1b, "Z"
+pause 10000000
+serial 1b, "=", 1b, ">", 1b, "1", 30, 1b, "0", 1b, "2", 1b, "]"
+pause 1000000
+serial 1b, "<" // ANSI mode
+serial 1b, "E", 1b, "M", 1b, "H", 1b, "D", 1b, "7", 1b, "8"
+serial 1b, "=", 1b, ">", 1b, "Z", 1b, "N", 1b, "O"
+# fixed_param_t
+serial 1b, "[D", 1b, "[B", 1b, "[C", 1b, "[H", 1b, "[A"
+# final x and y are invalid in this form
+serial 1b, "[r", 1b, "[f", 1b, "[x", 1b, "[y"
+# sel_param_t
+serial 1b, "[c", 1b, "[q", 1b, "[n", 1b, "[J", 1b, "[K"
+serial 1b, "[l", 1b, "[m", 1b, "[h", 1b, "[g",1b,"[3g"
+serial 1b, "[20h" // LNM
+serial 1b, "[c" // DA
+serial 1b, "[x" // DECREQTPARM
+serial 1b, "[5n" // DSR report status
+serial 1b, "[6n" // DSR report cursor position
+serial 1b, "[?6h", 1b, "[6n", 1b, "[?6l" # DECOM affects cursor position report
+serial 1b, "[2;6y" //data loop and modem test
+serial 1b, "[0;1q"
+key 7b SETUP
+pause 10000
+key 7b SETUP
+pause 100000
+online
+pause 1000000
+# TODO - jump scroll up, scrolling off double-width lines, clear a particular tab
+# par_range
+serial "xxx" // first character lost?
+log "Try out-of-range parameter",0d,0a
+serial 1b, "[999m"
+log "Try receiving XOFF followed by XON"
+dump 21bf,8
+log " - XOFF"
+serial 13
+pause 1000
+dump 21bf,8
+log " - XON"
+serial 11
+pause 1000
+dump 21bf,8
+log "Try sending XOFF followed by XON"
+key 7c,5a Ctrl/S
+pause 1000
+dump 21bf,8
+key 7c,0a Ctrl/Q
+pause 1000
+dump 21bf,8
+pause 10000
+log "Send XOFF, XOFF, XON"
+key 7c,5a Ctrl/S
+pause 10000
+dump 21bf,8
+key 7c,5a Ctrl/S
+pause 10000
+dump 21bf,8
+key 7c,0a Ctrl/Q
+pause 10000
+dump 21bf,8
+pause 1000000
+key 7d,23 SHIFT+BREAK
+pause 1000000
+# try an intermediate character but need numeric param [not_final, inter_range_ok]
+serial 1b,"[0!p"
+pause 1000000
+# max params
+serial 1b,"[1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16 m"
+# XOFF in middle of above. Needs good long recovery for XON
+pause 10000000
+key 7c,23 CTRL+BREAK sends answerback
+pause 1000000
+pause 1000000
+serial 1b, "[?2l", 1b, ">" // VT52 mode, numeric
+serial "VT52 mode, numeric"
+pause 100000
+# arrows
+key 10
+key 20
+key 22
+key 30
+# func keys
+key 32
+key 42
+key 31
+key 41
+# keypad numbers
+key 43
+key 53
+key 52
+key 71
+key 63
+key 62
+key 72
+key 40
+key 50
+key 70
+pause 1000
+serial 1b,"=" // application mode
+# arrows
+key 10
+key 20
+key 22
+key 30
+# func keys
+key 32
+key 42
+key 31
+key 41
+# keypad numbers
+key 43
+key 53
+key 52
+key 71
+key 63
+key 62
+key 72
+key 40
+key 50
+key 70
+pause 1000
+serial 1b,"<",1b,">" // ANSI mode, numeric
+# arrows
+key 10
+key 20
+key 22
+key 30
+# func keys
+key 32
+key 42
+key 31
+key 41
+# keypad numbers
+key 43
+key 53
+key 52
+key 71
+key 63
+key 62
+key 72
+key 40
+key 50
+key 70
+pause 1000
+serial 1b,"=" // application mode
+# arrows
+key 10
+key 20
+key 22
+key 30
+# func keys
+key 32
+key 42
+key 31
+key 41
+# keypad numbers
+key 43
+key 53
+key 52
+key 71
+key 63
+key 62
+key 72
+key 40
+key 50
+key 70
+pause 20000
+key 7c,75 Ctrl slash
+key 7c,77 Ctrl space
+key 7c,4a Ctrl ]
+key 7c,14
+# jump scrolling
+serial 1b,"[?4l"
+serial 1b,"[24;24HX",0a,0a
+serial 1b,"[HX",1b,"M",1b,"M"
+# Grabbing some bits of half_line_loop, where we've set margins
+# and some double-width lines might need adding to scroll region
+serial 1b,"[r",1b,"[H",1b,"[20h"
+serial 1b,"#301",0a,1b,"#302",0a,1b,"#303",0a,1b,"#304",0a,1b,"#305",0a
+serial 1b,"#306",0a,1b,"#307",0a,1b,"#308",0a,1b,"#309",0a,1b,"#300",0a
+serial 1b,"#311",0a,1b,"#312",0a,1b,"#313",0a,1b,"#314",0a,1b,"#315",0a
+serial 1b,"#316",0a,1b,"#317",0a,1b,"#318",0a,1b,"#319",0a,1b,"#320",0a
+serial 1b,"#321",0a,1b,"#322",0a,1b,"#323",0a,1b,"#324",0a
+serial 1b,"[1;5r",1b,"[6;10r"
+pause 100000
+# now provoke nvr bug
+bug nvr
+key 7b SETUP
+key 35 "0" (reset)
+pause 10000000 // allow to power up, should be error code
+nobug nvr
+missing gpo
+key 7b SETUP
+key 35 "0" (reset)
+pause 10000000 // (NVR still has dodgy checksum?)
+online
+serial 1b,"[?2l" // VT52 mode
+serial "Try DECGON without GPO"
+serial 1b,"1"
+serial 1b,"2"
+# Bottoming-out VT52 movement oddities - t/vt52-cup.txt
+serial 1b,"Y00","A"
+serial 1b,"Y11","B"
+serial 1b,"Y22","C"
+serial 1b,"Y",1b,"99","D"
+serial 1b,"Y","4",1b,"Y4","E"
+serial 1b,"Z"
+pause 100000
+# enough tabs to stray beyond right margin
+serial 09,09,09,09,09,09,09,09,09,09,09,09,09,09,09,09,09,09,09
+key 7b SETUP
+key 7d,18 SHIFT+R recall NVR settings
+pause 1000000
+have stp -- hoping to see extra switch block
+key 38 SETUP B
+pause 1000000
+key 7b SETUP
+pause 1000000
+have loopback
+online
+serial 1b,"<" ANSI mode
+serial 1b,"[2;6y" # data and modem tests
+pause 10000000
+missing loopback
+serial 1b,"[?3h"
+pause 10000000
+serial 1b,"[?7h"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012345678901234567890123456789012345678901234567890"
+serial "123456789012"
+pause 100000
+serial 1b,"[1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;0m"
+# No Scroll key - need auto xon and not local mode
+key 6a
+pause 100000
+key 6a
+log "Repeating key?"
+keygap 0
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+dump 2072,1
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+dump 2072,1
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+dump 2072,1
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+key 4a
+keygap 10
+pause 1000000
+bug ram
+key 7b SETUP
+key 35 0 (reset)
+pause 1000000
+nobug ram
+reset
+pause 1000000
+# parity set and even
+poke 21a9,e0 # even parity
+poke 21aa,f0 # fake STP to get maximum report length
+serial 41,42,43,44
+serial 1b, "[x" // DECREQTPARM
+pause 1000000
+bug pusart
+serial 41,42,43,44
+nobug pusart
+serial 41,42,43,44
+pause 1000000
+rxgap 1000
+serial "1234567890123456789012345678901234567890"
+serial "1234567890123456789012345678901234567890"
+serial "1234567890123456789012345678901234567890"
+serial "1234567890123456789012345678901234567890"
+pause 1000000
+# Try to provoke shuffle while smooth scroll is in progress (11ad-11be)
+# smooth scrolling
+serial 1b,"[?4h",1b,"[24;1H","X"
+serial 0a,0a,0a,0a,0a,0a,0a,0a,0a,0a,0a,0a,0a,0a
+serial 1b,"#3" # provokes wait_for_x
+serial 0a,0a,0a,0a,0a,0a,0a,0a,0a,0a,0a,0a,0a,0a
+pause 20000000
+poke 21a7,f0 # margin bell
+serial 1b,"[?3l" # 80 column mode
+pause 1000000
+serial 1b,"[23;70Hx" # close to margin
+pause 1000000
+local
+key 1a "1"
+key 39 "2"
+key 29 "3"
+key 28 "4"
+pause 1000000
+# Last two missing symbols are no_avo and curs_und_base
+missing avo
+reset
+pause 5000000
+key 7b SETUP
+key 38 SETUP B
+# Default is block cursor, so move to switch block 1 position 4
+key 10 RIGHT
+key 10 RIGHT 1-1
+key 10 RIGHT 1-2
+key 10 RIGHT 1-3 screen dark/light
+key 10 RIGHT 1-4 cursor underline/block
+key 37 TOGGLE 1/0
+key 7b SETUP
+log "Finished",0d,0a
+pause 10000000

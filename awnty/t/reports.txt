@@ -1,0 +1,5 @@
+serial 1b, "[c" // DA
+serial 1b, "[x" // DECREQTPARM
+serial 1b, "[5n" // DSR report status
+serial 1b, "[6n" // DSR report cursor position
+

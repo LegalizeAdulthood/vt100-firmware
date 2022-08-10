@@ -1,0 +1,8 @@
+watch 20f8
+watch 2151
+watch 2152
+watch 2140,1
+serial 1b,"[?2l" // VT52 mode
+pause 1000000
+serial 1b,"Y",07,"00X"
+pause 1000000

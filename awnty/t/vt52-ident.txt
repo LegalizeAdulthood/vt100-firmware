@@ -1,0 +1,4 @@
+online
+serial 1b,"[?2l" // VT52 mode
+serial 1b,"Z"
+pause 1000000

@@ -1,0 +1,12 @@
+missing gpo
+watch 2140 # char_action
+watch 2141
+reset
+pause 5000000
+serial 1b,"1"
+pause 1000000
+have gpo
+reset
+pause 5000000
+serial 1b,"1"
+pause 1000000
