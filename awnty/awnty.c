@@ -21,12 +21,13 @@
 
 #include "coverage.h"
 #include "er1400.h"
+#include "sdl_gd.h"
 #include "vt100_memory.h"
 
 uint8_t chargen[2048];
 uint8_t alt_chargen[2048];
 
-int opt_coverage = 0;
+int opt_coverage = 1;
 
 //FILE *logmem;
 
@@ -88,10 +89,6 @@ uint8_t pusart_command = 0; // latest command byte sent (don't store mode bytes)
 uint8_t nvr_latch = 0; // last value written to NVR latch (for reading back SPDI)
 
 uint8_t oldx[6];
-
-// memory callbacks - to vt100_memory.h
-//#define MEMORY_SIZE 0x10000
-//static uint8_t *memory = NULL;
 
 static bool test_finished = 0;
 
@@ -411,119 +408,6 @@ static inline int load_file(const char *filename, uint16_t addr) {
   return 0;
 }
 
-// More or less straight from libgl's gd.c
-// to replace the original
-// gdImageString(gdImagePtr im, gdFontPtr f, int x, int y, unsigned char *s, int color)
-//
-// So, with
-//   #include <gd.h>
-//   #include <gdfonts.h>
-//
-// You call like:
-//   sdl_gdImageString(..., gdFontGetSmall(), ...);
-//
-void sdl_gdImageString(SDL_Renderer *rend, gdFontPtr f, int x, int y, char *str, SDL_Color col)
-{
-    SDL_SetRenderDrawColor(rend, col.r, col.g, col.b, col.a);
-    for (size_t i = 0; i < strlen(str); ++i, x += f->w) {
-        int c = str[i];
-        if (c < f->offset || (c >= (f->offset + f->nchars)))
-            continue;
-        int fline = (c - f->offset) * f->h * f->w;
-        for (int cy = 0; cy < f->h; ++cy) {
-            for (int cx = 0; cx < f->w; ++cx) {
-                if (f->data[fline + cy * f->w + cx])
-                    SDL_RenderDrawPoint(rend, x + cx, y + cy);
-            }
-        }
-    }
-}
-
-static void coverage_graphic_sdl(const i8080 *c)
-{
-    int isc = 7; // size of each dot + gap
-    int xo = 20;
-    int yo =  8;
-
-    SDL_Color black =   {   0,   0,   0, 255 };
-    SDL_Color green =   {   0, 255,   0, 255 };
-    SDL_Color amber =   { 192, 160,   0, 255 };
-    SDL_Color white =   { 255, 255, 255, 255 };
-    SDL_Color yellow =  { 255, 255,   0, 255 };
-    SDL_Color grey1 =   {  64,  64,  64, 255 };
-    SDL_Color dullred = { 128,   0,   0, 255 };
-    SDL_Color magenta = { 192,   0, 192, 255 };
-    SDL_Color blue =    {   0,   0, 255, 255 };
-    SDL_Color red    =  { 255,   0, 255, 255 };
-    SDL_Color cyan =    {   0, 192, 192, 255 };
-
-    SDL_SetRenderDrawColor(cov_renderer, 0, 0, 0, 255);
-    SDL_RenderClear(cov_renderer);
-
-
-    for (int addr = 0x08; addr < 0x80; addr += 0x08) {
-        SDL_Color col = addr & 0x000f ? grey1 : white;
-        SDL_SetRenderDrawColor(cov_renderer, col.r, col.g, col.b, col.a);
-        SDL_RenderDrawLine(cov_renderer, xo + addr * isc - 1, yo + 0 * isc, xo + addr * isc - 1, yo + (0x3000 / 128 + 1) * isc);
-    }
-    for (int addr = 0x0000; addr < 0x3100; addr += 0x0100) {
-        SDL_Color col = addr & 0x0100 ? grey1 : white;
-        SDL_SetRenderDrawColor(cov_renderer, col.r, col.g, col.b, col.a);
-        int y = yo + (addr / 128 + (addr >= 0x2000)) * isc - 1;
-        SDL_RenderDrawLine(cov_renderer, xo, y, xo + 0x80 * isc - 1, y);
-    }
-
-    for (int addr = 0; addr < 0x3000; ++addr) {
-        int x = addr % 128;
-        int y = addr / 128 + (addr >= 0x2000);
-        SDL_Color col = black;
-        // For coverage colours, information discovered by running the program takes priority over
-        // the assertions about symbols and unreachability. (Though if we mark a section as unreachable
-        // based on static analysis and it gets executed, we should note that at the end.)
-        //
-        if ((c->coverage[addr] & 0xf) != 0) {
-            switch (c->coverage[addr] & 0xf) {
-                case COV_EXEC:              col = green; break;
-                case COV_READ:              col = grey1; break;
-                case COV_READ + COV_EXEC:   col = green; break;
-                case COV_WRITE:             col = dullred; break;
-                case COV_WRITE + COV_READ:  col = magenta; break;
-                case COV_DATA:              col = amber; break;
-                case COV_DATA + COV_READ:   col = yellow; break;
-            }
-        }
-        else if (c->coverage[addr] & COV_UNREACH) { // trumps UNREACH + SYMBOL
-            col = red;
-        }
-        else if (c->coverage[addr] == COV_SYMBOL) { // we have a symbol for here (applied after the run)
-            col = blue;
-        }
-        SDL_Rect fillrect = { xo + x * isc, yo + y * isc, isc - 2, isc - 2 };
-        SDL_SetRenderDrawColor(cov_renderer, col.r, col.g, col.b, col.a);
-        SDL_RenderFillRect(cov_renderer, &fillrect);
-
-        if (c->coverage[addr] & COV_DMA) {
-            int brx = xo + (x + 1) * isc - 2;
-            int bry = yo + (y + 1) * isc - 2;
-            SDL_SetRenderDrawColor(cov_renderer, cyan.r, cyan.g, cyan.b, cyan.a);
-            SDL_RenderDrawPoint(cov_renderer, brx, bry);
-            SDL_RenderDrawPoint(cov_renderer, brx - 1, bry);
-            SDL_RenderDrawPoint(cov_renderer, brx, bry - 1);
-        }
-    }
-
-    for (int addr = 0; addr < 0x3000; addr += 0x200) {
-        int x = addr % 128;
-        int y = addr / 128 + (addr >= 0x2000);
-        char adst[5];
-        sprintf(adst, "%04x", addr);
-        sdl_gdImageString(cov_renderer, gdFontGetTiny(), x, yo + (y + 1) * isc - 8, adst, white);
-    }
-
-    SDL_RenderPresent(cov_renderer);
-}
-
-
 // Two helper routines for screen() so we get coverage information without the
 // PC censoring that the main routines do.
 
@@ -734,7 +618,7 @@ static void sdl_screen(const i8080 *c, SDL_Renderer *rend)
 
             if ((line_attr & lnat_size_mask) != lnat_size_single) {
                 for (uint32_t glyph_mask = 1 << (dots_per_char - 1); glyph_mask != 0; glyph_mask >>= 1)
-                    clocked_dots  = (clocked_dots << 2) | ((glyph_dots & glyph_mask) ? 0b11 : 0);
+                    clocked_dots  = (clocked_dots << 2) | ((glyph_dots & glyph_mask) ? 3 : 0);
             }
             else {
                 clocked_dots = (clocked_dots << numpix) | glyph_dots;
@@ -1055,38 +939,6 @@ void display_stack(const i8080 *c) {
     }
 }
 
-// Prime the coverage array with details of data structures and presumed
-// unreachable code, filled out during disassembly.
-//
-void coverage_load(const i8080* c)
-{
-    FILE *covf = fopen("vt100-coverage.txt", "r");
-    if (!covf)
-        return;
-    uint16_t addr_start, addr_end;
-    char covctype;
-    char *lineptr = NULL;
-    size_t linesize;
-    while (getline(&lineptr, &linesize, covf) >= 0) {
-        if (sscanf(lineptr, "%c %04hx %04hx", &covctype, &addr_start, &addr_end) == 3) {
-            int covitype = 0;
-            if (covctype == 'd')
-                covitype = COV_DATA;
-            else if (covctype == 'u')
-                covitype = COV_UNREACH;
-            else {
-                fprintf(stderr, "Ignoring unknown coverage type '%c' in file\n", covctype);
-                continue;
-            }
-            //printf("Coverage '%c' from %04hx to %04hx\n", covctype, addr_start, addr_end);
-            for (uint16_t addr = addr_start; addr <= addr_end; ++addr)
-                c->coverage[addr] |= covitype;
-        }
-    }
-    free(lineptr);
-    fclose(covf);
-}
-
 // 8080 clock is main crystal 24.8832 MHz divided by 9, i.e. 2.7648 MHz
 // 60 Hz vertical blank interrupt is therefore every 46080 cycles.
 // LBA 7 changes state every 31.7778 µs, i.e. every 88 cycles (87.859)
@@ -1118,7 +970,7 @@ static inline void run_test(i8080* const c, const char* filename, const char *te
     printf("memory[0x17a2] = %02x\n", memory[0x17a2]);
 
     /* Seed coverage with data structures */
-    coverage_load(c);
+    coverage_load(c, "vt100-coverage.txt");
 
     c->pc = 0;
 
@@ -1360,7 +1212,7 @@ static inline void run_test(i8080* const c, const char* filename, const char *te
 
         if (opt_coverage) {
             if (c->cyc > next_cov) {
-               coverage_graphic_sdl(c);
+               coverage_graphic_sdl(c, cov_renderer);
                next_cov += 1000000;
             }
         }
@@ -1448,7 +1300,7 @@ static inline void run_test(i8080* const c, const char* filename, const char *te
 
         coverage_rw(c, 0x2000, 0x1000);
 
-        coverage_graphic_sdl(c);
+        coverage_graphic_sdl(c, cov_renderer);
     }
 
     //er1400_save(); // don't want this saved automatically any more -- better to use "pristine" NVRAM load

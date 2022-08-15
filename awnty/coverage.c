@@ -1,6 +1,11 @@
 #include "coverage.h"
 
 #include "vt100_memory.h"
+#include "sdl_gd.h"
+
+#include <gd.h>
+#include <gdfonts.h>
+#include <gdfontt.h>
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -122,6 +127,42 @@ void coverage_read_equ(const char *fname) {
     }
 }
 
+// Prime the coverage array with details of data structures and presumed
+// unreachable code, filled out during disassembly.
+//
+void coverage_load(const i8080* c, const char *fname)
+{
+    FILE *covf = fopen(fname, "r");
+    if (!covf) {
+        fprintf(stderr, "Warning: missing coverage areas: %s\n", fname);
+        return;
+    }
+
+    uint16_t addr_start, addr_end;
+    char covctype;
+    char *lineptr = NULL;
+    size_t linesize;
+    while (getline(&lineptr, &linesize, covf) >= 0) {
+        if (sscanf(lineptr, "%c %04hx %04hx", &covctype, &addr_start, &addr_end) == 3) {
+            int covitype = 0;
+            if (covctype == 'd')
+                covitype = COV_DATA;
+            else if (covctype == 'u')
+                covitype = COV_UNREACH;
+            else {
+                fprintf(stderr, "Ignoring unknown coverage type '%c' in file\n", covctype);
+                continue;
+            }
+            //printf("Coverage '%c' from %04hx to %04hx\n", covctype, addr_start, addr_end);
+            for (uint16_t addr = addr_start; addr <= addr_end; ++addr)
+                c->coverage[addr] |= covitype;
+        }
+    }
+    free(lineptr);
+    fclose(covf);
+}
+
+
 // One or both of the report_* booleans may be true. If they are both true,
 // it is the caller's reponsibility to ensure that the addresses apply to
 // both reports.
@@ -218,4 +259,89 @@ void coverage_rw(const i8080 *c, uint16_t area_start, uint16_t area_len) {
     if (in_unwritten)
         cov_report(in_unread, in_unwritten, unwritten_start, area_start + area_len - 1);
 }
+
+void coverage_graphic_sdl(const i8080 *c, SDL_Renderer *rend)
+{
+    int isc = 7; // size of each dot + gap
+    int xo = 20;
+    int yo =  8;
+
+    SDL_Color black =   {   0,   0,   0, 255 };
+    SDL_Color green =   {   0, 255,   0, 255 };
+    SDL_Color amber =   { 192, 160,   0, 255 };
+    SDL_Color white =   { 255, 255, 255, 255 };
+    SDL_Color yellow =  { 255, 255,   0, 255 };
+    SDL_Color grey1 =   {  64,  64,  64, 255 };
+    SDL_Color dullred = { 128,   0,   0, 255 };
+    SDL_Color magenta = { 192,   0, 192, 255 };
+    SDL_Color blue =    {   0,   0, 255, 255 };
+    SDL_Color red    =  { 255,   0, 255, 255 };
+    SDL_Color cyan =    {   0, 192, 192, 255 };
+
+    SDL_SetRenderDrawColor(rend, 0, 0, 0, 255);
+    SDL_RenderClear(rend);
+
+
+    for (int addr = 0x08; addr < 0x80; addr += 0x08) {
+        SDL_Color col = addr & 0x000f ? grey1 : white;
+        SDL_SetRenderDrawColor(rend, col.r, col.g, col.b, col.a);
+        SDL_RenderDrawLine(rend, xo + addr * isc - 1, yo + 0 * isc, xo + addr * isc - 1, yo + (0x3000 / 128 + 1) * isc);
+    }
+    for (int addr = 0x0000; addr < 0x3100; addr += 0x0100) {
+        SDL_Color col = addr & 0x0100 ? grey1 : white;
+        SDL_SetRenderDrawColor(rend, col.r, col.g, col.b, col.a);
+        int y = yo + (addr / 128 + (addr >= 0x2000)) * isc - 1;
+        SDL_RenderDrawLine(rend, xo, y, xo + 0x80 * isc - 1, y);
+    }
+
+    for (int addr = 0; addr < 0x3000; ++addr) {
+        int x = addr % 128;
+        int y = addr / 128 + (addr >= 0x2000);
+        SDL_Color col = black;
+        // For coverage colours, information discovered by running the program takes priority over
+        // the assertions about symbols and unreachability. (Though if we mark a section as unreachable
+        // based on static analysis and it gets executed, we should note that at the end.)
+        //
+        if ((c->coverage[addr] & 0xf) != 0) {
+            switch (c->coverage[addr] & 0xf) {
+                case COV_EXEC:              col = green; break;
+                case COV_READ:              col = grey1; break;
+                case COV_READ + COV_EXEC:   col = green; break;
+                case COV_WRITE:             col = dullred; break;
+                case COV_WRITE + COV_READ:  col = magenta; break;
+                case COV_DATA:              col = amber; break;
+                case COV_DATA + COV_READ:   col = yellow; break;
+            }
+        }
+        else if (c->coverage[addr] & COV_UNREACH) { // trumps UNREACH + SYMBOL
+            col = red;
+        }
+        else if (c->coverage[addr] == COV_SYMBOL) { // we have a symbol for here (applied after the run)
+            col = blue;
+        }
+        SDL_Rect fillrect = { xo + x * isc, yo + y * isc, isc - 2, isc - 2 };
+        SDL_SetRenderDrawColor(rend, col.r, col.g, col.b, col.a);
+        SDL_RenderFillRect(rend, &fillrect);
+
+        if (c->coverage[addr] & COV_DMA) {
+            int brx = xo + (x + 1) * isc - 2;
+            int bry = yo + (y + 1) * isc - 2;
+            SDL_SetRenderDrawColor(rend, cyan.r, cyan.g, cyan.b, cyan.a);
+            SDL_RenderDrawPoint(rend, brx, bry);
+            SDL_RenderDrawPoint(rend, brx - 1, bry);
+            SDL_RenderDrawPoint(rend, brx, bry - 1);
+        }
+    }
+
+    for (int addr = 0; addr < 0x3000; addr += 0x200) {
+        int x = addr % 128;
+        int y = addr / 128 + (addr >= 0x2000);
+        char adst[5];
+        sprintf(adst, "%04x", addr);
+        sdl_gdImageString(rend, gdFontGetTiny(), x, yo + (y + 1) * isc - 8, adst, white);
+    }
+
+    SDL_RenderPresent(rend);
+}
+
 

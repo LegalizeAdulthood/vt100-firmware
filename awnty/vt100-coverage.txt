@@ -1,0 +1,34 @@
+d 02d9 02ea screen layout
+d 044b 04ce keyboard maps and checksum
+d 085f 0863 non-repeating keys
+d 08e5 08fa c0 actions
+d 0a1c 0a8d escape tables
+d 0ad9 0b10 csi sequences
+d 0c4c 0c56 charsets
+d 0c8a 0c96 SGR parameters
+d 0e94 0e9f report table
+d 140a 142a DEC modes
+d 1432 1434 mode params
+d 143b 143d mode params
+d 144a 144c mode params
+d 1451 1453 mode params
+d 1462 1464 mode params
+d 1469 146b mode params
+d 1470 1472 mode params
+d 17ec 17fd "Wait" and scratch defs
+d 1aa2 1ab5 setup_key_t
+d 1cad 1ccc SET-UP strings
+d 1d4b 1d60 speed strings
+d 1d7c 1dcb baud rate strings
+u 0007 0007 after RST 0
+u 000d 000f after RST 1
+u 0015 0017 after RST 2
+u 0024 0027 after RST 4
+u 002c 002f after RST 5
+u 08d3 08d3 ret after unconditional jmp
+u 0b27 0b2d ESC cannot be passed into VT52 coordinate routine
+u 0dce 0dce checksum
+u 108c 108d legitimate entry point for wait_scroll but happens to be unused
+u 1743 1753 ??
+u 1ba6 1baf probable checksum plus unused code
+u 1fd7 1fff zeroes at end of ROM

@@ -6,6 +6,7 @@
 // Coverage and watch functionality.
 
 #include <stdint.h>
+#include <SDL2/SDL.h>
 
 #define COV_EXEC 1
 #define COV_READ 2
@@ -30,6 +31,13 @@ void watch_check();
 void coverage_read_sym(const char *fname);
 void coverage_read_equ(const char *fname);
 
+// Prime the coverage array with details of data structures and presumed
+// unreachable code, filled out during disassembly.
+//
+void coverage_load(const i8080 *c, const char *fname);
+
 void coverage_rw(const i8080 *c, uint16_t area_start, uint16_t area_len);
+
+void coverage_graphic_sdl(const i8080 *c, SDL_Renderer *rend);
 
 #endif
