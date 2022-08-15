@@ -21,6 +21,7 @@
 
 #include "coverage.h"
 #include "er1400.h"
+#include "vt100_memory.h"
 
 uint8_t chargen[2048];
 uint8_t alt_chargen[2048];
@@ -53,8 +54,8 @@ unsigned long next_cov = 10000;
 // yet.
 unsigned long last_screen = 0;
 unsigned long command_pause = 10000000;
-// With plain text, autowrap and jump scrolling, rx_gap can be reduced to 3000 cycles (1ms) without ever
-// exhausting the receive buffer (and causing the terminal to send XOFF).
+// With plain text, autowrap and jump scrolling, rx_gap can be reduced to 3000 cycles (1ms)
+// without ever exhausting the receive buffer (and causing the terminal to send XOFF).
 unsigned long rx_gap = 30000;
 unsigned long key_gap = 5000;
 uint8_t keyboard_status;
@@ -88,16 +89,9 @@ uint8_t nvr_latch = 0; // last value written to NVR latch (for reading back SPDI
 
 uint8_t oldx[6];
 
-int num_watch = 0;
-const int max_watch = 1000;
-uint16_t watch_addr[1000];
-uint16_t watch_lastval[1000];
-bool     watch_hadval[1000];
-uint8_t  watch_interp[1000];
-
-// memory callbacks
-#define MEMORY_SIZE 0x10000
-static uint8_t *memory = NULL;
+// memory callbacks - to vt100_memory.h
+//#define MEMORY_SIZE 0x10000
+//static uint8_t *memory = NULL;
 
 static bool test_finished = 0;
 
@@ -120,11 +114,6 @@ int dc012_blink_ff = 0;
 int dc012_scroll_latch = 0;
 int dc012_scroll_latch_low = 0;
 int dc012_basic_attribute_reverse = 0;
-
-char *symtable[0x2000];
-
-char *equtable[0x1000];
-const uint16_t equoffset = 0x2000; // equtable[0] is for address 0x2000
 
 const uint16_t LOC_RX_HEAD = 0x20c0;
 const uint16_t LOC_RX_TAIL = 0x20c1;
@@ -941,62 +930,6 @@ static void dumpx() {
     }
 }
 
-static void watch_init() {
-    num_watch = 0;
-}
-
-static void watch_add(uint16_t addr, int interp) {
-    if (num_watch < max_watch) {
-        watch_addr[num_watch] = addr;
-        watch_hadval[num_watch] = false;
-        watch_lastval[num_watch] = 0;
-        watch_interp[num_watch] = interp;
-        ++num_watch;
-    }
-}
-
-static void watch_check()
-{
-    for (int w = 0; w < num_watch; ++w) {
-        if (watch_interp[w] == 0) { // byte watch
-            uint16_t newval = memory[watch_addr[w]];
-            if (!watch_hadval[w] || newval != watch_lastval[w]) {
-                char st[16];
-                if (watch_addr[w] >= equoffset && equtable[watch_addr[w] - equoffset])
-                    strncpy(st, equtable[watch_addr[w] - equoffset], 16);
-                else
-                    snprintf(st, 16, "%-11s%04x", "", watch_addr[w]);
-                st[15] = 0;
-                printf("\t\t\t\t%-15s  %02x -> %02x\n", st, watch_lastval[w], newval);
-            }
-            watch_lastval[w] = newval;
-            watch_hadval[w] = true;
-        }
-        else if (watch_interp[w] == 1) { // word watch
-            uint16_t newval = memory[watch_addr[w]] | (memory[watch_addr[w] + 1] << 8);
-            if (!watch_hadval[w] || newval != watch_lastval[w]) {
-                char st[16];
-                char pt[30];
-                // Symbol we're watching -- will be in RAM (equ table)
-                if (watch_addr[w] >= equoffset && equtable[watch_addr[w] - equoffset])
-                    strncpy(st, equtable[watch_addr[w] - equoffset], 16);
-                else
-                    snprintf(st, 16, "%-11s%04x", "", watch_addr[w]);
-                st[15] = 0;
-                // Pointer -- into ROM
-                if (newval < 0x2000 && symtable[newval])
-                    snprintf(pt, 30, "%04x  %s", newval, symtable[newval]);
-                else
-                    snprintf(pt, 30, "%04x", newval);
-                pt[29] = 0;
-                printf("\t\t\t\t%-15s  %04x -> %s\n", st, watch_lastval[w], pt);
-            }
-            watch_lastval[w] = newval;
-            watch_hadval[w] = true;
-        }
-    }
-}
-
 static void dump_switches() {
     uint8_t sb1 = memory[0x21a6];
     printf("SB1: %d%d%d%d  %s scroll, autorepeat %s, %s background, cursor %s\n",
@@ -1103,7 +1036,7 @@ void coverage_read_sym(const char *fname) {
             symtable[i] = 0;
         while (fscanf(symf, "%4hx %s\n", &symaddr, symname) == 2) {
             if (symaddr < 0x3000) {
-                symtable[symaddr] = malloc(strlen(symname) + 1);
+                symtable[symaddr] = (char *)malloc(strlen(symname) + 1);
                 if (symtable[symaddr])
                     strcpy(symtable[symaddr], symname);
             }
@@ -1663,8 +1596,8 @@ static inline void run_test(i8080* const c, const char* filename, const char *te
 }
 
 int main(int argc, char *argv[]) {
-    memory = malloc(MEMORY_SIZE);
-    if (memory == NULL) {
+    if (!memory_init()) {
+        fputs("Couldn't allocate 64K memory\n", stderr);
         return 1;
     }
 
@@ -1683,7 +1616,7 @@ int main(int argc, char *argv[]) {
         fclose(charf);
     }
     else {
-        fprintf(stderr, "Missing chargen ROM ../bin/23-018E2.bin\n");
+        fputs("Missing chargen ROM ../bin/23-018E2.bin\n", stderr);
     }
 
     charf = fopen("alt-chargen.bin", "rb");
@@ -1692,7 +1625,7 @@ int main(int argc, char *argv[]) {
         fclose(charf);
     }
     else {
-        fprintf(stderr, "Missing alt chargen ROM alt-chargen.bin\n");
+        fputs("Missing alt chargen ROM alt-chargen.bin\n", stderr);
         memset(alt_chargen, 0xff, 2048);
     }
 

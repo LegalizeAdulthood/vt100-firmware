@@ -1,5 +1,5 @@
 bin = awnty
-src = i8080.c awnty.c er1400.c
+src = i8080.c awnty.c er1400.c coverage.o vt100_memory.o
 obj = $(src:.c=.o)
 CC = gcc
 CFLAGS = -g -Wall -Wextra -O2 -std=c2x -pedantic
@@ -13,4 +13,4 @@ $(bin): $(obj)
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 clean:
-	-rm $(bin) $(obj)
+	-rm -f $(bin) $(obj)
