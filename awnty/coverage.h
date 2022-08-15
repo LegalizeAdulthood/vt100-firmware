@@ -1,6 +1,10 @@
 #ifndef COVERAGE_H
 #define COVERAGE_H
 
+#include "i8080.h"
+
+// Coverage and watch functionality.
+
 #include <stdint.h>
 
 #define COV_EXEC 1
@@ -22,5 +26,10 @@ extern const uint16_t equoffset;// = 0x2000; // equtable[0] is for address 0x200
 void watch_init();
 void watch_add(uint16_t addr, int interp);
 void watch_check();
+
+void coverage_read_sym(const char *fname);
+void coverage_read_equ(const char *fname);
+
+void coverage_rw(const i8080 *c, uint16_t area_start, uint16_t area_len);
 
 #endif
