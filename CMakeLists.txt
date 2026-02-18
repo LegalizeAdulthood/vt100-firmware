@@ -6,6 +6,7 @@ project("${VT100_FIRMWARE_PROJECT_NAME}" C)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 include(misc_target)
+include(target_folder)
 
 add_subdirectory(awnty)
 add_subdirectory(src)

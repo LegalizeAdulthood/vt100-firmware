@@ -140,9 +140,8 @@ void coverage_load(const i8080* c, const char *fname)
 
     uint16_t addr_start, addr_end;
     char covctype;
-    char *lineptr = NULL;
-    size_t linesize;
-    while (getline(&lineptr, &linesize, covf) >= 0) {
+    char lineptr[256];
+    while (fgets(lineptr, sizeof(lineptr), covf) != NULL) {
         if (sscanf(lineptr, "%c %04hx %04hx", &covctype, &addr_start, &addr_end) == 3) {
             int covitype = 0;
             if (covctype == 'd')
@@ -158,7 +157,6 @@ void coverage_load(const i8080* c, const char *fname)
                 c->coverage[addr] |= covitype;
         }
     }
-    free(lineptr);
     fclose(covf);
 }
 

@@ -22,7 +22,19 @@
 #include "coverage.h"
 #include "er1400.h"
 #include "sdl_gd.h"
+#include "unused.h"
 #include "vt100_memory.h"
+
+#ifdef _WIN32
+#include <windows.h>
+#define SLEEP_100US() Sleep(1)  // 100µs rounds up to 1ms on Windows
+#else
+#define SLEEP_100US()               \
+  do {                              \
+  struct timespec t = {0, 100000};  \
+  nanosleep(&t, NULL);              \
+  } while (0)
+#endif
 
 uint8_t chargen[2048];
 uint8_t alt_chargen[2048];
@@ -132,7 +144,7 @@ SDL_Texture *scr_fontb = NULL;
 
 static void sdl_screen(const i8080 *c, SDL_Renderer *rend);
 
-static uint8_t rb(void *userdata __attribute__ ((unused)), uint16_t addr) {
+static uint8_t rb(void *userdata UNUSED, uint16_t addr) {
     if (bug_ram && (addr == 0x2222 || addr == 0x3222))
         return 0x88;
     if (addr < 0x3000)
@@ -143,13 +155,13 @@ static uint8_t rb(void *userdata __attribute__ ((unused)), uint16_t addr) {
         return 0x0f;
 }
 
-static void wb(void* userdata __attribute__ ((unused)), uint16_t addr, uint8_t val) {
+static void wb(void* userdata UNUSED, uint16_t addr, uint8_t val) {
     //fprintf(logmem, "W %04x %02x\n", (unsigned int)addr, (unsigned int)val);
     memory[addr] = val;
 }
 
 
-static uint8_t int_acknowledge(void *userdata __attribute__ ((unused)) ) {
+static uint8_t int_acknowledge(void *userdata UNUSED) {
     //i8080* const c = (i8080*) userdata;
 
     uint8_t iop = 0xc7 + (vbi << 5) + (reci << 4) + (kbdi << 3);
@@ -1055,15 +1067,14 @@ static inline void run_test(i8080* const c, const char* filename, const char *te
         }
 
         if (need_command) {
-            char *lineptr = NULL;
-            size_t linesize;
+            char buffer[4096];
             uint16_t addr;
 
-            if (getline(&lineptr, &linesize, cmdf) >= 0) {
-                printf("Command: %s", lineptr); // lineptr has LF already
+            if (fgets(buffer, sizeof(buffer), cmdf) != NULL) {
+                printf("Command: %s", buffer); // buffer has LF already
                 uint8_t hex[100];
                 uint8_t nhex;
-                if (( nhex = parse_key(lineptr, hex, 100) )) {
+                if (( nhex = parse_key(buffer, hex, 100) )) {
                     need_command = false;
                     for (int i = 0; i < nhex; ++i)
                         key_feed[i] = hex[i] & 0x7f;
@@ -1072,23 +1083,23 @@ static inline void run_test(i8080* const c, const char* filename, const char *te
                     key_index = 0;
                     key_pause = conf_pause;
                 }
-                else if ( strncmp(lineptr, "reset", 5) == 0) {
+                else if ( strncmp(buffer, "reset", 5) == 0) {
                     c->pc = 0;
                 }
-                else if ( strncmp(lineptr, "keygap ", 7) == 0) {
+                else if ( strncmp(buffer, "keygap ", 7) == 0) {
                     int gap;
-                    if (sscanf(&lineptr[7], "%d", &gap) == 1) {
+                    if (sscanf(&buffer[7], "%d", &gap) == 1) {
                         printf("Setting keygap to %d\n", gap);
                         conf_pause = gap;
                     }
                 }
-                else if (strncmp(lineptr, "rxgap ", 6) == 0) {
+                else if (strncmp(buffer, "rxgap ", 6) == 0) {
                     long gap;
-                    gap = strtol(&lineptr[6], NULL, 10);
+                    gap = strtol(&buffer[6], NULL, 10);
                     printf("Setting rxgap to %ld cycles\n", gap);
                     rx_gap = gap;
                 }
-                else if (( nhex = parse_serial(lineptr, hex, 100) )) {
+                else if (( nhex = parse_serial(buffer, hex, 100) )) {
                     need_command = false;
                     for (int i = 0; i < nhex; ++i)
                         receive_feed[i] = hex[i] & 0x7f;
@@ -1096,114 +1107,113 @@ static inline void run_test(i8080* const c, const char* filename, const char *te
                     receive_index = 0;
                     next_reci = c->cyc + rx_gap;
                 }
-                else if (( pause_cycles = parse_pause(lineptr) )) {
+                else if (( pause_cycles = parse_pause(buffer) )) {
                     printf("Pause for %lu cycles\n", pause_cycles);
                     need_command = false;
                     feeding_pause = true;
                     pause_cycles = c->cyc + pause_cycles;
                 }
-                else if ( strncmp(lineptr, "local", 5) == 0 ) {
+                else if ( strncmp(buffer, "local", 5) == 0 ) {
                     printf("Forcing local mode\n");
                     memory[LOC_LOCAL_MODE] = 0x20;
                 }
-                else if ( strncmp(lineptr, "online", 6) == 0 ) {
+                else if ( strncmp(buffer, "online", 6) == 0 ) {
                     printf("Forcing online mode\n");
                     memory[LOC_LOCAL_MODE] = 0;
                 }
-                else if (parse_dump(lineptr, &addr, &nhex)) {
+                else if (parse_dump(buffer, &addr, &nhex)) {
                     dump_memory(addr, nhex);
                 }
-                else if (strncmp(lineptr, "log ", 4) == 0) {
+                else if (strncmp(buffer, "log ", 4) == 0) {
                     // already echoing commands - do something
                     // else if we don't echo commands by default
                 }
-                else if (strncmp(lineptr, "have ", 5) == 0) {
-                    if (strncmp(&lineptr[5], "avo", 3) == 0)
+                else if (strncmp(buffer, "have ", 5) == 0) {
+                    if (strncmp(&buffer[5], "avo", 3) == 0)
                         have_avo = 1;
-                    else if (strncmp(&lineptr[5], "gpo", 3) == 0)
+                    else if (strncmp(&buffer[5], "gpo", 3) == 0)
                         have_gpo = 1;
-                    else if (strncmp(&lineptr[5], "stp", 3) == 0)
+                    else if (strncmp(&buffer[5], "stp", 3) == 0)
                         have_stp = 1;
-                    else if (strncmp(&lineptr[5], "loopback", 8) == 0) {
+                    else if (strncmp(&buffer[5], "loopback", 8) == 0) {
                         have_loopback = 1;
                         printf("FITTED loopback connector\n");
                     }
                 }
-                else if (strncmp(lineptr, "missing ", 8) == 0) {
-                    if (strncmp(&lineptr[8], "avo", 3) == 0)
+                else if (strncmp(buffer, "missing ", 8) == 0) {
+                    if (strncmp(&buffer[8], "avo", 3) == 0)
                         have_avo = 0;
-                    else if (strncmp(&lineptr[8], "gpo", 3) == 0)
+                    else if (strncmp(&buffer[8], "gpo", 3) == 0)
                         have_gpo = 0;
-                    else if (strncmp(&lineptr[8], "stp", 3) == 0)
+                    else if (strncmp(&buffer[8], "stp", 3) == 0)
                         have_gpo = 0;
-                    else if (strncmp(&lineptr[8], "loopback", 8) == 0) {
+                    else if (strncmp(&buffer[8], "loopback", 8) == 0) {
                         have_loopback = 0;
                         printf("REMOVED loopback connector\n");
                     }
                 }
-                else if (strncmp(lineptr, "bug ", 4) == 0) {
-                    if (strncmp(&lineptr[4], "nvr", 3) == 0) {
+                else if (strncmp(buffer, "bug ", 4) == 0) {
+                    if (strncmp(&buffer[4], "nvr", 3) == 0) {
                         er1400_bug(1); 
                     }
-                    else if (strncmp(&lineptr[4], "ram", 3) == 0) {
+                    else if (strncmp(&buffer[4], "ram", 3) == 0) {
                         bug_ram = 1;
                     }
-                    else if (strncmp(&lineptr[4], "pusart", 6) == 0) {
+                    else if (strncmp(&buffer[4], "pusart", 6) == 0) {
                         bug_pusart = 1;
                     }
                 }
-                else if (strncmp(lineptr, "nobug ", 6) == 0) {
-                    if (strncmp(&lineptr[6], "nvr", 3) == 0) {
+                else if (strncmp(buffer, "nobug ", 6) == 0) {
+                    if (strncmp(&buffer[6], "nvr", 3) == 0) {
                         er1400_bug(0);
                     }
-                    else if (strncmp(&lineptr[6], "ram", 3) == 0) {
+                    else if (strncmp(&buffer[6], "ram", 3) == 0) {
                         bug_ram = 0;
                     }
-                    else if (strncmp(&lineptr[6], "pusart", 6) == 0) {
+                    else if (strncmp(&buffer[6], "pusart", 6) == 0) {
                         bug_pusart = 0;
                     }
                 }
-                else if (strncmp(lineptr, "poke ", 5) == 0) {
+                else if (strncmp(buffer, "poke ", 5) == 0) {
                     uint16_t loc;
                     uint8_t  val;
-                    if (sscanf(&lineptr[5], "%4hx,%2hhx", &loc, &val) == 2) {
+                    if (sscanf(&buffer[5], "%4hx,%2hhx", &loc, &val) == 2) {
                         printf("POKE %04x <- %02x\n", loc, val);
                         memory[loc] = val;
                     }
                 }
-                else if (strncmp(lineptr, "dumpx", 5) == 0) {
+                else if (strncmp(buffer, "dumpx", 5) == 0) {
                     dumpx();
                 }
-                else if (strncmp(lineptr, "switches", 8) == 0) {
+                else if (strncmp(buffer, "switches", 8) == 0) {
                     dump_switches();
                 }
-                else if (strncmp(lineptr, "covrw ", 6) == 0) {
+                else if (strncmp(buffer, "covrw ", 6) == 0) {
                     uint16_t loc, len;
-                    if (sscanf(&lineptr[6], "%4hx,%4hx", &loc, &len) == 2) {
+                    if (sscanf(&buffer[6], "%4hx,%4hx", &loc, &len) == 2) {
                         printf("COVERAGE\n");
                         coverage_rw(c, loc, len);
                     }
                     else {
-                        fprintf(stderr, "Couldn't read <addr>,<len> from: %s", lineptr);
+                        fprintf(stderr, "Couldn't read <addr>,<len> from: %s", buffer);
                     }
                 }
-                else if (strncmp(lineptr, "watch ", 6) == 0) {
+                else if (strncmp(buffer, "watch ", 6) == 0) {
                     uint16_t loc;
                     int interp = 0;
-                    int params = sscanf(&lineptr[6], "%4hx,%d", &loc, &interp);
+                    int params = sscanf(&buffer[6], "%4hx,%d", &loc, &interp);
                     if (params >= 1) {
                         watch_add(loc, interp);
                     }
                     else {
-                        fprintf(stderr, "Couldn't read <addr> from: %s", lineptr);
+                        fprintf(stderr, "Couldn't read <addr> from: %s", buffer);
                     }
                 }
-                else if (strncmp(lineptr, "stack", 5) == 0) {
+                else if (strncmp(buffer, "stack", 5) == 0) {
                     display_stack(c);
                 }
             }
             else {
-                free(lineptr);
                 printf("Finished commands\n");
                 remaining_cycles = c->cyc + 5000000;
                 need_command = false;
@@ -1229,10 +1239,7 @@ static inline void run_test(i8080* const c, const char* filename, const char *te
         if (strcmp(timestr, lasttime) != 0) {
             //printf(timestr);
             strcpy(lasttime, timestr);
-            struct timespec t;
-            t.tv_sec = 0;
-            t.tv_nsec = 100000;
-            nanosleep(&t, NULL);
+            SLEEP_100US();
         }
 
     }
