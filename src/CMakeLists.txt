@@ -62,7 +62,18 @@ add_custom_target(vt100-rom ALL
         vt100.equ
     SOURCES
         vt100.asm
+        compare_bin.cmake
         lst_to_equ.cmake
         lst_to_sym.cmake
 )
 target_folder(vt100-rom "Firmware")
+
+if(BUILD_TESTING)
+    add_test(NAME vt100.bin
+        COMMAND
+            "${CMAKE_COMMAND}"
+                "-DACTUAL_FILE=${CMAKE_CURRENT_BINARY_DIR}/vt100.bin"
+                "-DEXPECTED_FILE=${CMAKE_SOURCE_DIR}/bin/vt100.bin"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/compare_bin.cmake"
+    )
+endif()
