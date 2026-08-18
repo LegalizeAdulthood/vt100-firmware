@@ -24,7 +24,10 @@
       "name": "vcpkg",
       "hidden": true,
       "description": "Configure the toolchain for vcpkg",
-      "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+      "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "VCPKG_OVERLAY_PORTS": "${sourceDir}/ports"
+      }
     },
     {
       "name": "default",

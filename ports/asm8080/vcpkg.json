@@ -1,0 +1,14 @@
+{
+  "name": "asm8080",
+  "version-semver": "1.0.14",
+  "description": "Intel 8080 assembler.",
+  "homepage": "https://github.com/begoon/asm8080",
+  "license": "MIT",
+  "supports": "native",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    }
+  ]
+}

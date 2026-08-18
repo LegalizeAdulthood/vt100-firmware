@@ -4,6 +4,10 @@
   "description": "Sample code for the Utah C++ Programmers video",
   "version-semver": "1.0.0",
   "dependencies": [
+    {
+      "name": "asm8080",
+      "host": true
+    },
     "libgd",
     "pkgconf",
     "sdl2"
