@@ -22,6 +22,12 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Install Linux build prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes autoconf autoconf-archive automake libtool
+
       - name: Bootstrap vcpkg
         if: runner.os == 'Linux'
         run: ./vcpkg/bootstrap-vcpkg.sh
