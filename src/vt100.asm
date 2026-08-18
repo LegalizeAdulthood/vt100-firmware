@@ -744,7 +744,7 @@ key_scan_col6:	db	 0aeh, 0ach, 0b5h, 0b4h,C0_CR,  '.',  ',',  'n',  'b',  'x', 0
 key_scan_col7:	db	 0b9h, 0b3h, 0b6h, 0adh,    0,  '/',  'm',  20h,  'v',  'c',  'z'
 
 ; This is the checksum byte for ROM 1 (0000-07FF)
-		db	0ffh		; CHECKSUM
+rom1_checksum:	db	0ffh		; CHECKSUM
 ;
 vertical_int:	push	psw
 		push	h
@@ -2417,7 +2417,7 @@ prepare_report:	lxi	h,pending_report
 		inx	h
 		ret
 ;
-		db	42h		; CHECKSUM
+rom2_checksum:	db	42h		; CHECKSUM
 ;	TBC - tabulation clear
 tbc_action:	mov	a,b		; A <- which tabs to clear (0 = here, 3 = all)
 		ora	a
@@ -3817,7 +3817,7 @@ curs_was_off:	shld	cursor_timer	; Set new timer
 		mov	m,a		; and replace
 		ret
 ;
-		db	74h		; CHECKSUM
+rom3_checksum:	db	74h		; CHECKSUM
 ;
 el_action:	mov	a,b		; A <- selective parameter
 		ora	a
@@ -4968,13 +4968,13 @@ try_answerback:	cpi	'A'
 		pop	h
 		ret
 ;
-; These 10 bytes are all valid 8080 instructions but are unreachable. The first byte is a little out of
-; place, hence my assumption that it's the checksum for ROM 4 (1800h - 1fffh), as there are no unused
-; non-zero bytes elsewhere in this ROM. The other 9 bytes would result in a lowercase character in the
+; This is the checksum byte for ROM 4 (1800h - 1fffh). It is a little out of place, as there are no
+; unused non-zero bytes elsewhere in this ROM. The following 9 bytes are valid 8080 instructions but
+; unreachable. They would result in a lowercase character in the
 ; A register being made uppercase, returning all others unchanged. As this is very far from the keyboard
 ; routines, perhaps this is the remnants of some VT50 compatibility code. Who knows?
 ;
-		sbb	b		; = 98h. Probably CHECKSUM (first byte of unused code)
+rom4_checksum:	db	98h		; CHECKSUM
 		cpi	61h		; UNREACHABLE (see note above)
 		rm
 		cpi	7bh

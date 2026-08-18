@@ -31,7 +31,7 @@ Known checksum locations in `vt100.asm`:
 - ROM 1: line 747, `db 0ffh`
 - ROM 2: line 2420, `db 42h`
 - ROM 3: line 3820, `db 74h`
-- ROM 4: line 4977, `sbb b`, probably checksum plus start of unreachable code
+- ROM 4: line 4977, `db 98h`
 
 ## Summary
 
@@ -459,12 +459,11 @@ This is covered above as a direct refactor.
 
 ### Unreachable ROM 4 fragment
 
-Available space: 9-10 bytes, near `1ba6h`.
+Available space: 9 bytes, near `1ba7h`.
 
-Lines 4977-4983 are documented as unreachable:
+Lines 4978-4983 are documented as unreachable:
 
 ```asm
-	sbb	b
 	cpi	61h
 	rm
 	cpi	7bh
@@ -473,10 +472,10 @@ Lines 4977-4983 are documented as unreachable:
 	ret
 ```
 
-The first byte, `sbb b`, is probably the ROM 4 checksum byte. If checksum bytes
-are recomputed elsewhere, this whole fragment may be reusable. If preserving the
-same checksum-byte location matters, only the following 9 bytes should be
-considered easy slack.
+The byte immediately before this fragment is `rom4_checksum`, emitted as
+`db 98h`. If checksum bytes are recomputed elsewhere, the checksum location may
+be movable, but with the current checksum-byte location only these following 9
+bytes should be considered easy slack.
 
 Risk: low for behavior, medium for checksum/layout.
 
