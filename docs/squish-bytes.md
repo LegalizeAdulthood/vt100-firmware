@@ -26,12 +26,17 @@ rotate-and-XOR checksum routine at `self_test`. Any byte-level change to the ROM
 requires recomputing the checksum bytes if POST checksum behavior remains
 enabled.
 
-Known checksum locations in `vt100.asm`:
+Known checksum labels in `vt100.asm`:
 
-- ROM 1: line 747, `db 0ffh`
-- ROM 2: line 2420, `db 42h`
-- ROM 3: line 3820, `db 74h`
-- ROM 4: line 4977, `db 98h`
+- ROM 1: `rom1_checksum`, line 747, currently `db 0ffh`
+- ROM 2: `rom2_checksum`, line 2420, currently `db 42h`
+- ROM 3: `rom3_checksum`, line 3820, currently `db 74h`
+- ROM 4: `rom4_checksum`, line 4977, currently `db 98h`
+
+The `write-checksum` tool reads these labels from the generated `vt100.sym`
+file before patching the monolithic 8 KiB `vt100.bin`. This lets a checksum byte
+move within its 2 KiB ROM block without changing a hardcoded offset table in the
+tool.
 
 ## Summary
 

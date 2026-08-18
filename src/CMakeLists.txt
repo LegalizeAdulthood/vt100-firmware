@@ -8,6 +8,7 @@ add_custom_command(
         vt100.bin
         vt100.hex
         vt100.lst
+        vt100.sym
     BYPRODUCTS
         src/vt100.asm
     COMMAND
@@ -17,29 +18,17 @@ add_custom_command(
     COMMAND
         "${ASM8080_EXECUTABLE}" -lvt100 -ovt100 src/vt100.asm
     COMMAND
-        "$<TARGET_FILE:write-checksum>" "${CMAKE_CURRENT_BINARY_DIR}/vt100.bin"
+        "${CMAKE_COMMAND}" -DLST_FILE=vt100.lst -DOUTPUT_FILE=vt100.sym -P "${CMAKE_CURRENT_SOURCE_DIR}/lst_to_sym.cmake"
+    COMMAND
+        "$<TARGET_FILE:write-checksum>" "${CMAKE_CURRENT_BINARY_DIR}/vt100.sym" "${CMAKE_CURRENT_BINARY_DIR}/vt100.bin"
     DEPENDS
         vt100.asm
         write-checksum
-    WORKING_DIRECTORY
-        "${CMAKE_CURRENT_BINARY_DIR}"
-    COMMENT
-        "Assembling and checksumming vt100.asm"
-    VERBATIM
-)
-
-add_custom_command(
-    OUTPUT
-        vt100.sym
-    COMMAND
-        "${CMAKE_COMMAND}" -DLST_FILE=vt100.lst -DOUTPUT_FILE=vt100.sym -P "${CMAKE_CURRENT_SOURCE_DIR}/lst_to_sym.cmake"
-    DEPENDS
-        vt100.lst
         lst_to_sym.cmake
     WORKING_DIRECTORY
         "${CMAKE_CURRENT_BINARY_DIR}"
     COMMENT
-        "Generating vt100.sym"
+        "Assembling and checksumming vt100.asm"
     VERBATIM
 )
 
