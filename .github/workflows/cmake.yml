@@ -24,7 +24,11 @@ jobs:
 
       - name: Install Linux build prerequisites
         if: runner.os == 'Linux'
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
+          echo "man-db man-db/auto-update boolean false" | sudo debconf-set-selections
+          sudo dpkg-reconfigure man-db
           sudo apt-get update
           sudo apt-get install --yes autoconf autoconf-archive automake libtool
 
