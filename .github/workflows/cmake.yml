@@ -30,7 +30,7 @@ jobs:
           echo "man-db man-db/auto-update boolean false" | sudo debconf-set-selections
           sudo dpkg-reconfigure man-db
           sudo apt-get update
-          sudo apt-get install --yes autoconf autoconf-archive automake libtool
+          sudo apt-get install --yes autoconf autoconf-archive automake libtool libltdl-dev
 
       - name: Bootstrap vcpkg
         if: runner.os == 'Linux'
