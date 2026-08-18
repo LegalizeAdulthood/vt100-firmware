@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 set(VT100_FIRMWARE_PROJECT_NAME "vt100-firmware")
-project("${VT100_FIRMWARE_PROJECT_NAME}" C)
+project("${VT100_FIRMWARE_PROJECT_NAME}" C CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
@@ -10,6 +10,7 @@ include(target_folder)
 include(CTest)
 
 add_subdirectory(awnty)
+add_subdirectory(tools)
 add_subdirectory(src)
 
 misc_target(FILES

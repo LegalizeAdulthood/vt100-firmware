@@ -16,12 +16,15 @@ add_custom_command(
         "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/vt100.asm" src/vt100.asm
     COMMAND
         "${ASM8080_EXECUTABLE}" -lvt100 -ovt100 src/vt100.asm
+    COMMAND
+        "$<TARGET_FILE:write-checksum>" "${CMAKE_CURRENT_BINARY_DIR}/vt100.bin"
     DEPENDS
         vt100.asm
+        write-checksum
     WORKING_DIRECTORY
         "${CMAKE_CURRENT_BINARY_DIR}"
     COMMENT
-        "Assembling vt100.asm"
+        "Assembling and checksumming vt100.asm"
     VERBATIM
 )
 
