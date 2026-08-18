@@ -78,7 +78,7 @@ restart7:	org	38h
 ; doesn't repeat indefinitely. As register E is a mask of requested tests and repeat indication, POST sets
 ; the mask just as if DECTST had been invoked with "just self-test, no repeats."
 ;
-; TM §4.2.8, "Power-Up and Self-Test", p. 4-19, describes POST.
+; TM 4.2.8, "Power-Up and Self-Test", p. 4-19, describes POST.
 ;
 post:		mvi	e,1		; Pretend this is DECTST and we requested POST without repeats
 ;
@@ -464,7 +464,7 @@ init_video_ram:	call	to_ground	; initialise character processing routine
 		mvi	b,0ffh
 		jmp	memset		; attribute RAM blank (default rendition)
 ;
-; This is the initial configuration of screen RAM. TM §4.6 explains the
+; This is the initial configuration of screen RAM. TM 4.6 explains the
 ; screen refresh and three termination bytes on each line.
 ; This layout almost matches TM Figure 4-7-3, p.4-89, except that that figure seems to have
 ; a typo (repeated 7F 70 06 line, when second should be 7F 70 0C) - other figures in that
@@ -525,7 +525,7 @@ reset_pusart:	mvi	a,40h		; Reset PUSART so we can write a mode byte again
 ;	columns or refresh rate always sets or resets interlaced mode, we may need to write
 ;	the column mode twice.
 ;
-;	See TM §4.6.2, p. 4-55
+;	See TM 4.6.2, p. 4-55
 ;
 update_dc011:	lda	columns_132
 		ora	a
@@ -777,7 +777,7 @@ connectx:	call	connect_extra	;
 update_scroll:	lxi	b,scroll_dir
 		ldax	b		; A <- scroll direction (-1 or 1)
 		lxi	h,scroll_scan
-		add	m		; A <- scan line ± 1
+		add	m		; A <- scan line +/- 1
 		daa			; keep arithmetic decimal, as there are 10 scan lines
 		ani	0fh		; A <- scan line (single BCD digit)
 		mov	m,a		; update scroll_scan
@@ -896,7 +896,7 @@ gfx_tx_char:	mov	c,a
 wait_gpo_rdy:	push	b
 		call	keyboard_tick
 		pop	b
-		in	ior_flags	; TM §6.4.1 "When data is passed, the GRAPHICS FLAG goes
+		in	ior_flags	; TM 6.4.1 "When data is passed, the GRAPHICS FLAG goes
 		ani	iob_flags_gpo	; high and stays high until the data is stored in [RAM]"
 		jnz	wait_gpo_rdy
 		mov	a,c
@@ -934,7 +934,7 @@ print_nomap:	call	single_shift
 ; SET-UP condition.
 ;
 ; To demonstrate this, the following three sequences should produce a string of three '#' (hash)
-; characters, but the third one will produce two '#' and a '£' (pound).
+; characters, but the third one will produce two '#' and a '(pound)'.
 ;
 ;
 ;	a) SI # SO # SI #	(designations being G0, G1, G0)
@@ -977,7 +977,7 @@ normal_mapping:	mov	a,d		; A <- character map
 		jz	not_uk_enc
 		cpi	23h		; Only difference between UK and ASCII is '#', 023h
 		jnz	not_uk_enc	; So leave everything else untouched
-		mvi	c,1eh		; '#' becomes '£', at ROM glyph 01eh (TM Figure 4-6-18, p.4-78)
+		mvi	c,1eh		; '#' becomes '(pound)', at ROM glyph 01eh (TM Figure 4-6-18, p.4-78)
 not_uk_enc:	lda	char_rvid	; A <- 0 = normal video, 80h = reverse video
 		ora	c
 		mov	c,a		; C <- ROM glyph + normal/reverse video bit
@@ -1130,7 +1130,7 @@ rpt_expired:	lda	setup_b1
 		rz
 		mov	a,e		; A <- key flags
 		ani	10h		; CTRL pressed?
-		rnz			; A key with control cannot repeat (TM §4.4.9.5)
+		rnz			; A key with control cannot repeat (TM 4.4.9.5)
 		lda	latest_key_scan
 		lxi	h,nonrepeat	; Five keys are not allowed to auto-repeat
 		mvi	b,5
@@ -1337,7 +1337,7 @@ make_keyclick:	lda	setup_b2
 		sta	kbd_click_mask	; When this mask is sent to the keyboard, it gets cleared
 		ret
 ;
-; Table of keys that are not allowed to auto-repeat (TM §4.4.9.5)
+; Table of keys that are not allowed to auto-repeat (TM 4.4.9.5)
 ; These are: SETUP, ESC, NO SCROLL, TAB, RETURN
 ;
 nonrepeat:	db	7bh, 2ah, 6ah, 3ah, 64h
@@ -2907,7 +2907,7 @@ scroll_common:	call	calc_shuf1
 		sub	m
 		cpi	17h		; Even jump scrolls can only be completed in one go 
 		rnz			; if they apply to full screen, else they must be
-					; delayed until frame refresh. (TM §4.7.5)
+					; delayed until frame refresh. (TM 4.7.5)
 ;
 ; shuffle
 ;
@@ -4677,7 +4677,7 @@ wl1l:		in	ior_flags
 ; If we're expected to clock data out of NVR and we don't want it,
 ; we just wait out a number of clocks.
 ;
-wait_nvr:	lxi	h,315		; 315 x LBA 7 cycles at 63.5 µs per cycle = 20 ms
+wait_nvr:	lxi	h,315		; 315 x LBA 7 cycles at 63.5 us per cycle = 20 ms
 w20h:		in	ior_flags
 		ana	c
 		jz	w20h
@@ -5371,10 +5371,10 @@ program_pusart:	lda	rx_spd		; A <- receive speed, in bits 7-4
 		lda	pusart_mode
 		jz	two_stop	; jump if 110 baud
 		ani	3fh
-		ori	80h		; Set 1½ stop bits (according to TM Figure 4-3-3 and 8251A datasheet)
+		ori	80h		; Set 1.5 stop bits (according to TM Figure 4-3-3 and 8251A datasheet)
 		jmp	stow_m		; Why not one stop bit? 
 ;
-two_stop:	ani	3fh		; Set two stop bits for transmit at low speed (TM §1.1)
+two_stop:	ani	3fh		; Set two stop bits for transmit at low speed (TM 1.1)
 		ori	0c0h
 stow_m:		sta	pusart_mode
 		in	ior_flags
@@ -5737,7 +5737,7 @@ ior_modem	equ	22h
 ; This is the flags buffer. This defined in the VT100 Print Set, MP-00633-00,
 ; VT100 Basic Video (Sheet 6 of 6). It is an 81LS97 chip, buffering the signal
 ; names (and active H/L) shown in the comments
-; TM §4.6.2.7 says that LBA 7 is used for clocking the NVR, and the print set shows this
+; TM 4.6.2.7 says that LBA 7 is used for clocking the NVR, and the print set shows this
 ior_flags	equ	42h
 iob_flags_xmit	equ	01h ; BV3 XMIT FLAG H
 iob_flags_avo	equ	02h ; BV1 ADVANCED VIDEO L
@@ -5763,7 +5763,7 @@ iow_brightness	equ	42h
 ;	+-----+-----+-----+-----+-----+-----+-----+-----+
 ;
 ;	Not defined in TM - this from print set MP-00633-00.
-;	Bit 4 is not connected. TM §4.2.7 says it was intended to disable receiver interrupts,
+;	Bit 4 is not connected. TM 4.2.7 says it was intended to disable receiver interrupts,
 ;		though it isn't used. In the earliest print set available, this drives a signal
 ;		called BV2 REC INT ENA H, which is ANDed with the "Receive Ready" BV3 REC FLAG H
 ;		signal from the PUSART.
@@ -5975,7 +5975,7 @@ UNUSED_X2110	equ	2110h
 ; saved here.
 saved_action	equ	2111h
 ;
-; Detailed in TM §4.7.3.2, p. 4-92
+; Detailed in TM 4.7.3.2, p. 4-92
 ; Each entry in this array contains the number of a line on the physical screen. What the TM
 ; doesn't say is that bit 7 might be set on the physical line number; this means that the line
 ; is double width, which in turn means that a second set of terminating bytes have been placed
@@ -6130,7 +6130,7 @@ pending_setup	equ	2177h
 keypad_mode     equ	2178h
 ; For line shuffling
 shufdt1		equ	2179h
-; TM §4.7.11 details SET-UP scratch RAM (saying it is subject to change.)
+; TM 4.7.11 details SET-UP scratch RAM (saying it is subject to change.)
 ; It confirms that the first area here is the answerback message, 22 bytes, with 20 characters and 2 delimiters.
 aback_buffer	equ	217bh
 aback_bufend	equ	2190h
@@ -6141,7 +6141,7 @@ tablen		equ	17 ; bytes in tab settings area
 columns_132	equ	21a2h
 ; brightest = 0, dimmest = 1fh
 brightness	equ	21a3h
-; pusart_mode, based on TM §4.7.11
+; pusart_mode, based on TM 4.7.11
 pusart_mode	equ	21a4h
 ;
 ; local_mode flag is ORed into the keyboard byte in order to set the Local LED,
