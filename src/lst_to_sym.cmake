@@ -1,0 +1,23 @@
+if(NOT DEFINED LST_FILE)
+    message(FATAL_ERROR "LST_FILE is required")
+endif()
+if(NOT DEFINED OUTPUT_FILE)
+    message(FATAL_ERROR "OUTPUT_FILE is required")
+endif()
+
+file(STRINGS "${LST_FILE}" LST_LINES REGEX "[Ll][Aa][Bb][Ee][Ll]")
+
+set(OUTPUT_TEXT "")
+foreach(LINE IN LISTS LST_LINES)
+    string(STRIP "${LINE}" LINE)
+    string(TOUPPER "${LINE}" UPPER_LINE)
+    string(FIND "${UPPER_LINE}" "LABEL" KIND_POS)
+    string(REGEX MATCH "^[A-Za-z0-9_]+" NAME "${LINE}")
+    string(REGEX MATCH "[A-Fa-f0-9][A-Fa-f0-9][A-Fa-f0-9][A-Fa-f0-9]h$" ADDRESS_H "${LINE}")
+    if(NOT KIND_POS EQUAL -1 AND NAME AND ADDRESS_H)
+        string(SUBSTRING "${ADDRESS_H}" 0 4 ADDRESS)
+        string(APPEND OUTPUT_TEXT "${ADDRESS} ${NAME}\n")
+    endif()
+endforeach()
+
+file(WRITE "${OUTPUT_FILE}" "${OUTPUT_TEXT}")

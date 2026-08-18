@@ -25,10 +25,44 @@ add_custom_command(
     VERBATIM
 )
 
+add_custom_command(
+    OUTPUT
+        vt100.sym
+    COMMAND
+        "${CMAKE_COMMAND}" -DLST_FILE=vt100.lst -DOUTPUT_FILE=vt100.sym -P "${CMAKE_CURRENT_SOURCE_DIR}/lst_to_sym.cmake"
+    DEPENDS
+        vt100.lst
+        lst_to_sym.cmake
+    WORKING_DIRECTORY
+        "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMENT
+        "Generating vt100.sym"
+    VERBATIM
+)
+
+add_custom_command(
+    OUTPUT
+        vt100.equ
+    COMMAND
+        "${CMAKE_COMMAND}" -DLST_FILE=vt100.lst -DOUTPUT_FILE=vt100.equ -P "${CMAKE_CURRENT_SOURCE_DIR}/lst_to_equ.cmake"
+    DEPENDS
+        vt100.lst
+        lst_to_equ.cmake
+    WORKING_DIRECTORY
+        "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMENT
+        "Generating vt100.equ"
+    VERBATIM
+)
+
 add_custom_target(vt100-rom ALL
     DEPENDS
         vt100.bin
+        vt100.sym
+        vt100.equ
     SOURCES
         vt100.asm
+        lst_to_equ.cmake
+        lst_to_sym.cmake
 )
 target_folder(vt100-rom "Firmware")
