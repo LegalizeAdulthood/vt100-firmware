@@ -42,6 +42,52 @@ add_custom_command(
     VERBATIM
 )
 
+add_custom_command(
+    OUTPUT
+        invaders.bin
+        invaders.hex
+        invaders.lst
+        invaders.sym
+    COMMAND
+        "${ASM8080_EXECUTABLE}" "-I${CMAKE_CURRENT_SOURCE_DIR}" -linvaders -oinvaders "${CMAKE_CURRENT_SOURCE_DIR}/invaders.asm"
+    COMMAND
+        "${CMAKE_COMMAND}" -DLST_FILE=invaders.lst -DOUTPUT_FILE=invaders.sym -P "${CMAKE_CURRENT_SOURCE_DIR}/lst_to_sym.cmake"
+    COMMAND
+        "$<TARGET_FILE:write-checksum>" "${CMAKE_CURRENT_BINARY_DIR}/invaders.sym" "${CMAKE_CURRENT_BINARY_DIR}/invaders.bin"
+    DEPENDS
+        base.asm
+        invaders.asm
+        invaders-abi.asm
+        write-checksum
+        lst_to_sym.cmake
+    WORKING_DIRECTORY
+        "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMENT
+        "Assembling and checksumming invaders.asm"
+    VERBATIM
+)
+
+add_custom_command(
+    OUTPUT
+        invaders-avo.bin
+        invaders-avo.hex
+        invaders-avo.lst
+        invaders-avo.sym
+    COMMAND
+        "${ASM8080_EXECUTABLE}" "-I${CMAKE_CURRENT_SOURCE_DIR}" -linvaders-avo -oinvaders-avo "${CMAKE_CURRENT_SOURCE_DIR}/invaders-avo.asm"
+    COMMAND
+        "${CMAKE_COMMAND}" -DLST_FILE=invaders-avo.lst -DOUTPUT_FILE=invaders-avo.sym -P "${CMAKE_CURRENT_SOURCE_DIR}/lst_to_sym.cmake"
+    DEPENDS
+        invaders-abi.asm
+        invaders-avo.asm
+        lst_to_sym.cmake
+    WORKING_DIRECTORY
+        "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMENT
+        "Assembling invaders-avo.asm"
+    VERBATIM
+)
+
 set(VT100_SPLIT_ROM_IMAGES
     23-061E2.bin
     23-032E2.bin
@@ -82,6 +128,21 @@ add_custom_target(vt100-rom ALL
         lst_to_sym.cmake
 )
 target_folder(vt100-rom "Firmware")
+
+add_custom_target(invaders-rom
+    DEPENDS
+        invaders.bin
+        invaders.sym
+        invaders-avo.bin
+        invaders-avo.sym
+    SOURCES
+        base.asm
+        invaders.asm
+        invaders-avo.asm
+        invaders-abi.asm
+        lst_to_sym.cmake
+)
+target_folder(invaders-rom "Firmware")
 
 if(BUILD_TESTING)
     add_test(NAME vt100.bin
