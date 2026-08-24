@@ -9,19 +9,14 @@ add_custom_command(
         vt100.hex
         vt100.lst
         vt100.sym
-    BYPRODUCTS
-        src/vt100.asm
     COMMAND
-        "${CMAKE_COMMAND}" -E make_directory src
-    COMMAND
-        "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/vt100.asm" src/vt100.asm
-    COMMAND
-        "${ASM8080_EXECUTABLE}" -lvt100 -ovt100 src/vt100.asm
+        "${ASM8080_EXECUTABLE}" "-I${CMAKE_CURRENT_SOURCE_DIR}" -lvt100 -ovt100 "${CMAKE_CURRENT_SOURCE_DIR}/vt100.asm"
     COMMAND
         "${CMAKE_COMMAND}" -DLST_FILE=vt100.lst -DOUTPUT_FILE=vt100.sym -P "${CMAKE_CURRENT_SOURCE_DIR}/lst_to_sym.cmake"
     COMMAND
         "$<TARGET_FILE:write-checksum>" "${CMAKE_CURRENT_BINARY_DIR}/vt100.sym" "${CMAKE_CURRENT_BINARY_DIR}/vt100.bin"
     DEPENDS
+        base.asm
         vt100.asm
         write-checksum
         lst_to_sym.cmake
@@ -79,6 +74,7 @@ add_custom_target(vt100-rom ALL
         vt100.sym
         vt100.equ
     SOURCES
+        base.asm
         vt100.asm
         compare_bin.cmake
         split_vt100_roms.cmake
