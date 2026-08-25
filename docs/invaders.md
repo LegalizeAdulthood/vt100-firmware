@@ -773,10 +773,12 @@ laaaaak
 aaa_aaa
 ```
 
-With AVO RAM available, store the shield as a direct glyph buffer rather
-than a packed nibble state. Any glyph other than `sg_blank` is solid. A missile
-or laser hit turns the struck cell into `sg_blank`, optionally also eroding one
-neighboring cell to make damage look less like pinholes.
+Because AVO RAM is nibble-wide, store the shield as one 4-bit cell code per
+visible shield cell rather than as full glyph bytes or packed damage nibbles.
+The cell code indexes a ROM glyph table when rendering. Any code other than
+`inv_cell_blank` is solid. A missile or laser hit turns the struck cell into
+`inv_cell_blank`, optionally also eroding one neighboring cell to make damage
+look less like pinholes.
 
 ```text
 Light top hit, source:
@@ -795,9 +797,9 @@ la___ak
 a_____a
 ```
 
-This is less compact than the earlier 4-column nibble design, but it is simpler
-to test and looks much better. The packed nibble design remains a fallback if
-the AVO memory budget tightens.
+This is less compact than the earlier 4-column damage-nibble design, but it is
+simpler to test, fits the AVO RAM hardware, and looks much better. The packed
+damage design remains a fallback if the AVO memory budget tightens.
 
 ### Ground And Status
 
@@ -828,7 +830,7 @@ inv_score_hi        db 0
 inv_gunners         db 3
 inv_game_over       db 0
 inv_play_x          db 10       ; physical column for logical playfield col 0
-inv_saved_leds      db 0        ; previous terminal led_state
+inv_saved_leds      db 0        ; previous low nibble of terminal led_state
 inv_heartbeat_timer db 0
 inv_heartbeat_phase db 0
 
@@ -836,7 +838,8 @@ inv_left_pressed    db 0
 inv_right_pressed   db 0
 inv_fire_pressed    db 0
 
-turret_x            db 26       ; left edge of 7-column gunner sprite
+turret_x_lo         db 4        ; left edge of 7-column gunner sprite
+turret_x_hi         db 2        ; 24h = physical column 36
 turret_state        db 0        ; 0 normal, 1 exploding
 turret_timer        db 0
 
@@ -883,7 +886,7 @@ ufo_death_hi        db 0
 ufo_points          db 0
 ufo_disabled        db 0
 
-shield_cells        ds 84       ; 4 shields * 7 columns * 3 rows
+shield_cells        ds 84       ; 4-bit cell codes, not full glyph bytes
 shield_x            ds 4        ; left edge of each shelter
 ```
 
@@ -1027,16 +1030,18 @@ If storing values above 255 is inconvenient, encode UFO points as score units of
 
 ## Shield Damage
 
-The preferred AVO implementation stores shields as literal glyph cells:
+The preferred AVO implementation stores shields as one 4-bit cell code per
+visible shield cell:
 
 ```asm
 shield_cells        ds 84       ; 4 shields * 7 columns * 3 rows
 shield_x            ds 4
 ```
 
-A byte other than `sg_blank` is solid. `sg_blank` is already destroyed.
-Rendering copies the current `shield_cells` bytes to screen RAM and writes
-`id_shield` to the object map for every non-blank glyph.
+A code other than `inv_cell_blank` is solid. `inv_cell_blank` is already
+destroyed. Rendering expands the current `shield_cells` codes through a ROM
+glyph table, writes those glyphs to screen RAM, and writes `id_shield` to the
+object map for every non-blank glyph.
 
 On a hit from above:
 
@@ -1057,7 +1062,7 @@ On a hit from below:
 
 This reproduces the feel of `ascii-invaders`, where shelters are simply glyph
 art with cells erased by shots. It is also easier to test than a
-packed damage state: MAME tests can compare the 84 shield bytes directly.
+packed damage state: MAME tests can compare the 84 shield cell codes directly.
 
 The earlier packed-column design remains a compact fallback. In that version,
 each 4-column shield column has a 4-bit damage value:
@@ -1473,20 +1478,6 @@ same-size trampoline replacements of existing bytes with calls into the AVO ROM.
 The AVO ROM must repeat the displaced base-ROM bytes on normal terminal paths.
 Static tests should fail if `invaders.bin` differs from `vt100.bin` outside the
 explicit trampoline spans and checksum bytes.
-
-## 6. Static Playfield, Turret, Shields, And LEDs
-
-Implement the first visible game screen. Initialize score, level, gunner count,
-ground line, shelters, and the turret. Save the previous keyboard LED state on
-entry and drive the low four LEDs from the remaining gunner count. Draw shields
-from cell data rather than packed damage nibbles on the first pass; this keeps
-the collision and screen tests simple.
-
-Test this slice with a CTest test whose CMake driver launches
-`src/tests/mame-invaders-static-screen.lua`. Enter the game, stop after
-initialization, and compare screen RAM for the score line, ground line, shelter
-cells, and turret location. Also assert that `led_state` matches the initial
-gunner count and that exiting the game restores the saved LED state.
 
 ## 7. Keyboard Input And Turret Movement
 
