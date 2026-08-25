@@ -36,6 +36,12 @@ test.run(function()
         { "inv_saved_led_state", 1 },
         { "inv_game_over", 1 },
         { "inv_level_timer", 1 },
+        { "inv_turret_death_timer", 1 },
+        { "inv_missile_tick_timer", 1 },
+        { "inv_missile_fire_timer", 1 },
+        { "inv_missile_active_count", 1 },
+        { "inv_missile_shot_index", 1 },
+        { "inv_missile_slot_tmp", 1 },
         { "inv_turret_x_lo", 1 },
         { "inv_turret_x_hi", 1 },
         { "inv_laser_active", 1 },
@@ -66,8 +72,9 @@ test.run(function()
         { "inv_alien_min_row", 1 },
         { "inv_alien_max_row", 1 },
         { "inv_alien_data_base", 275 },
+        { "inv_missile_data_base", 12 },
         { "inv_shield_cells_base", 84 },
-        { "inv_dirty_queue_base", 64 },
+        { "inv_dirty_queue_base", 48 },
         { "inv_object_map_base", 1440 },
     }
 

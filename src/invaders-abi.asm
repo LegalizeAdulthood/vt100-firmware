@@ -40,6 +40,14 @@ inv_laser_start_row     equ     inv_turret_top_row-1
 inv_laser_top_row       equ     0
 inv_laser_period        equ     1
 inv_laser_glyph         equ     19h
+inv_missile_count       equ     3
+inv_missile_tick_period equ     3
+inv_missile_initial_delay equ   40
+inv_missile_reload_delay equ    17
+inv_missile_empty_delay equ     4
+inv_missile_glyph       equ     18h
+inv_missile_shoot_order_count equ 76
+inv_turret_death_frames equ     55
 inv_level_pause_frames  equ     0fh
 inv_alien_rows          equ     5
 inv_alien_cols          equ     11
@@ -119,7 +127,13 @@ inv_level               equ     inv_gunners-1
 inv_saved_led_state     equ     inv_level-1
 inv_game_over           equ     inv_saved_led_state-1
 inv_level_timer         equ     inv_game_over-1
-inv_turret_x            equ     inv_level_timer-1
+inv_turret_death_timer  equ     inv_level_timer-1
+inv_missile_tick_timer  equ     inv_turret_death_timer-1
+inv_missile_fire_timer  equ     inv_missile_tick_timer-1
+inv_missile_active_count equ    inv_missile_fire_timer-1
+inv_missile_shot_index  equ     inv_missile_active_count-1
+inv_missile_slot_tmp    equ     inv_missile_shot_index-1
+inv_turret_x            equ     inv_missile_slot_tmp-1
 inv_turret_x_lo         equ     inv_turret_x
 inv_turret_x_hi         equ     inv_turret_x_lo-1
 inv_laser_active        equ     inv_turret_x_hi-1
@@ -166,14 +180,29 @@ inv_alien_y_hi_base     equ     inv_alien_y_hi_top-inv_alien_count+1
 inv_alien_data_top      equ     inv_alien_live_top
 inv_alien_data_base     equ     inv_alien_y_hi_base
 inv_alien_data_size     equ     inv_alien_data_top-inv_alien_data_base+1
-inv_state_low           equ     inv_alien_data_base
+inv_alien_state_low     equ     inv_alien_data_base
+;
+; Enemy missile arrays store one byte per missile slot.
+;
+inv_missile_active_top  equ     inv_alien_state_low-1
+inv_missile_active_base equ     inv_missile_active_top-inv_missile_count+1
+inv_missile_row_top     equ     inv_missile_active_base-1
+inv_missile_row_base    equ     inv_missile_row_top-inv_missile_count+1
+inv_missile_col_top     equ     inv_missile_row_base-1
+inv_missile_col_base    equ     inv_missile_col_top-inv_missile_count+1
+inv_missile_phase_top   equ     inv_missile_col_base-1
+inv_missile_phase_base  equ     inv_missile_phase_top-inv_missile_count+1
+inv_missile_data_top    equ     inv_missile_active_top
+inv_missile_data_base   equ     inv_missile_phase_base
+inv_missile_data_size   equ     inv_missile_data_top-inv_missile_data_base+1
+inv_state_low           equ     inv_missile_data_base
 ;
 ; Larger buffers live below the fixed scalar state.
 ;
 inv_shield_cells_top    equ     inv_state_low-1
 inv_shield_cells_base   equ     inv_shield_cells_top-inv_shield_cell_count+1
 inv_dirty_queue_top     equ     inv_shield_cells_base-1
-inv_dirty_queue_size    equ     64
+inv_dirty_queue_size    equ     48
 inv_dirty_queue_base    equ     inv_dirty_queue_top-inv_dirty_queue_size+1
 inv_object_map_top      equ     inv_dirty_queue_base-1
 inv_object_map_size     equ     1440
