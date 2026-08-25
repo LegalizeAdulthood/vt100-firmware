@@ -18,4 +18,8 @@ inv_enter_impl:	ret
 inv_idle_impl:	ret
 inv_exit_impl:	ret
 
+; Emit a full 8 KiB program expansion ROM image for MAME.
+	org	inv_avo_base+1fffh
+	db	0
+
 	end
