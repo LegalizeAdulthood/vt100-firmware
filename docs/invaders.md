@@ -1145,7 +1145,7 @@ failed" and "hardware acceptance failed."
 
 Use several layers so most bugs are caught before opening MAME:
 
-1. Build test: run the existing CMake workflow and CTest suite.
+1. Build test: run the `invaders` CMake workflow and CTest suite.
 2. Static ROM test: verify that Invaders entry hooks assemble at the expected
    labels, ROM checksum bytes were refreshed, `invaders-[1-4].bin` are exactly
    2048 bytes each, and `invaders-avo.bin` is exactly 8192 bytes.
@@ -1172,21 +1172,28 @@ Use several layers so most bugs are caught before opening MAME:
 ### Existing Build And ROM Preparation
 
 Configure with `MAME_COMMAND` when `mame.exe` is not already on `PATH`. The
-`mame-invaders` target is only created when CMake has a non-empty
-`MAME_COMMAND`.
+`mame-invaders` target and the MAME-backed CTest tests are only created when
+CMake has a non-empty `MAME_COMMAND`.
 
 ```bat
 cd /d <SourceDir>
-cmake --preset default -DMAME_COMMAND=<MAMEDir>\mame.exe
+cmake --preset invaders -DMAME_COMMAND=<MAMEDir>\mame.exe
 ```
 
-Build the Invaders ROM set and install it into MAME's `vt100` ROM directory:
+Exercise the full build and test path with the `invaders` CMake workflow
+preset:
 
 ```bat
-cmake --build --preset default --target invaders-rom
-cmake --build --preset default --target mame-invaders
-ctest --test-dir <BuildDir>
+cmake --workflow --preset invaders
 ```
+
+The workflow configures the build tree, runs the `invaders` build preset, and
+runs the `invaders` CTest preset. The `invaders` build preset selects
+`vt100-rom` so stock VT100 ROM regression tests have fresh build artifacts, and
+`mame-invaders` to build and stage the Invaders ROMs for MAME. Invaders-specific
+CTest tests should run CMake scripts from `src/tests`. Those scripts set the
+MAME working directory, invoke `mame.exe` with the staged ROMs, and pass the
+appropriate Lua script with `-autoboot_script`.
 
 The `invaders-rom` target assembles and checksum-patches `invaders.bin`, then
 splits it into these files:
@@ -1342,7 +1349,7 @@ window scaling, and imperfect graphics flags can otherwise cause noisy diffs.
 For this game, a better visual assertion is often to read screen RAM and compare
 the 60 by 24 character grid directly.
 
-### Suggested MAME Commands
+### Suggested MAME Test Commands
 
 Manual smoke command, from `docs/mame.md`:
 
@@ -1351,25 +1358,27 @@ cd /d <MAMEDir>
 mame.exe vt100 -rompath roms -window
 ```
 
-Automated runs should prefer the installed MAME build's script/headless options.
-Check them with:
+Automated runs should go through CTest. The top-level command is:
 
 ```bat
-cd /d <MAMEDir>
-mame.exe -showusage
+cmake --workflow --preset invaders
 ```
 
-The intended CI shape is:
+Each MAME-backed CTest entry should run a CMake driver script from `src/tests`.
+That driver script sets MAME's working directory and then invokes MAME in
+headless/scripted mode. The driver command shape is:
 
 ```bat
-mame.exe vt100 ^
-  -rompath roms ^
-  -skip_gameinfo ^
-  -nothrottle ^
-  -video none ^
-  -sound none ^
-  -autoboot_script <SourceDir>\tools\mame-invaders-smoke.lua
+cmake ^
+  -DMAME_COMMAND=<MAMEDir>\mame.exe ^
+  -DMAME_WORKING_DIRECTORY=<MAMEDir> ^
+  -DMAME_LUA_SCRIPT=<SourceDir>\src\tests\mame-invaders-smoke.lua ^
+  -P <SourceDir>\src\tests\run-mame-test.cmake
 ```
+
+The CMake script should run `mame.exe vt100 -rompath roms -skip_gameinfo
+-nothrottle -video none -sound none -autoboot_script <script>` with
+`<MAMEDir>` as the working directory.
 
 If the installed MAME build cannot skip the warning screen for the `vt100`
 driver, the Lua script or input script must send the equivalent of typing `OK`
@@ -1380,6 +1389,7 @@ before triggering the game.
 The MAME-backed gate should initially be modest:
 
 - firmware builds and CTest passes;
+- the stock VT100 ROM and split-ROM CTest checks still pass;
 - ROM set is prepared by `mame-invaders` and `mame.exe -verifyroms vt100`
   reports no missing ROMs;
 - expansion ROM code is visible at `8000h` and the AVO probe signature can be
@@ -1409,19 +1419,210 @@ AVO attribute interactions, and exact video timing.
   expansion ROM and the `3000h`-`3fffh` AVO RAM range, or do we need a small
   driver patch for full automated testing?
 
-## Implementation Order
+# Implementation
 
-1. Add the SET-UP `I` launcher, game exit hook, and `inv_active` idle dispatch.
-2. Allocate expansion ROM code symbols and AVO RAM state/object-map symbols.
-3. Implement `inv_wait_frame`, `inv_init_screen`, `inv_putc`,
-   `inv_puts_glyphs`, and optionally `inv_puts_sg`.
-4. Draw static status, ground, shields, and turret.
-5. Read raw keyboard scan codes and move the turret.
-6. Add player laser and shield collision.
-7. Add alien formation initialization and one-alien-per-frame movement.
-8. Add alien kills, scoring, and level reset.
-9. Add alien missiles and turret death.
-10. Add UFO timing, movement, and scoring.
-11. Add game-over and clean exit.
-12. Add MAME smoke tests for SET-UP entry, frame advance, input, firing, and
-    exit.
+Each slice should leave the repository in a buildable, testable state. Add tests
+as CTest tests, and exercise the complete implementation with
+`cmake --workflow --preset invaders`. CTest entries should run CMake driver
+scripts from `src/tests`. For MAME-backed tests, those CMake scripts set the
+working directory to `<MAMEDir>`, run `mame.exe` against the staged ROMs, and
+pass the matching Lua script with `-autoboot_script`. MAME Lua test scripts and
+shared Lua helpers also live under `src/tests`.
+
+## 1. ROM Layout And MAME Test Harness
+
+Implement the automated test foundation before adding gameplay. Keep
+`vt100-rom` in the `invaders` build preset so every Invaders workflow run also
+builds the stock VT100 ROM images used by the existing CTest regression checks.
+Keep the existing `invaders-rom` target as the build entry point for
+`invaders.bin`, `invaders-[1-4].bin`, `invaders-avo.bin`, and the matching
+symbol files. Keep `mame-invaders` as the MAME installation target. Add
+`src/tests` for CMake test driver scripts and MAME Lua scripts, starting with
+shared Lua helpers to load `.sym` files, read and write the 8080 program space,
+fail with a clear message, and exit MAME with a non-zero host-visible result
+when an assertion fails.
+
+Test this slice by adding CTest tests for the ROM layout checks, then running
+the `invaders` workflow preset:
+
+```bat
+cmake --workflow --preset invaders
+```
+
+Add a CMake driver such as `src/tests/mame-invaders-rom-layout.cmake` and a Lua
+script such as `src/tests/mame-invaders-rom-layout.lua`. The CMake driver sets
+MAME's working directory and runs MAME with the Lua script. The Lua script
+checks `inv_enter` is visible at `8000h`, verifies that the first byte is the
+expected `jmp` opcode, confirms that the top of AVO RAM can be written and read,
+and exits. Register the CMake driver as a CTest test. The static host checks
+should also be CTest tests, using CMake scripts to assert that
+`invaders-[1-4].bin` are 2048 bytes each and `invaders-avo.bin` is 8192 bytes.
+
+## 2. Entry Glue And Mode Ownership
+
+Implement the smallest base-ROM hook that can enter and leave the game. Add the
+SET-UP `I` launcher in the existing `setup_keys` path, discard the synthetic
+`setup_ready` return before entering the game, restore normal SET-UP dispatch
+state, and jump to `inv_enter` in the `8000h` expansion ROM. Add `inv_active`
+and an idle-loop branch so normal terminal code runs when the flag is clear and
+Invaders code runs when it is set. Implement `inv_exit` enough to clear
+`inv_active` and return control to the normal terminal path.
+
+Test this slice with a CTest test whose CMake driver launches a Lua script such
+as `src/tests/mame-invaders-entry.lua`. The script should boot MAME, enter
+SET-UP, press `I`, wait for a bounded number of frames, and assert that
+`inv_active` became non-zero. It should then press SET-UP or trigger the test
+exit path and assert that `inv_active` returns to zero. A CTest static symbol
+test should verify that `inv_enter`, `inv_idle`, and `inv_exit` resolve in the
+`8000h`-`9fffh` expansion ROM window.
+
+## 3. Top-Down AVO RAM State Allocation
+
+Define the game-state layout in AVO RAM from `3fffh` downward. Keep fixed test
+and diagnostic bytes at the top, then allocate persistent state such as
+`inv_active`, frame counters, input latches, score, gunner count, level, and
+saved LED state below them. Reserve larger buffers, including trace buffers,
+dirty queues, and any object map, beneath the fixed scalar state. Treat `3800h`
+as a soft low-water mark, not as the beginning of a required block.
+
+Test this slice with a CTest static layout script that parses `invaders.sym`
+and fails if mutable symbols fall outside `3000h`-`3fffh`, overlap each other,
+or cross the configured low-water mark without an explicit update to the plan.
+A CTest MAME driver should launch a Lua test that writes sentinel values to the
+top-down state region, reads them back, and verifies that visible screen memory
+remains unchanged until a rendering routine intentionally touches it.
+
+## 4. Frame Loop And Test Mode
+
+Implement the frame scheduler. `inv_wait_frame` should wait for
+`frame_count` to change, then update a 16-bit Invaders frame counter. `inv_idle`
+should service keyboard hardware, consume game input, honor exit requests, wait
+for a frame, and call `inv_frame`. Add deterministic test-mode controls in AVO
+RAM so tests can select an input script, stop at a requested frame, and report a
+result code without depending on wall-clock timing.
+
+Test this slice with a CTest test whose CMake driver launches
+`src/tests/mame-invaders-frame.lua`. Enable test mode, enter the game, run for a
+fixed number of frames with `-nothrottle`, and assert that the Invaders frame
+counter advances monotonically. Set a stop frame and assert that
+`inv_test_result` reports pass before MAME exits.
+
+## 5. Screen And Glyph Rendering Primitives
+
+Implement the direct screen writer before game objects. Build a row-address
+table for the 24 visible playfield rows, then add `inv_putc`,
+`inv_puts_glyphs`, and `inv_puts_sg`. The Special Graphics helper should
+convert printable Special Graphics source bytes to the character-generator glyph
+numbers already expected by the firmware. Keep rendering routines separate from
+game logic so screen RAM tests can exercise them directly.
+
+Test this slice with a CTest test whose CMake driver launches
+`src/tests/mame-invaders-render.lua`. In test mode, call a small rendering probe
+that clears the playfield, writes a few normal and Special Graphics glyphs at
+known logical coordinates, and stops. The Lua script should read screen RAM and
+compare the affected cells with expected glyph values, including row-boundary
+and right-edge cases.
+
+## 6. Static Playfield, Turret, Shields, And LEDs
+
+Implement the first visible game screen. Initialize score, level, gunner count,
+ground line, shelters, and the turret. Save the previous keyboard LED state on
+entry and drive the low four LEDs from the remaining gunner count. Draw shields
+from cell data rather than packed damage nibbles on the first pass; this keeps
+the collision and screen tests simple.
+
+Test this slice with a CTest test whose CMake driver launches
+`src/tests/mame-invaders-static-screen.lua`. Enter the game, stop after
+initialization, and compare screen RAM for the score line, ground line, shelter
+cells, and turret location. Also assert that `led_state` matches the initial
+gunner count and that exiting the game restores the saved LED state.
+
+## 7. Keyboard Input And Turret Movement
+
+Implement raw game input handling. Consume the existing keyboard scan-code silo,
+set one-frame latches for left, right, and fire, and treat SET-UP as the primary
+exit key. Clamp turret movement to the playfield bounds and redraw only the
+cells affected by movement. Keep `q` or another development shortcut optional
+and behind test/development mode if it is not intended for hardware behavior.
+
+Test this slice with a CTest test whose CMake driver launches
+`src/tests/mame-invaders-input.lua`. Use MAME input scripting or the firmware
+test input selector to press left, right, fire, and SET-UP. Assert that the
+turret position changes only within bounds, fire is latched for the frame that
+consumed it, and SET-UP exits without leaking normal terminal key output.
+
+## 8. Player Laser And Shield Collisions
+
+Implement the player laser as a single active shot. Firing should create the
+laser only when no laser is active, advance it upward on the configured cadence,
+erase the previous cell, and stop at the top of the playfield. Add shield
+collision using the shield cell buffer and update both the shield data and
+screen RAM when a hit removes material.
+
+Test this slice with a CTest test whose CMake driver launches
+`src/tests/mame-invaders-laser.lua`. Run deterministic input that fires into
+empty space, then into a known shield cell. Assert laser position,
+active/inactive state, shot counters, shield-cell mutation, and the matching
+screen RAM update.
+
+## 9. Alien Formation And One-Alien Movement
+
+Implement alien state and formation initialization. Spawn 55 aliens over the
+first 55 frames or through an equivalent deterministic initialization path.
+Move one live alien per frame, track formation bounds, reverse direction at the
+edges, descend on direction changes, and accelerate naturally as aliens are
+removed by iterating only live aliens.
+
+Test this slice with a CTest test whose CMake driver launches
+`src/tests/mame-invaders-aliens.lua`. Stop at frames 55, 128, and at least one
+edge-turn frame. Assert live alien count, selected alien index, formation bounds,
+direction, descent count, and representative screen cells. Include a test case
+with removed aliens so the one-alien-per-frame iterator skips dead entries
+correctly.
+
+## 10. Alien Kills, Scoring, And Level Reset
+
+Connect the player laser to alien collision. On hit, remove the alien, update
+the score from the alien row, erase or animate the destroyed alien, and delay
+formation motion if a kill animation needs visible time. When no aliens remain,
+pause briefly, increment the level, reset formation state, and redraw the new
+round.
+
+Test this slice with a CTest test whose CMake driver launches
+`src/tests/mame-invaders-scoring.lua`. Use deterministic setup to fire at a
+chosen alien. Assert live count, dead flag, score bytes, screen erasure or
+explosion glyphs, and level reset behavior after clearing the last alien.
+
+## 11. Enemy Missiles, Turret Death, And Game Over
+
+Implement enemy fire using the deterministic shooter order. Track a small fixed
+set of missiles, move them downward, collide with shields and the turret, and
+advance the gunner/death sequence. Losing a gunner should update LEDs and
+respawn the turret after the configured delay. Losing the final gunner should
+enter game-over state and stop active play until SET-UP exits or a restart path
+is added.
+
+Test this slice with a CTest test whose CMake driver launches
+`src/tests/mame-invaders-enemy-fire.lua`. Select a known shooter script, run
+until a missile hits a shield, then until a missile hits the turret. Assert
+missile slots, shield damage, gunner count, LED mask, death timer, respawn
+state, and final game-over state.
+
+## 12. UFO, Heartbeat, Exit, And Regression Gate
+
+Finish the remaining arcade polish and close the regression loop. Add UFO
+timing, movement, collision, and score selection. Drive the keyboard click
+heartbeat from alien movement cadence. Harden `inv_exit` so it restores or
+rebuilds terminal state, clears transient game state, restores LEDs, and returns
+the terminal to normal input handling. Add CTest entries for the MAME Lua smoke
+tests once the local MAME invocation is stable, and include them in the workflow
+preset's normal test pass.
+
+Test this slice with a CTest test whose CMake driver launches
+`src/tests/mame-invaders-full-smoke.lua`. Run from a clean ROM install, enter
+the game, execute scripted movement and firing, wait through alien movement,
+enemy fire, UFO appearance, and exit. Assert the high-level acceptance gates
+listed above, add screen-RAM golden checks for a small set of deterministic
+frames, and exercise the whole suite with `cmake --workflow --preset invaders`.
+Keep hardware testing as the final gate for keyboard feel, brightness, AVO
+attribute behavior, and exact video timing.

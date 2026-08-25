@@ -33,6 +33,11 @@
       "name": "default",
       "displayName": "Configure with default settings",
       "inherits": [ "sibling-build-preset", "project-name", "vcpkg" ]
+    },
+    {
+      "name": "invaders",
+      "displayName": "Configure Invaders ROM testing",
+      "inherits": "default"
     }
   ],
   "buildPresets": [
@@ -41,6 +46,16 @@
       "displayName": "Build with default settings",
       "configurePreset": "default",
       "configuration": "Release"
+    },
+    {
+      "name": "invaders",
+      "displayName": "Build and stage Invaders ROMs for MAME",
+      "configurePreset": "invaders",
+      "configuration": "Release",
+      "targets": [
+        "vt100-rom",
+        "mame-invaders"
+      ]
     }
   ],
   "testPresets": [
@@ -48,6 +63,15 @@
       "name": "default",
       "displayName": "Test with default settings",
       "configurePreset": "default",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "invaders",
+      "displayName": "Test Invaders ROMs with default settings",
+      "configurePreset": "invaders",
       "configuration": "Release",
       "output": {
         "outputOnFailure": true
@@ -70,6 +94,24 @@
         {
           "type": "test",
           "name": "default"
+        }
+      ]
+    },
+    {
+      "name": "invaders",
+      "displayName": "Workflow for Invaders ROM testing",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "invaders"
+        },
+        {
+          "type": "build",
+          "name": "invaders"
+        },
+        {
+          "type": "test",
+          "name": "invaders"
         }
       ]
     }

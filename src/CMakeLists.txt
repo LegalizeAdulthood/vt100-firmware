@@ -255,21 +255,5 @@ add_custom_target(invaders-rom
 target_folder(invaders-rom "Firmware")
 
 if(BUILD_TESTING)
-    add_test(NAME vt100.bin
-        COMMAND
-            "${CMAKE_COMMAND}"
-                "-DACTUAL_FILE=${CMAKE_CURRENT_BINARY_DIR}/vt100.bin"
-                "-DEXPECTED_FILE=${CMAKE_SOURCE_DIR}/bin/vt100.bin"
-                -P "${CMAKE_CURRENT_SOURCE_DIR}/compare_bin.cmake"
-    )
-
-    foreach(VT100_SPLIT_ROM_IMAGE IN LISTS VT100_SPLIT_ROM_IMAGES)
-        add_test(NAME ${VT100_SPLIT_ROM_IMAGE}
-            COMMAND
-                "${CMAKE_COMMAND}"
-                    "-DACTUAL_FILE=${CMAKE_CURRENT_BINARY_DIR}/${VT100_SPLIT_ROM_IMAGE}"
-                    "-DEXPECTED_FILE=${CMAKE_SOURCE_DIR}/bin/${VT100_SPLIT_ROM_IMAGE}"
-                    -P "${CMAKE_CURRENT_SOURCE_DIR}/compare_bin.cmake"
-        )
-    endforeach()
+    add_subdirectory(tests)
 endif()
