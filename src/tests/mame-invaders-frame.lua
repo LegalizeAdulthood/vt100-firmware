@@ -10,7 +10,7 @@ local test = dofile(script_directory .. "/mame-test.lua")
 local M = {}
 local frame_subscription
 
-local function make_entry_step()
+local function make_frame_step()
     local binary_directory = test.required_env("VT100_INVADERS_BINARY_DIRECTORY")
     local equates = test.load_equates(binary_directory .. "/invaders.equ")
 
@@ -20,20 +20,17 @@ local function make_entry_step()
     local inv_test_stop_lo = test.required_equate(equates, "inv_test_stop_lo")
     local inv_test_stop_hi = test.required_equate(equates, "inv_test_stop_hi")
     local inv_test_result = test.required_equate(equates, "inv_test_result")
+    local inv_frame_lo = test.required_equate(equates, "inv_frame_lo")
+    local inv_frame_hi = test.required_equate(equates, "inv_frame_hi")
     local in_setup = test.required_equate(equates, "in_setup")
-    local char_action = test.required_equate(equates, "char_action")
-    local saved_action = test.required_equate(equates, "saved_action")
-    local new_key_scan = test.required_equate(equates, "new_key_scan")
     local key_flags = test.required_equate(equates, "key_flags")
     local key_silo = test.required_equate(equates, "key_silo")
-    local key_history = test.required_equate(equates, "key_history")
-    local latest_key_scan = test.required_equate(equates, "latest_key_scan")
-    local pending_setup = test.required_equate(equates, "pending_setup")
 
     local key_flag_shift = 0x20
     local key_flag_eos = 0x80
     local scan_setup = 0x7b
     local scan_i = 0x16
+    local stop_frame = 8
 
     local mem = test.program_space()
 
@@ -41,8 +38,8 @@ local function make_entry_step()
         return mem:read_u8(address)
     end
 
-    local function read_u16(address)
-        return read_u8(address) + (read_u8(address + 1) * 256)
+    local function read_u16(lo_address, hi_address)
+        return read_u8(lo_address) + (read_u8(hi_address) * 256)
     end
 
     local function write_u8(address, value)
@@ -62,8 +59,8 @@ local function make_entry_step()
     local stage_frame = 0
     local setup_key_repeats = 0
     local shift_i_repeats = 0
-    local exit_key_repeats = 0
-    local saved_action_value = 0
+    local last_game_frame = nil
+    local saw_frame_advance = false
 
     local function enter_stage(next_stage)
         stage = next_stage
@@ -72,15 +69,12 @@ local function make_entry_step()
 
     local function fail_timeout(description)
         test.fail(string.format(
-            "%s timed out at frame %d: key_flags=%s key_silo=%s new_key_scan=%s latest_key_scan=%s key_history=%s pending_setup=%s in_setup=%s",
+            "%s timed out at frame %d: active=%s game_frame=%s result=%s in_setup=%s",
             description,
             frame,
-            test.hex(read_u8(key_flags), 2),
-            test.hex(read_u8(key_silo), 2),
-            test.hex(read_u8(new_key_scan), 2),
-            test.hex(read_u8(latest_key_scan), 2),
-            test.hex(read_u8(key_history), 2),
-            test.hex(read_u8(pending_setup), 2),
+            test.hex(read_u8(inv_active), 2),
+            test.hex(read_u16(inv_frame_lo, inv_frame_hi), 4),
+            test.hex(read_u8(inv_test_result), 2),
             test.hex(read_u8(in_setup), 2)))
     end
 
@@ -93,11 +87,11 @@ local function make_entry_step()
                     return
                 end
                 write_u8(inv_active, 0)
-                write_u8(inv_test_mode, 0)
+                write_u8(inv_test_mode, 1)
                 write_u8(inv_test_script, 0)
-                write_u8(inv_test_stop_lo, 0)
+                write_u8(inv_test_stop_lo, stop_frame)
                 write_u8(inv_test_stop_hi, 0)
-                write_u8(inv_test_result, 0)
+                write_u8(inv_test_result, 0x0e)
                 enter_stage("setup-key")
                 return
             end
@@ -114,7 +108,6 @@ local function make_entry_step()
 
             if stage == "wait-setup" then
                 if read_u8(in_setup) ~= 0 then
-                    saved_action_value = read_u16(saved_action)
                     enter_stage("shift-i")
                     return
                 end
@@ -136,9 +129,17 @@ local function make_entry_step()
 
             if stage == "wait-active" then
                 if read_u8(inv_active) ~= 0 then
-                    test.assert_eq(read_u8(in_setup), 0, "in_setup after Invaders entry")
-                    test.assert_eq(read_u16(char_action), saved_action_value, "char_action after Invaders entry")
-                    enter_stage("exit-key")
+                    local game_frame = read_u16(inv_frame_lo, inv_frame_hi)
+                    if game_frame >= stop_frame then
+                        test.fail(string.format(
+                            "missed active frame window: game_frame=%s stop_frame=%s",
+                            test.hex(game_frame, 4),
+                            test.hex(stop_frame, 4)))
+                        return
+                    end
+                    test.assert_eq(read_u8(inv_test_result), 0, "initial test result")
+                    last_game_frame = game_frame
+                    enter_stage("wait-stop")
                     return
                 end
                 if frame - stage_frame > 120 then
@@ -147,23 +148,33 @@ local function make_entry_step()
                 return
             end
 
-            if stage == "exit-key" then
-                if exit_key_repeats < 2 then
-                    inject_key(scan_setup, 0)
-                    exit_key_repeats = exit_key_repeats + 1
+            if stage == "wait-stop" then
+                local game_frame = read_u16(inv_frame_lo, inv_frame_hi)
+                if game_frame < last_game_frame then
+                    test.fail(string.format(
+                        "game frame moved backward: was %s, now %s",
+                        test.hex(last_game_frame, 4),
+                        test.hex(game_frame, 4)))
                     return
                 end
-                enter_stage("wait-exit")
-                return
-            end
+                if game_frame > last_game_frame then
+                    saw_frame_advance = true
+                end
+                last_game_frame = game_frame
 
-            if stage == "wait-exit" then
                 if read_u8(inv_active) == 0 then
+                    test.assert_eq(game_frame, stop_frame, "stop game frame")
+                    test.assert_eq(read_u8(inv_test_result), 0, "stop test result")
+                    if not saw_frame_advance then
+                        test.fail("game frame counter did not advance")
+                        return
+                    end
                     test.pass()
                     return
                 end
+
                 if frame - stage_frame > 120 then
-                    fail_timeout("leaving Invaders")
+                    fail_timeout("waiting for test stop frame")
                 end
             end
         end)
@@ -175,22 +186,22 @@ local function make_entry_step()
 end
 
 function M.start()
-    local step_entry_test = nil
+    local step_frame_test = nil
 
     emu.register_prestart(function()
-        local ok, result = pcall(make_entry_step)
+        local ok, result = pcall(make_frame_step)
         if not ok then
             test.fail(result)
             return
         end
-        step_entry_test = result
+        step_frame_test = result
     end)
 
     frame_subscription = emu.add_machine_frame_notifier(function()
-        if step_entry_test == nil then
+        if step_frame_test == nil then
             return
         end
-        local ok, err = pcall(step_entry_test)
+        local ok, err = pcall(step_frame_test)
         if not ok then
             test.fail(err)
         end
