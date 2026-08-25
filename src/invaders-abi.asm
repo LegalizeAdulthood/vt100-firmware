@@ -9,6 +9,11 @@ inv_idle                equ     inv_code_base+3
 inv_exit                equ     inv_code_base+6
 inv_idle_hook           equ     inv_code_base+9
 inv_setup_keys_hook     equ     inv_code_base+12
+inv_screen_rows         equ     24
+inv_screen_cols         equ     80
+inv_row_stride          equ     inv_screen_cols+3
+inv_sg_source_base      equ     5fh
+inv_sg_source_limit     equ     7fh
 ;
 ; Mutable Invaders state lives in AVO RAM and grows downward from the top.
 ;
@@ -37,6 +42,8 @@ inv_fail_no_avo         equ     01h
 inv_fail_bad_state      equ     02h
 inv_fail_bad_sprite     equ     03h
 inv_fail_timeout        equ     04h
+inv_test_script_none    equ     00h
+inv_test_script_render  equ     01h
 ;
 ; Persistent scalar game state.
 ;
