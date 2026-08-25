@@ -13,7 +13,7 @@ file(READ "${INPUT_FILE}" INPUT_HEX HEX)
 string(LENGTH "${INPUT_HEX}" INPUT_HEX_LENGTH)
 math(EXPR INPUT_SIZE "${INPUT_HEX_LENGTH} / 2")
 if(NOT INPUT_SIZE EQUAL 8192)
-    message(FATAL_ERROR "Expected an 8192-byte VT100 ROM image: ${INPUT_FILE} is ${INPUT_SIZE} bytes")
+    message(FATAL_ERROR "Expected an 8192-byte ROM image: ${INPUT_FILE} is ${INPUT_SIZE} bytes")
 endif()
 
 file(MAKE_DIRECTORY "${OUTPUT_DIRECTORY}")
@@ -31,14 +31,26 @@ set(ROM_SKIPS
     2
     3
 )
-set(ROM_FILES
-    23-061E2.bin
-    23-032E2.bin
-    23-033E2.bin
-    23-034E2.bin
-)
+if(DEFINED OUTPUT_PREFIX)
+    set(ROM_FILES
+        ${OUTPUT_PREFIX}-1.bin
+        ${OUTPUT_PREFIX}-2.bin
+        ${OUTPUT_PREFIX}-3.bin
+        ${OUTPUT_PREFIX}-4.bin
+    )
+elseif(NOT DEFINED ROM_FILES)
+    set(ROM_FILES
+        23-061E2.bin
+        23-032E2.bin
+        23-033E2.bin
+        23-034E2.bin
+    )
+endif()
 
 list(LENGTH ROM_FILES ROM_FILE_COUNT)
+if(NOT ROM_FILE_COUNT EQUAL 4)
+    message(FATAL_ERROR "Expected exactly four output ROM file names")
+endif()
 math(EXPR LAST_ROM_FILE_INDEX "${ROM_FILE_COUNT} - 1")
 
 if(WIN32)

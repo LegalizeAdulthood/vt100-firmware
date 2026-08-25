@@ -104,6 +104,13 @@ set(VT100_SPLIT_ROM_IMAGES
     23-034E2.bin
 )
 
+set(INVADERS_SPLIT_ROM_IMAGES
+    invaders-1.bin
+    invaders-2.bin
+    invaders-3.bin
+    invaders-4.bin
+)
+
 add_custom_command(
     OUTPUT
         ${VT100_SPLIT_ROM_IMAGES}
@@ -119,6 +126,25 @@ add_custom_command(
         "${CMAKE_CURRENT_BINARY_DIR}"
     COMMENT
         "Splitting vt100.bin into ROM images"
+    VERBATIM
+)
+
+add_custom_command(
+    OUTPUT
+        ${INVADERS_SPLIT_ROM_IMAGES}
+    COMMAND
+        "${CMAKE_COMMAND}"
+            "-DINPUT_FILE=${CMAKE_CURRENT_BINARY_DIR}/invaders.bin"
+            "-DOUTPUT_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}"
+            "-DOUTPUT_PREFIX=invaders"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/split_vt100_roms.cmake"
+    DEPENDS
+        invaders.bin
+        split_vt100_roms.cmake
+    WORKING_DIRECTORY
+        "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMENT
+        "Splitting invaders.bin into ROM images"
     VERBATIM
 )
 
@@ -173,12 +199,50 @@ if(MAME_COMMAND)
         VERBATIM
     )
     target_folder(mame "Firmware")
+
+    add_custom_target(mame-invaders
+        COMMAND
+            "${CMAKE_COMMAND}" -E make_directory "${MAME_ROM_DIRECTORY}"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+                "${CMAKE_CURRENT_BINARY_DIR}/invaders-1.bin"
+                "${MAME_ROM_DIRECTORY}/23-061e2-00.e56"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+                "${CMAKE_CURRENT_BINARY_DIR}/invaders-2.bin"
+                "${MAME_ROM_DIRECTORY}/23-032e2-00.e52"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+                "${CMAKE_CURRENT_BINARY_DIR}/invaders-3.bin"
+                "${MAME_ROM_DIRECTORY}/23-033e2-00.e45"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+                "${CMAKE_CURRENT_BINARY_DIR}/invaders-4.bin"
+                "${MAME_ROM_DIRECTORY}/23-034e2-00.e40"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+                "${CMAKE_CURRENT_BINARY_DIR}/invaders-avo.bin"
+                "${MAME_ROM_DIRECTORY}/23-225e4-00.e69"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+                "${CMAKE_SOURCE_DIR}/bin/23-018E2.bin"
+                "${MAME_ROM_DIRECTORY}/23-018e2-00.e4"
+        DEPENDS
+            ${INVADERS_SPLIT_ROM_IMAGES}
+            invaders-avo.bin
+            "${CMAKE_SOURCE_DIR}/bin/23-018E2.bin"
+        COMMENT
+            "Copying Invaders ROM images to ${MAME_ROM_DIRECTORY}"
+        VERBATIM
+    )
+    target_folder(mame-invaders "Firmware")
 endif()
 
 add_custom_target(invaders-rom
     DEPENDS
         invaders.bin
         invaders.sym
+        ${INVADERS_SPLIT_ROM_IMAGES}
         invaders-avo.bin
         invaders-avo.sym
     SOURCES
