@@ -32,6 +32,14 @@ inv_enter_impl:
         sta     inv_score2
         sta     inv_game_over
         sta     inv_test_result
+        sta     inv_laser_active
+        sta     inv_laser_row_lo
+        sta     inv_laser_row_hi
+        sta     inv_laser_col_lo
+        sta     inv_laser_col_hi
+        sta     inv_laser_timer
+        sta     inv_laser_shots_lo
+        sta     inv_laser_shots_hi
         mvi     a,inv_initial_gunners
         sta     inv_gunners
         mvi     a,inv_initial_level
@@ -126,6 +134,7 @@ inv_frame:
         ora     a
         rz
         call    inv_update_turret
+        call    inv_update_laser
         ret
 ;
 inv_prepare_screen:
@@ -403,6 +412,213 @@ inv_store_turret_x:
         ani     0fh
         sta     inv_turret_x_hi
         ret
+;
+inv_get_laser_row:
+        lda     inv_laser_row_hi
+        ani     0fh
+        rlc
+        rlc
+        rlc
+        rlc
+        mov     b,a
+        lda     inv_laser_row_lo
+        ani     0fh
+        ora     b
+        ret
+;
+inv_store_laser_row:
+        push    psw
+        ani     0fh
+        sta     inv_laser_row_lo
+        pop     psw
+        rrc
+        rrc
+        rrc
+        rrc
+        ani     0fh
+        sta     inv_laser_row_hi
+        ret
+;
+inv_get_laser_col:
+        lda     inv_laser_col_hi
+        ani     0fh
+        rlc
+        rlc
+        rlc
+        rlc
+        mov     b,a
+        lda     inv_laser_col_lo
+        ani     0fh
+        ora     b
+        ret
+;
+inv_store_laser_col:
+        push    psw
+        ani     0fh
+        sta     inv_laser_col_lo
+        pop     psw
+        rrc
+        rrc
+        rrc
+        rrc
+        ani     0fh
+        sta     inv_laser_col_hi
+        ret
+;
+inv_inc_laser_shots:
+        lxi     h,inv_laser_shots_lo
+        inr     m
+        mov     a,m
+        ani     0fh
+        mov     m,a
+        rnz
+        dcx     h
+        inr     m
+        mov     a,m
+        ani     0fh
+        mov     m,a
+        ret
+;
+inv_deactivate_laser:
+        xra     a
+        sta     inv_laser_active
+        sta     inv_laser_timer
+        ret
+;
+inv_erase_laser:
+        call    inv_get_laser_col
+        mov     c,a
+        call    inv_get_laser_row
+        mov     b,a
+        xra     a
+        jmp     inv_putc
+;
+inv_shield_cell_addr:
+        mov     a,b
+        cpi     inv_shield_top_row
+        jc      inv_no_shield_cell
+        sui     inv_shield_top_row
+        cpi     inv_shield_h
+        jnc     inv_no_shield_cell
+        mov     e,a
+        mov     a,c
+        cpi     inv_shield0_x
+        jc      inv_no_shield_cell
+        cpi     inv_shield0_x+inv_shield_w
+        jc      inv_shield0_cell_addr
+        cpi     inv_shield1_x
+        jc      inv_no_shield_cell
+        cpi     inv_shield1_x+inv_shield_w
+        jc      inv_shield1_cell_addr
+        cpi     inv_shield2_x
+        jc      inv_no_shield_cell
+        cpi     inv_shield2_x+inv_shield_w
+        jc      inv_shield2_cell_addr
+        cpi     inv_shield3_x
+        jc      inv_no_shield_cell
+        cpi     inv_shield3_x+inv_shield_w
+        jnc     inv_no_shield_cell
+        lxi     h,inv_shield_cells_base+(inv_shield_cells_each*3)
+        mvi     a,inv_shield3_x
+        jmp     inv_shield_cell_at
+inv_shield2_cell_addr:
+        lxi     h,inv_shield_cells_base+(inv_shield_cells_each*2)
+        mvi     a,inv_shield2_x
+        jmp     inv_shield_cell_at
+inv_shield1_cell_addr:
+        lxi     h,inv_shield_cells_base+inv_shield_cells_each
+        mvi     a,inv_shield1_x
+        jmp     inv_shield_cell_at
+inv_shield0_cell_addr:
+        lxi     h,inv_shield_cells_base
+        mvi     a,inv_shield0_x
+inv_shield_cell_at:
+        mov     d,a
+        mov     a,c
+        sub     d
+        mov     d,a
+        mov     a,e
+        add     a
+        add     a
+        add     e
+        add     e
+        add     e
+        add     d
+        call    add_a_to_hl
+        mov     a,m
+        ora     a
+        ret
+inv_no_shield_cell:
+        xra     a
+        ret
+;
+inv_try_shield_collision:
+        call    inv_shield_cell_addr
+        rz
+        mvi     m,inv_cell_blank
+        xra     a
+        call    inv_putc
+        mvi     a,0ffh
+        ret
+;
+inv_place_laser:
+        call    inv_try_shield_collision
+        ora     a
+        jz      inv_draw_laser
+        jmp     inv_deactivate_laser
+;
+inv_draw_laser:
+        mvi     a,inv_laser_glyph
+        jmp     inv_putc
+;
+inv_spawn_laser:
+        call    inv_get_turret_x
+        adi     inv_turret_w/2
+        mov     c,a
+        mvi     b,inv_laser_start_row
+        mvi     a,0ffh
+        sta     inv_laser_active
+        mvi     a,inv_laser_period
+        sta     inv_laser_timer
+        mvi     a,inv_laser_start_row
+        call    inv_store_laser_row
+        mov     a,c
+        call    inv_store_laser_col
+        call    inv_inc_laser_shots
+        jmp     inv_place_laser
+;
+inv_move_laser:
+        mvi     a,inv_laser_period
+        sta     inv_laser_timer
+        call    inv_erase_laser
+        call    inv_get_laser_row
+        cpi     inv_laser_top_row
+        jz      inv_deactivate_laser
+        dcr     a
+        push    psw
+        call    inv_store_laser_row
+        pop     psw
+        mov     b,a
+        call    inv_get_laser_col
+        mov     c,a
+        jmp     inv_place_laser
+;
+inv_update_laser:
+        lda     inv_laser_active
+        ora     a
+        jnz     inv_laser_tick
+        lda     inv_fire_pressed
+        ora     a
+        rz
+        jmp     inv_spawn_laser
+inv_laser_tick:
+        lda     inv_laser_timer
+        ora     a
+        jz      inv_move_laser
+        dcr     a
+        sta     inv_laser_timer
+        rnz
+        jmp     inv_move_laser
 ;
 inv_update_turret:
         lda     inv_left_pressed

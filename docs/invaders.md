@@ -1480,20 +1480,6 @@ The AVO ROM must repeat the displaced base-ROM bytes on normal terminal paths.
 Static tests should fail if `invaders.bin` differs from `vt100.bin` outside the
 explicit trampoline spans and checksum bytes.
 
-## 8. Player Laser And Shield Collisions
-
-Implement the player laser as a single active shot. Firing should create the
-laser only when no laser is active, advance it upward on the configured cadence,
-erase the previous cell, and stop at the top of the playfield. Add shield
-collision using the shield cell buffer and update both the shield data and
-screen RAM when a hit removes material.
-
-Test this slice with a CTest test whose CMake driver launches
-`src/tests/mame-invaders-laser.lua`. Run deterministic input that fires into
-empty space, then into a known shield cell. Assert laser position,
-active/inactive state, shot counters, shield-cell mutation, and the matching
-screen RAM update.
-
 ## 9. Alien Formation And One-Alien Movement
 
 Implement alien state and formation initialization. Spawn 55 aliens over the

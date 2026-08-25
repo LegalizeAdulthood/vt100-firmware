@@ -36,6 +36,10 @@ inv_turret_start_x_lo   equ     04h
 inv_turret_start_x_hi   equ     02h
 inv_turret_min_x        equ     inv_play_left
 inv_turret_max_x        equ     inv_play_left+inv_play_width-inv_turret_w
+inv_laser_start_row     equ     inv_turret_top_row-1
+inv_laser_top_row       equ     0
+inv_laser_period        equ     1
+inv_laser_glyph         equ     19h
 inv_initial_gunners     equ     3
 inv_initial_level       equ     1
 inv_scan_arrow_right    equ     10h
@@ -103,7 +107,15 @@ inv_game_over           equ     inv_saved_led_state-1
 inv_turret_x            equ     inv_game_over-1
 inv_turret_x_lo         equ     inv_turret_x
 inv_turret_x_hi         equ     inv_turret_x_lo-1
-inv_state_low           equ     inv_turret_x_hi
+inv_laser_active        equ     inv_turret_x_hi-1
+inv_laser_row_lo        equ     inv_laser_active-1
+inv_laser_row_hi        equ     inv_laser_row_lo-1
+inv_laser_col_lo        equ     inv_laser_row_hi-1
+inv_laser_col_hi        equ     inv_laser_col_lo-1
+inv_laser_timer         equ     inv_laser_col_hi-1
+inv_laser_shots_lo      equ     inv_laser_timer-1
+inv_laser_shots_hi      equ     inv_laser_shots_lo-1
+inv_state_low           equ     inv_laser_shots_hi
 ;
 ; Larger buffers live below the fixed scalar state.
 ;
