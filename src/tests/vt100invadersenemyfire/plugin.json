@@ -1,0 +1,8 @@
+{
+  "plugin": {
+    "name": "vt100invadersenemyfire",
+    "description": "VT100 Invaders enemy fire test",
+    "type": "plugin",
+    "start": "false"
+  }
+}

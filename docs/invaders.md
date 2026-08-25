@@ -1472,21 +1472,6 @@ The AVO ROM must repeat the displaced base-ROM bytes on normal terminal paths.
 Static tests should fail if `invaders.bin` differs from `vt100.bin` outside the
 explicit trampoline spans and checksum bytes.
 
-## 11. Enemy Missiles, Turret Death, And Game Over
-
-Implement enemy fire using the deterministic shooter order. Track a small fixed
-set of missiles, move them downward, collide with shields and the turret, and
-advance the gunner/death sequence. Losing a gunner should update LEDs and
-respawn the turret after the configured delay. Losing the final gunner should
-enter game-over state and stop active play until SET-UP exits or a restart path
-is added.
-
-Test this slice with a CTest test whose CMake driver launches
-`src/tests/mame-invaders-enemy-fire.lua`. Select a known shooter script, run
-until a missile hits a shield, then until a missile hits the turret. Assert
-missile slots, shield damage, gunner count, LED mask, death timer, respawn
-state, and final game-over state.
-
 ## 11.5. Keyboard Click Bit, Heartbeat, And Turret Death Sound
 
 Take ownership of the keyboard click/bell bit while the game is active. Add a

@@ -41,6 +41,7 @@ inv_enter_impl:
         sta     inv_laser_timer
         sta     inv_laser_shots_lo
         sta     inv_laser_shots_hi
+        call    inv_reset_enemy_fire
         mvi     a,inv_initial_gunners
         sta     inv_gunners
         mvi     a,inv_initial_level
@@ -143,7 +144,16 @@ inv_frame:
         rz
         call    inv_update_level_reset
         rnz
+        call    inv_update_turret_death
+        rnz
         call    inv_update_aliens
+        call    inv_update_enemy_fire
+        lda     inv_game_over
+        ora     a
+        rnz
+        lda     inv_turret_death_timer
+        ora     a
+        rnz
         call    inv_update_turret
         call    inv_update_laser
         ret
@@ -728,6 +738,441 @@ inv_laser_tick:
         rnz
         jmp     inv_move_laser
 ;
+inv_reset_enemy_fire:
+        xra     a
+        sta     inv_turret_death_timer
+        sta     inv_missile_active_count
+        sta     inv_missile_shot_index
+        sta     inv_missile_slot_tmp
+        lxi     h,inv_missile_data_base
+        mvi     b,inv_missile_data_size
+inv_clear_missile_data:
+        mov     m,a
+        inx     h
+        dcr     b
+        jnz     inv_clear_missile_data
+        mvi     a,inv_missile_tick_period
+        sta     inv_missile_tick_timer
+        mvi     a,inv_missile_initial_delay
+        sta     inv_missile_fire_timer
+        ret
+;
+inv_missile_active_addr:
+        mov     a,b
+        lxi     h,inv_missile_active_base
+        jmp     add_a_to_hl
+;
+inv_missile_row_addr:
+        mov     a,b
+        lxi     h,inv_missile_row_base
+        jmp     add_a_to_hl
+;
+inv_missile_col_addr:
+        mov     a,b
+        lxi     h,inv_missile_col_base
+        jmp     add_a_to_hl
+;
+inv_missile_phase_addr:
+        mov     a,b
+        lxi     h,inv_missile_phase_base
+        jmp     add_a_to_hl
+;
+inv_current_missile_active_addr:
+        lda     inv_missile_slot_tmp
+        mov     b,a
+        jmp     inv_missile_active_addr
+;
+inv_current_missile_row_addr:
+        lda     inv_missile_slot_tmp
+        mov     b,a
+        jmp     inv_missile_row_addr
+;
+inv_current_missile_col_addr:
+        lda     inv_missile_slot_tmp
+        mov     b,a
+        jmp     inv_missile_col_addr
+;
+inv_current_missile_phase_addr:
+        lda     inv_missile_slot_tmp
+        mov     b,a
+        jmp     inv_missile_phase_addr
+;
+inv_current_missile_position:
+        call    inv_current_missile_row_addr
+        mov     d,m
+        call    inv_current_missile_col_addr
+        mov     c,m
+        mov     b,d
+        ret
+;
+inv_find_free_missile:
+        mvi     b,0
+inv_find_free_missile_loop:
+        call    inv_missile_active_addr
+        mov     a,m
+        ora     a
+        jz      inv_find_free_missile_done
+        inr     b
+        mov     a,b
+        cpi     inv_missile_count
+        jc      inv_find_free_missile_loop
+        xra     a
+        ret
+inv_find_free_missile_done:
+        mvi     a,0ffh
+        ret
+;
+inv_draw_current_missile:
+        call    inv_current_missile_position
+        mvi     a,inv_missile_glyph
+        call    inv_putc
+        xra     a
+        ret
+;
+inv_erase_current_missile:
+        call    inv_current_missile_position
+        xra     a
+        jmp     inv_putc
+;
+inv_deactivate_current_missile:
+        call    inv_current_missile_active_addr
+        mov     a,m
+        ora     a
+        jz      inv_deactivate_current_missile_done
+        mvi     m,0
+        lxi     h,inv_missile_active_count
+        mov     a,m
+        ora     a
+        jz      inv_deactivate_current_missile_done
+        dcr     m
+        mov     a,m
+        ora     a
+        jnz     inv_deactivate_current_missile_done
+        mvi     a,inv_missile_empty_delay
+        sta     inv_missile_fire_timer
+inv_deactivate_current_missile_done:
+        xra     a
+        ret
+;
+inv_clear_active_missiles:
+        mvi     b,0
+inv_clear_active_missiles_loop:
+        mov     a,b
+        sta     inv_missile_slot_tmp
+        call    inv_current_missile_active_addr
+        mov     a,m
+        ora     a
+        jz      inv_clear_active_missiles_next
+        call    inv_erase_current_missile
+        call    inv_current_missile_active_addr
+        mvi     m,0
+inv_clear_active_missiles_next:
+        lda     inv_missile_slot_tmp
+        inr     a
+        mov     b,a
+        cpi     inv_missile_count
+        jc      inv_clear_active_missiles_loop
+        xra     a
+        sta     inv_missile_active_count
+        ret
+;
+inv_update_enemy_fire:
+        lda     inv_missile_tick_timer
+        ora     a
+        jz      inv_enemy_fire_tick_now
+        dcr     a
+        sta     inv_missile_tick_timer
+        rnz
+inv_enemy_fire_tick_now:
+        mvi     a,inv_missile_tick_period
+        sta     inv_missile_tick_timer
+        call    inv_enemy_try_fire
+        jmp     inv_update_missiles
+;
+inv_enemy_try_fire:
+        call    inv_get_alien_init
+        cpi     inv_alien_count
+        rc
+        call    inv_get_alien_live_count
+        ora     a
+        rz
+        lda     inv_missile_fire_timer
+        ora     a
+        jz      inv_enemy_try_fire_now
+        dcr     a
+        sta     inv_missile_fire_timer
+        ret
+inv_enemy_try_fire_now:
+        lda     inv_missile_active_count
+        cpi     inv_missile_count
+        rnc
+        call    inv_enemy_pick_shooter
+        ora     a
+        rz
+        jmp     inv_fire_enemy_missile
+;
+inv_enemy_pick_shooter:
+        mvi     e,inv_missile_shoot_order_count
+inv_enemy_pick_shooter_loop:
+        push    d
+        call    inv_next_shoot_column
+        pop     d
+        mov     c,a
+        push    d
+        call    inv_find_column_shooter
+        pop     d
+        ora     a
+        rnz
+        dcr     e
+        jnz     inv_enemy_pick_shooter_loop
+        xra     a
+        ret
+;
+inv_next_shoot_column:
+        lda     inv_missile_shot_index
+        lxi     h,inv_missile_shoot_order
+        call    add_a_to_hl
+        mov     d,m
+        lda     inv_missile_shot_index
+        inr     a
+        cpi     inv_missile_shoot_order_count
+        jc      inv_next_shoot_column_store
+        xra     a
+inv_next_shoot_column_store:
+        sta     inv_missile_shot_index
+        mov     a,d
+        ora     a
+        jz      inv_enemy_best_column
+        dcr     a
+        ret
+;
+inv_enemy_best_column:
+        call    inv_get_turret_x
+        cpi     inv_alien_start_x
+        jc      inv_enemy_best_first_column
+        sui     inv_alien_start_x
+        mov     d,a
+        mvi     b,0
+inv_enemy_best_column_loop:
+        mov     a,d
+        cpi     inv_alien_slot_w
+        jc      inv_enemy_best_column_done
+        sui     inv_alien_slot_w
+        mov     d,a
+        inr     b
+        mov     a,b
+        cpi     inv_alien_cols
+        jc      inv_enemy_best_column_loop
+        mvi     a,inv_alien_cols-1
+        ret
+inv_enemy_best_column_done:
+        mov     a,b
+        ret
+inv_enemy_best_first_column:
+        xra     a
+        ret
+;
+inv_find_column_shooter:
+        mov     a,c
+        adi     (inv_alien_rows-1)*inv_alien_cols
+        mov     b,a
+        mvi     d,inv_alien_rows
+inv_find_column_shooter_loop:
+        call    inv_alien_live_addr
+        mov     a,m
+        ora     a
+        jnz     inv_find_column_shooter_done
+        mov     a,b
+        sui     inv_alien_cols
+        mov     b,a
+        dcr     d
+        jnz     inv_find_column_shooter_loop
+        xra     a
+        ret
+inv_find_column_shooter_done:
+        mvi     a,0ffh
+        ret
+;
+inv_fire_enemy_missile:
+        mov     c,b
+        call    inv_find_free_missile
+        ora     a
+        rz
+        mov     a,b
+        sta     inv_missile_slot_tmp
+        mov     b,c
+        call    inv_get_alien_y
+        adi     inv_alien_h
+        push    psw
+        call    inv_get_alien_x
+        inr     a
+        mov     d,a
+        pop     psw
+        push    d
+        push    psw
+        call    inv_current_missile_row_addr
+        pop     psw
+        mov     m,a
+        pop     d
+        mov     a,d
+        push    psw
+        call    inv_current_missile_col_addr
+        pop     psw
+        mov     m,a
+        call    inv_current_missile_phase_addr
+        mvi     m,0
+        call    inv_current_missile_active_addr
+        mvi     m,0ffh
+        lxi     h,inv_missile_active_count
+        inr     m
+        mvi     a,inv_missile_reload_delay
+        sta     inv_missile_fire_timer
+        jmp     inv_place_current_missile
+;
+inv_place_current_missile:
+        call    inv_current_missile_position
+        mov     a,b
+        cpi     inv_turret_top_row
+        jnc     inv_current_missile_bottom
+        call    inv_try_shield_collision
+        ora     a
+        jnz     inv_deactivate_current_missile
+        jmp     inv_draw_current_missile
+;
+inv_current_missile_bottom:
+        call    inv_current_missile_hits_turret
+        ora     a
+        jnz     inv_current_missile_hit_turret
+        jmp     inv_deactivate_current_missile
+;
+inv_current_missile_hits_turret:
+        call    inv_current_missile_position
+        mov     a,b
+        cpi     inv_turret_top_row
+        jc      inv_current_missile_misses_turret
+        cpi     inv_turret_top_row+inv_turret_h
+        jnc     inv_current_missile_misses_turret
+        call    inv_get_turret_x
+        mov     d,a
+        mov     a,c
+        cmp     d
+        jc      inv_current_missile_misses_turret
+        mov     a,d
+        adi     inv_turret_w
+        mov     d,a
+        mov     a,c
+        cmp     d
+        jnc     inv_current_missile_misses_turret
+        mvi     a,0ffh
+        ret
+inv_current_missile_misses_turret:
+        xra     a
+        ret
+;
+inv_current_missile_hit_turret:
+        call    inv_deactivate_current_missile
+        call    inv_start_turret_death
+        mvi     a,0ffh
+        ret
+;
+inv_update_missiles:
+        mvi     b,0
+inv_update_missiles_loop:
+        push    b
+        call    inv_update_current_missile
+        pop     b
+        ora     a
+        rnz
+        inr     b
+        mov     a,b
+        cpi     inv_missile_count
+        jc      inv_update_missiles_loop
+        xra     a
+        ret
+;
+inv_update_current_missile:
+        mov     a,b
+        sta     inv_missile_slot_tmp
+        call    inv_current_missile_active_addr
+        mov     a,m
+        ora     a
+        rz
+        call    inv_erase_current_missile
+        call    inv_current_missile_row_addr
+        inr     m
+        call    inv_current_missile_phase_addr
+        mov     a,m
+        xri     1
+        ani     1
+        mov     m,a
+        jmp     inv_place_current_missile
+;
+inv_start_turret_death:
+        lda     inv_game_over
+        ora     a
+        rnz
+        lda     inv_turret_death_timer
+        ora     a
+        rnz
+        call    inv_get_turret_x
+        mov     c,a
+        call    inv_erase_turret_at
+        call    inv_draw_turret_explosion
+        call    inv_deactivate_laser
+        call    inv_clear_active_missiles
+        lda     inv_gunners
+        ora     a
+        jz      inv_set_game_over
+        dcr     a
+        sta     inv_gunners
+        call    inv_update_gunner_leds
+        lda     inv_gunners
+        ora     a
+        jz      inv_set_game_over
+        mvi     a,inv_turret_death_frames
+        sta     inv_turret_death_timer
+        ret
+;
+inv_set_game_over:
+        mvi     a,0ffh
+        sta     inv_game_over
+        xra     a
+        sta     inv_turret_death_timer
+        ret
+;
+inv_update_turret_death:
+        lda     inv_game_over
+        ora     a
+        rnz
+        lda     inv_turret_death_timer
+        ora     a
+        rz
+        dcr     a
+        sta     inv_turret_death_timer
+        jnz     inv_turret_death_active
+        mvi     a,inv_turret_start_x_lo
+        sta     inv_turret_x_lo
+        mvi     a,inv_turret_start_x_hi
+        sta     inv_turret_x_hi
+        call    inv_draw_turret
+        mvi     a,inv_missile_initial_delay
+        sta     inv_missile_fire_timer
+inv_turret_death_active:
+        mvi     a,0ffh
+        ret
+;
+inv_draw_turret_explosion:
+        call    inv_get_turret_x
+        mov     c,a
+        mvi     b,inv_turret_top_row
+        lxi     h,inv_turret_explosion_top
+        call    inv_puts_glyphs
+        call    inv_get_turret_x
+        mov     c,a
+        mvi     b,inv_turret_top_row+1
+        lxi     h,inv_turret_explosion_bottom
+        jmp     inv_puts_glyphs
+;
 inv_get_nibble_pair:
         mov     a,m
         ani     0fh
@@ -855,6 +1300,7 @@ inv_next_level:
 inv_next_level_store:
         sta     inv_level
         call    inv_reset_aliens
+        call    inv_reset_enemy_fire
         jmp     inv_draw_static_screen
 ;
 inv_get_alien_init:
@@ -1604,6 +2050,16 @@ inv_turret_top:
         db      '_','_','_','a','_','_','_',0
 inv_turret_bottom:
         db      '_','a','a','a','a','a','_',0
+inv_turret_explosion_top:
+        db      '*','a','a','a','a','a','*',0
+inv_turret_explosion_bottom:
+        db      'a','*','a','*','a','*','a',0
+;
+inv_missile_shoot_order:
+        db      0,1,11,1,0,7,0,1,6,3,0,1,1,0,1,1,0,4,11
+        db      9,2,0,11,0,1,8,2,0,6,0,3,11,4,0,1,7,0,1
+        db      0,11,0,9,0,2,10,11,1,0,8,0,1,6,3,0,7,0,1
+        db      1,0,1,1,0,1,11,9,2,0,4,0,11,0,9,0,1,0,5
 ;
 inv_exit_impl:
         xra     a
