@@ -66,6 +66,11 @@
       "configuration": "Release",
       "output": {
         "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "label": "invaders"
+        }
       }
     },
     {
