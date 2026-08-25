@@ -64,5 +64,6 @@ if(MAME_COMMAND)
     endfunction()
 
     add_mame_invaders_test(mame-invaders-rom-layout mame-invaders-rom-layout.lua)
+    add_mame_invaders_test(mame-invaders-state-layout mame-invaders-state-layout.lua)
     add_mame_invaders_test(mame-invaders-entry vt100invadersentry/init.lua vt100invadersentry)
 endif()

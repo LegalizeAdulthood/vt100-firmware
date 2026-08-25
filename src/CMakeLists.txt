@@ -78,6 +78,21 @@ add_custom_command(
 
 add_custom_command(
     OUTPUT
+        invaders.equ
+    COMMAND
+        "${CMAKE_COMMAND}" -DLST_FILE=invaders.lst -DOUTPUT_FILE=invaders.equ -P "${CMAKE_CURRENT_SOURCE_DIR}/lst_to_equ.cmake"
+    DEPENDS
+        invaders.lst
+        lst_to_equ.cmake
+    WORKING_DIRECTORY
+        "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMENT
+        "Generating invaders.equ"
+    VERBATIM
+)
+
+add_custom_command(
+    OUTPUT
         invaders-avo.bin
         invaders-avo.hex
         invaders-avo.lst
@@ -244,6 +259,7 @@ if(MAME_COMMAND)
                 "${MAME_ROM_DIRECTORY}/23-018e2-00.e4"
         DEPENDS
             ${INVADERS_SPLIT_ROM_IMAGES}
+            invaders.equ
             invaders-avo.bin
             "${CMAKE_SOURCE_DIR}/bin/23-018E2.bin"
         COMMENT
@@ -257,6 +273,7 @@ add_custom_target(invaders-rom
     DEPENDS
         invaders.bin
         invaders.sym
+        invaders.equ
         invaders-base.inc
         ${INVADERS_SPLIT_ROM_IMAGES}
         invaders-avo.bin
@@ -267,6 +284,7 @@ add_custom_target(invaders-rom
         invaders-avo.asm
         invaders-abi.asm
         lst_to_asm_equ.cmake
+        lst_to_equ.cmake
         lst_to_sym.cmake
 )
 target_folder(invaders-rom "Firmware")

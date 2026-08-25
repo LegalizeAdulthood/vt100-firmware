@@ -1172,10 +1172,11 @@ Use several layers so most bugs are caught before opening MAME:
 2. Static ROM test: verify that Invaders entry hooks assemble at the expected
    labels, ROM checksum bytes were refreshed, `invaders-[1-4].bin` are exactly
    2048 bytes each, and `invaders-avo.bin` is exactly 8192 bytes.
-3. AVO layout test: parse the symbol files and assert that Invaders code stays
-   inside the `8000h`-`9fffh` expansion ROM window, while entity state, object
-   map, trace buffers, and other mutable data are allocated downward from
-   `3fffh` and stay inside AVO RAM, `3000h`-`3fffh`.
+3. AVO layout test: parse code labels from the generated `.sym` files and
+   address equates from the generated `.equ` files. Assert that Invaders code
+   stays inside the `8000h`-`9fffh` expansion ROM window, while entity state,
+   object map, trace buffers, and other mutable data are allocated downward
+   from `3fffh` and stay inside AVO RAM, `3000h`-`3fffh`.
 4. Sprite table test: verify that every Special Graphics source row has the
    expected width, height, glyph conversion, and object-ID mask, with
    right-padding made explicit.
@@ -1321,9 +1322,10 @@ mainly means freezing entry timing and scripted input.
 ### MAME Lua Or Debugger Assertions
 
 The most useful automated MAME tests should inspect memory rather than relying
-only on pixels. A harness can load labels from the generated `invaders.sym` and
-`invaders-avo.sym` files, then read Invaders state from the emulated 8080
-program address space.
+only on pixels. A harness should load code labels from the generated
+`invaders.sym` and `invaders-avo.sym` files, load address constants from
+`invaders.equ`, then read Invaders state from the emulated 8080 program address
+space.
 
 Conceptual Lua shape:
 
@@ -1331,14 +1333,14 @@ Conceptual Lua shape:
 local cpu = manager.machine.devices[":maincpu"]
 local mem = cpu.spaces["program"]
 
-local base_symbols = load_symbols("<BuildDir>\\src\\invaders.sym")
+local base_equates = load_equates("<BuildDir>\\src\\invaders.equ")
 local avo_symbols = load_symbols("<BuildDir>\\src\\invaders-avo.sym")
 
-local INV_ENTER = 0x8000
+local INV_ENTER = base_equates.inv_enter
 local INV_ENTER_IMPL = avo_symbols.inv_enter_impl
-local INV_ACTIVE = base_symbols.inv_active
-local INV_FRAME_LO = base_symbols.inv_frame_lo
-local INV_TEST_RESULT = base_symbols.inv_test_result
+local INV_ACTIVE = base_equates.inv_active
+local INV_FRAME_LO = base_equates.inv_frame_lo
+local INV_TEST_RESULT = base_equates.inv_test_result
 
 emu.register_frame_done(function()
     if emu.framecount() == 600 then
@@ -1467,22 +1469,6 @@ same-size trampoline replacements of existing bytes with calls into the AVO ROM.
 The AVO ROM must repeat the displaced base-ROM bytes on normal terminal paths.
 Static tests should fail if `invaders.bin` differs from `vt100.bin` outside the
 explicit trampoline spans and checksum bytes.
-
-## 3. Top-Down AVO RAM State Allocation
-
-Define the game-state layout in AVO RAM from `3fffh` downward. Keep fixed test
-and diagnostic bytes at the top, then allocate persistent state such as
-`inv_active`, frame counters, input latches, score, gunner count, level, and
-saved LED state below them. Reserve larger buffers, including trace buffers,
-dirty queues, and any object map, beneath the fixed scalar state. Treat `3800h`
-as a soft low-water mark, not as the beginning of a required block.
-
-Test this slice with a CTest static layout script that parses `invaders.sym`
-and fails if mutable symbols fall outside `3000h`-`3fffh`, overlap each other,
-or cross the configured low-water mark without an explicit update to the plan.
-A CTest MAME driver should launch a Lua test that writes sentinel values to the
-top-down state region, reads them back, and verifies that visible screen memory
-remains unchanged until a rendering routine intentionally touches it.
 
 ## 4. Frame Loop And Test Mode
 

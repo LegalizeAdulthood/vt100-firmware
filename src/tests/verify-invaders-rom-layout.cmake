@@ -7,6 +7,7 @@ set(VT100_BASE_SYMBOLS "${VT100_BINARY_DIRECTORY}/vt100.sym")
 set(INVADERS_BASE_ROM "${VT100_BINARY_DIRECTORY}/invaders.bin")
 set(INVADERS_AVO_ROM "${VT100_BINARY_DIRECTORY}/invaders-avo.bin")
 set(INVADERS_BASE_SYMBOLS "${VT100_BINARY_DIRECTORY}/invaders.sym")
+set(INVADERS_BASE_EQUATES "${VT100_BINARY_DIRECTORY}/invaders.equ")
 set(INVADERS_BASE_INCLUDE "${VT100_BINARY_DIRECTORY}/invaders-base.inc")
 set(INVADERS_AVO_SYMBOLS "${VT100_BINARY_DIRECTORY}/invaders-avo.sym")
 
@@ -23,6 +24,7 @@ set(REQUIRED_INVADERS_FILES
     "${INVADERS_BASE_ROM}"
     "${INVADERS_AVO_ROM}"
     "${INVADERS_BASE_SYMBOLS}"
+    "${INVADERS_BASE_EQUATES}"
     "${INVADERS_BASE_INCLUDE}"
     "${INVADERS_AVO_SYMBOLS}"
 )
@@ -50,8 +52,6 @@ function(read_symbol SYMBOL_FILE SYMBOL_NAME OUTPUT_VARIABLE)
     foreach(SYMBOL_LINE IN LISTS SYMBOL_FILE_LINES)
         if(SYMBOL_LINE MATCHES "^([0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f])[ \t]+${SYMBOL_NAME}$")
             list(APPEND SYMBOL_ADDRESSES "${CMAKE_MATCH_1}")
-        elseif(SYMBOL_LINE MATCHES "^${SYMBOL_NAME}[ \t]+[Ee][Qq][Uu][ \t]+([0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f])[Hh]$")
-            list(APPEND SYMBOL_ADDRESSES "${CMAKE_MATCH_1}")
         endif()
     endforeach()
     list(LENGTH SYMBOL_ADDRESSES SYMBOL_ADDRESS_COUNT)
@@ -63,16 +63,33 @@ function(read_symbol SYMBOL_FILE SYMBOL_NAME OUTPUT_VARIABLE)
     set(${OUTPUT_VARIABLE} "${SYMBOL_ADDRESS}" PARENT_SCOPE)
 endfunction()
 
-function(assert_symbol_in_window SYMBOL_NAME SYMBOL_ADDRESS)
-    math(EXPR SYMBOL_VALUE "0x${SYMBOL_ADDRESS}")
-    if(SYMBOL_VALUE LESS 32768 OR SYMBOL_VALUE GREATER 40959)
-        message(FATAL_ERROR "${SYMBOL_NAME} is outside the AVO ROM window: 0x${SYMBOL_ADDRESS}")
+function(read_equate EQUATE_FILE EQUATE_NAME OUTPUT_VARIABLE)
+    file(STRINGS "${EQUATE_FILE}" EQUATE_FILE_LINES)
+    set(EQUATE_ADDRESSES "")
+    foreach(EQUATE_LINE IN LISTS EQUATE_FILE_LINES)
+        if(EQUATE_LINE MATCHES "^([0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f])[ \t]+${EQUATE_NAME}$")
+            list(APPEND EQUATE_ADDRESSES "${CMAKE_MATCH_1}")
+        endif()
+    endforeach()
+    list(LENGTH EQUATE_ADDRESSES EQUATE_ADDRESS_COUNT)
+    if(NOT EQUATE_ADDRESS_COUNT EQUAL 1)
+        message(FATAL_ERROR "Expected exactly one ${EQUATE_NAME} equate in ${EQUATE_FILE}; got ${EQUATE_ADDRESS_COUNT}")
+    endif()
+    list(GET EQUATE_ADDRESSES 0 EQUATE_ADDRESS)
+    string(TOUPPER "${EQUATE_ADDRESS}" EQUATE_ADDRESS)
+    set(${OUTPUT_VARIABLE} "${EQUATE_ADDRESS}" PARENT_SCOPE)
+endfunction()
+
+function(assert_address_in_window ADDRESS_NAME ADDRESS_VALUE)
+    math(EXPR NUMERIC_ADDRESS "0x${ADDRESS_VALUE}")
+    if(NUMERIC_ADDRESS LESS 32768 OR NUMERIC_ADDRESS GREATER 40959)
+        message(FATAL_ERROR "${ADDRESS_NAME} is outside the AVO ROM window: 0x${ADDRESS_VALUE}")
     endif()
 endfunction()
 
-function(assert_symbol_equals SYMBOL_NAME SYMBOL_ADDRESS EXPECTED_ADDRESS)
-    if(NOT SYMBOL_ADDRESS STREQUAL EXPECTED_ADDRESS)
-        message(FATAL_ERROR "${SYMBOL_NAME} expected 0x${EXPECTED_ADDRESS}; got 0x${SYMBOL_ADDRESS}")
+function(assert_address_equals ADDRESS_NAME ADDRESS_VALUE EXPECTED_ADDRESS)
+    if(NOT ADDRESS_VALUE STREQUAL EXPECTED_ADDRESS)
+        message(FATAL_ERROR "${ADDRESS_NAME} expected 0x${EXPECTED_ADDRESS}; got 0x${ADDRESS_VALUE}")
     endif()
 endfunction()
 
@@ -136,6 +153,61 @@ function(append_allowed_symbol OUTPUT_VARIABLE SYMBOL_ADDRESS)
     set(${OUTPUT_VARIABLE} "${ALLOWED_OFFSETS}" PARENT_SCOPE)
 endfunction()
 
+function(assert_mutable_state_layout EQUATE_FILE RAM_START RAM_TOP DATA_FLOOR)
+    set(MUTABLE_STATE_RANGES
+        inv_test_signature 3
+        inv_test_mode 1
+        inv_test_script 1
+        inv_test_stop_lo 1
+        inv_test_stop_hi 1
+        inv_test_result 1
+        inv_test_trace_head 1
+        inv_test_trace_base 128
+        inv_active 1
+        inv_last_vframe 1
+        inv_frame_lo 1
+        inv_frame_hi 1
+        inv_left_pressed 1
+        inv_right_pressed 1
+        inv_fire_pressed 1
+        inv_score0 1
+        inv_score1 1
+        inv_score2 1
+        inv_gunners 1
+        inv_level 1
+        inv_saved_led_state 1
+        inv_dirty_queue_base 64
+        inv_object_map_base 1440
+    )
+
+    set(USED_MUTABLE_OFFSETS "")
+    list(LENGTH MUTABLE_STATE_RANGES MUTABLE_STATE_RANGE_COUNT)
+    math(EXPR LAST_MUTABLE_STATE_RANGE_INDEX "${MUTABLE_STATE_RANGE_COUNT} - 1")
+    foreach(MUTABLE_STATE_RANGE_INDEX RANGE 0 ${LAST_MUTABLE_STATE_RANGE_INDEX} 2)
+        list(GET MUTABLE_STATE_RANGES ${MUTABLE_STATE_RANGE_INDEX} MUTABLE_EQUATE_NAME)
+        math(EXPR MUTABLE_STATE_SIZE_INDEX "${MUTABLE_STATE_RANGE_INDEX} + 1")
+        list(GET MUTABLE_STATE_RANGES ${MUTABLE_STATE_SIZE_INDEX} MUTABLE_BYTE_COUNT)
+        read_equate("${EQUATE_FILE}" "${MUTABLE_EQUATE_NAME}" MUTABLE_EQUATE_ADDRESS)
+        math(EXPR MUTABLE_START "0x${MUTABLE_EQUATE_ADDRESS}")
+        math(EXPR MUTABLE_END "${MUTABLE_START} + ${MUTABLE_BYTE_COUNT} - 1")
+
+        if(MUTABLE_START LESS RAM_START OR MUTABLE_END GREATER RAM_TOP)
+            message(FATAL_ERROR "${MUTABLE_EQUATE_NAME} is outside AVO RAM: 0x${MUTABLE_EQUATE_ADDRESS}")
+        endif()
+        if(MUTABLE_START LESS DATA_FLOOR)
+            message(FATAL_ERROR "${MUTABLE_EQUATE_NAME} crosses inv_data_floor: 0x${MUTABLE_EQUATE_ADDRESS}")
+        endif()
+
+        foreach(MUTABLE_OFFSET RANGE ${MUTABLE_START} ${MUTABLE_END})
+            list(FIND USED_MUTABLE_OFFSETS "${MUTABLE_OFFSET}" MUTABLE_OFFSET_INDEX)
+            if(NOT MUTABLE_OFFSET_INDEX EQUAL -1)
+                message(FATAL_ERROR "${MUTABLE_EQUATE_NAME} overlaps another mutable AVO RAM allocation at ${MUTABLE_OFFSET}")
+            endif()
+            list(APPEND USED_MUTABLE_OFFSETS "${MUTABLE_OFFSET}")
+        endforeach()
+    endforeach()
+endfunction()
+
 assert_file_size("${INVADERS_BASE_ROM}" 8192)
 assert_file_size("${INVADERS_AVO_ROM}" 8192)
 
@@ -155,34 +227,45 @@ endforeach()
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_enter_impl INV_ENTER_IMPL)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_idle_impl INV_IDLE_IMPL)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_exit_impl INV_EXIT_IMPL)
-read_symbol("${INVADERS_BASE_INCLUDE}" inv_enter INV_ENTER)
-read_symbol("${INVADERS_BASE_INCLUDE}" inv_idle INV_IDLE)
-read_symbol("${INVADERS_BASE_INCLUDE}" inv_exit INV_EXIT)
-read_symbol("${INVADERS_BASE_INCLUDE}" inv_idle_hook INV_IDLE_HOOK)
-read_symbol("${INVADERS_BASE_INCLUDE}" inv_setup_keys_hook INV_SETUP_KEYS_HOOK)
-read_symbol("${INVADERS_BASE_INCLUDE}" inv_active INV_ACTIVE)
-read_symbol("${INVADERS_BASE_INCLUDE}" idle_loop INVADERS_IDLE_LOOP)
-read_symbol("${INVADERS_BASE_INCLUDE}" keyboard_tick INVADERS_KEYBOARD_TICK)
-read_symbol("${INVADERS_BASE_INCLUDE}" setup_keys INVADERS_SETUP_KEYS)
-read_symbol("${INVADERS_BASE_INCLUDE}" rom1_checksum INVADERS_ROM1_CHECKSUM)
-read_symbol("${INVADERS_BASE_INCLUDE}" rom2_checksum INVADERS_ROM2_CHECKSUM)
-read_symbol("${INVADERS_BASE_INCLUDE}" rom3_checksum INVADERS_ROM3_CHECKSUM)
-read_symbol("${INVADERS_BASE_INCLUDE}" rom4_checksum INVADERS_ROM4_CHECKSUM)
+read_equate("${INVADERS_BASE_EQUATES}" inv_enter INV_ENTER)
+read_equate("${INVADERS_BASE_EQUATES}" inv_idle INV_IDLE)
+read_equate("${INVADERS_BASE_EQUATES}" inv_exit INV_EXIT)
+read_equate("${INVADERS_BASE_EQUATES}" inv_idle_hook INV_IDLE_HOOK)
+read_equate("${INVADERS_BASE_EQUATES}" inv_setup_keys_hook INV_SETUP_KEYS_HOOK)
+read_equate("${INVADERS_BASE_EQUATES}" inv_avo_ram_start INV_AVO_RAM_START)
+read_equate("${INVADERS_BASE_EQUATES}" inv_avo_ram_top INV_AVO_RAM_TOP)
+read_equate("${INVADERS_BASE_EQUATES}" inv_data_top INV_DATA_TOP)
+read_equate("${INVADERS_BASE_EQUATES}" inv_data_floor INV_DATA_FLOOR)
+read_symbol("${INVADERS_BASE_SYMBOLS}" idle_loop INVADERS_IDLE_LOOP)
+read_symbol("${INVADERS_BASE_SYMBOLS}" keyboard_tick INVADERS_KEYBOARD_TICK)
+read_symbol("${INVADERS_BASE_SYMBOLS}" setup_keys INVADERS_SETUP_KEYS)
+read_symbol("${INVADERS_BASE_SYMBOLS}" rom1_checksum INVADERS_ROM1_CHECKSUM)
+read_symbol("${INVADERS_BASE_SYMBOLS}" rom2_checksum INVADERS_ROM2_CHECKSUM)
+read_symbol("${INVADERS_BASE_SYMBOLS}" rom3_checksum INVADERS_ROM3_CHECKSUM)
+read_symbol("${INVADERS_BASE_SYMBOLS}" rom4_checksum INVADERS_ROM4_CHECKSUM)
 read_symbol("${VT100_BASE_SYMBOLS}" idle_loop VT100_IDLE_LOOP)
 read_symbol("${VT100_BASE_SYMBOLS}" keyboard_tick VT100_KEYBOARD_TICK)
 read_symbol("${VT100_BASE_SYMBOLS}" setup_keys VT100_SETUP_KEYS)
-assert_symbol_in_window(inv_enter_impl "${INV_ENTER_IMPL}")
-assert_symbol_in_window(inv_idle_impl "${INV_IDLE_IMPL}")
-assert_symbol_in_window(inv_exit_impl "${INV_EXIT_IMPL}")
-assert_symbol_in_window(inv_enter "${INV_ENTER}")
-assert_symbol_in_window(inv_idle "${INV_IDLE}")
-assert_symbol_in_window(inv_exit "${INV_EXIT}")
-assert_symbol_in_window(inv_idle_hook "${INV_IDLE_HOOK}")
-assert_symbol_in_window(inv_setup_keys_hook "${INV_SETUP_KEYS_HOOK}")
-assert_symbol_equals(inv_active "${INV_ACTIVE}" "3FFF")
-assert_symbol_equals(idle_loop "${INVADERS_IDLE_LOOP}" "${VT100_IDLE_LOOP}")
-assert_symbol_equals(keyboard_tick "${INVADERS_KEYBOARD_TICK}" "${VT100_KEYBOARD_TICK}")
-assert_symbol_equals(setup_keys "${INVADERS_SETUP_KEYS}" "${VT100_SETUP_KEYS}")
+assert_address_in_window(inv_enter_impl "${INV_ENTER_IMPL}")
+assert_address_in_window(inv_idle_impl "${INV_IDLE_IMPL}")
+assert_address_in_window(inv_exit_impl "${INV_EXIT_IMPL}")
+assert_address_in_window(inv_enter "${INV_ENTER}")
+assert_address_in_window(inv_idle "${INV_IDLE}")
+assert_address_in_window(inv_exit "${INV_EXIT}")
+assert_address_in_window(inv_idle_hook "${INV_IDLE_HOOK}")
+assert_address_in_window(inv_setup_keys_hook "${INV_SETUP_KEYS_HOOK}")
+assert_address_equals(inv_avo_ram_start "${INV_AVO_RAM_START}" "3000")
+assert_address_equals(inv_avo_ram_top "${INV_AVO_RAM_TOP}" "3FFF")
+assert_address_equals(inv_data_top "${INV_DATA_TOP}" "3FFF")
+assert_address_equals(inv_data_floor "${INV_DATA_FLOOR}" "3800")
+assert_address_equals(idle_loop "${INVADERS_IDLE_LOOP}" "${VT100_IDLE_LOOP}")
+assert_address_equals(keyboard_tick "${INVADERS_KEYBOARD_TICK}" "${VT100_KEYBOARD_TICK}")
+assert_address_equals(setup_keys "${INVADERS_SETUP_KEYS}" "${VT100_SETUP_KEYS}")
+
+math(EXPR INVADERS_RAM_START "0x${INV_AVO_RAM_START}")
+math(EXPR INVADERS_RAM_TOP "0x${INV_AVO_RAM_TOP}")
+math(EXPR INVADERS_DATA_FLOOR_VALUE "0x${INV_DATA_FLOOR}")
+assert_mutable_state_layout("${INVADERS_BASE_EQUATES}" ${INVADERS_RAM_START} ${INVADERS_RAM_TOP} ${INVADERS_DATA_FLOOR_VALUE})
 
 file(READ "${VT100_BASE_ROM}" VT100_BASE_HEX HEX)
 file(READ "${INVADERS_BASE_ROM}" INVADERS_BASE_HEX HEX)
@@ -228,8 +311,8 @@ assert_jump_target("${INVADERS_AVO_HEADER}" 3 "${INV_IDLE_IMPL}" "inv_idle")
 assert_jump_target("${INVADERS_AVO_HEADER}" 6 "${INV_EXIT_IMPL}" "inv_exit")
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_idle_hook_impl INV_IDLE_HOOK_IMPL)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_setup_keys_hook_impl INV_SETUP_KEYS_HOOK_IMPL)
-assert_symbol_in_window(inv_idle_hook_impl "${INV_IDLE_HOOK_IMPL}")
-assert_symbol_in_window(inv_setup_keys_hook_impl "${INV_SETUP_KEYS_HOOK_IMPL}")
+assert_address_in_window(inv_idle_hook_impl "${INV_IDLE_HOOK_IMPL}")
+assert_address_in_window(inv_setup_keys_hook_impl "${INV_SETUP_KEYS_HOOK_IMPL}")
 assert_jump_target("${INVADERS_AVO_HEADER}" 9 "${INV_IDLE_HOOK_IMPL}" "inv_idle_hook")
 
 file(READ "${INVADERS_AVO_ROM}" INVADERS_AVO_SETUP_HOOK HEX OFFSET 12 LIMIT 3)
