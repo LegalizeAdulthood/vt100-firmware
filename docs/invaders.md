@@ -5,12 +5,13 @@ VT100 firmware, using [vtinvaders](https://github.com/j4james/vtinvaders) and
 [ascii-invaders](https://github.com/macdice/ascii-invaders) as gameplay and
 rendering references.
 
-The design assumes that the game code and game RAM live in the memory added by
-the AVO board, `3000h`-`3fffh`. The base firmware ROM should only need a small
-entry hook, any necessary dispatch glue, and a way to leave the game cleanly.
-While the game is active, the normal terminal screen contents and AVO attribute
-contents are considered owned by the game. Returning to terminal mode should
-restore or rebuild the normal terminal display state.
+The design assumes that the base firmware ROM contains only the launcher,
+dispatch glue, and clean exit path. The game code lives in the AVO program
+expansion ROM window starting at `8000h`, while mutable game state lives in the
+AVO RAM range, `3000h`-`3fffh`. While the game is active, the normal terminal
+screen contents and AVO attribute contents are considered owned by the game.
+Returning to terminal mode should restore or rebuild the normal terminal display
+state.
 
 ## Goals
 
@@ -182,24 +183,31 @@ SHIFT gate or normalize lowercase `i` in the new launcher branch. `q`/`Q` can
 remain as a development or MAME convenience exit, but the hardware-facing
 launcher and escape hatch should be SET-UP based.
 
-## AVO Memory Plan
+## Invaders ROM And AVO Memory Plan
 
-The AVO address range gives the game room to be simple rather than byte-perfect
-on the first implementation pass.
+The Invaders entry points are shared between the base ROM and the AVO expansion
+image through `src/invaders-abi.asm`. The expansion ROM starts at `8000h`; the
+AVO RAM range remains available for mutable state, scratch data, and attribute
+or screen-related storage. Allocate persistent game state from `3fffh`
+downward, leaving lower AVO addresses untouched as long as possible to reduce
+conflict with normal screen and attribute memory use.
 
 ```asm
+inv_avo_base    equ 8000h
+inv_code_base   equ inv_avo_base
+inv_code_top    equ 9fffh       ; 8 KiB AVO program expansion ROM
+
 avo_ram_start   equ 3000h
 avo_ram_top     equ 3fffh
 
-inv_code_base   equ 3000h
-inv_code_top    equ 37ffh       ; target budget for game routines and tables
-inv_data_base   equ 3800h
-inv_data_top    equ 3fffh       ; state, dirty queue, optional shadow IDs
+inv_data_top    equ avo_ram_top ; allocate mutable state downward from here
+inv_data_floor  equ 3800h       ; soft low-water mark; move only if needed
 ```
 
-If code size grows, split the range differently. The main constraint is that
-the game should own the AVO memory while active. If the normal terminal display
-is to be restored exactly, save the visible screen and attribute data before
+If code size grows, keep it in the expansion ROM and adjust only the mutable
+AVO RAM layout. The main constraint is that the game should own the selected
+top-down AVO RAM state range while active. If the normal terminal display is to
+be restored exactly, save the visible screen and attribute data before
 entering. If exact restoration is not required, leave through a normal terminal
 reset/rebuild path.
 
@@ -1121,9 +1129,11 @@ rather than shrinking the sprites.
 Yes, MAME can be used for automatic testing. It should be treated as the main
 repeatable regression environment for firmware builds, with final confidence
 still coming from real VT100 hardware or a hardware-equivalent emulator setup.
-The repository already has a MAME setup note in [mame.md](mame.md). That note
-builds the firmware, splits the four 2 KiB CPU ROMs, names them for MAME's
-`vt100` driver, and runs the image.
+The repository already has a MAME setup note in [mame.md](mame.md). The current
+CMake build also has Invaders-specific targets: `invaders-rom` builds the
+checksummed base firmware, splits it into four 2 KiB ROM chunks, and builds the
+8 KiB AVO expansion image; `mame-invaders` installs those images into MAME's
+`vt100` ROM directory.
 
 The current MAME VT100 driver is useful enough for smoke tests, input tests,
 memory-state assertions, and screenshot comparisons, but the local MAME note
@@ -1136,12 +1146,13 @@ failed" and "hardware acceptance failed."
 Use several layers so most bugs are caught before opening MAME:
 
 1. Build test: run the existing CMake workflow and CTest suite.
-2. Static ROM test: verify that invaders entry hooks assemble at the expected
-   labels, ROM checksum bytes were refreshed, and generated split ROMs are
-   exactly 2048 bytes each.
-3. AVO layout test: parse the symbol file and assert that invaders code/data
-   remain inside `3000h`-`3fffh`, with no overlap between code, entity state,
-   object map, and trace buffers.
+2. Static ROM test: verify that Invaders entry hooks assemble at the expected
+   labels, ROM checksum bytes were refreshed, `invaders-[1-4].bin` are exactly
+   2048 bytes each, and `invaders-avo.bin` is exactly 8192 bytes.
+3. AVO layout test: parse the symbol files and assert that Invaders code stays
+   inside the `8000h`-`9fffh` expansion ROM window, while entity state, object
+   map, trace buffers, and other mutable data are allocated downward from
+   `3fffh` and stay inside AVO RAM, `3000h`-`3fffh`.
 4. Sprite table test: verify that every Special Graphics source row has the
    expected width, height, glyph conversion, and object-ID mask, with
    right-padding made explicit.
@@ -1160,47 +1171,57 @@ Use several layers so most bugs are caught before opening MAME:
 
 ### Existing Build And ROM Preparation
 
-The baseline automated pipeline should start with the same build described in
-`docs/mame.md`:
+Configure with `MAME_COMMAND` when `mame.exe` is not already on `PATH`. The
+`mame-invaders` target is only created when CMake has a non-empty
+`MAME_COMMAND`.
 
 ```bat
-cd /d C:\code\vt100\vt100-firmware
-cmake --workflow --preset default
-ctest --test-dir C:\code\vt100\build-vt100-firmware-default
+cd /d <SourceDir>
+cmake --preset default -DMAME_COMMAND=<MAMEDir>\mame.exe
 ```
 
-Then prepare MAME's ROM set:
+Build the Invaders ROM set and install it into MAME's `vt100` ROM directory:
 
 ```bat
-set "FIRMWARE_ROOT=C:\code\vt100\vt100-firmware"
-set "BUILD_SRC=C:\code\vt100\build-vt100-firmware-default\src"
-set "MAME_ROOT=C:\code\mame"
-set "ROM_DIR=%MAME_ROOT%\roms\vt100"
-
-if not exist "%ROM_DIR%" mkdir "%ROM_DIR%"
-
-copy /Y "%BUILD_SRC%\23-061E2.bin" "%ROM_DIR%\23-061e2-00.e56"
-copy /Y "%BUILD_SRC%\23-032E2.bin" "%ROM_DIR%\23-032e2-00.e52"
-copy /Y "%BUILD_SRC%\23-033E2.bin" "%ROM_DIR%\23-033e2-00.e45"
-copy /Y "%BUILD_SRC%\23-034E2.bin" "%ROM_DIR%\23-034e2-00.e40"
-copy /Y "%FIRMWARE_ROOT%\bin\23-018E2.bin" "%ROM_DIR%\23-018e2-00.e4"
+cmake --build --preset default --target invaders-rom
+cmake --build --preset default --target mame-invaders
+ctest --test-dir <BuildDir>
 ```
+
+The `invaders-rom` target assembles and checksum-patches `invaders.bin`, then
+splits it into these files:
+
+| Generated file | MAME file name |
+|---|---|
+| `invaders-1.bin` | `23-061e2-00.e56` |
+| `invaders-2.bin` | `23-032e2-00.e52` |
+| `invaders-3.bin` | `23-033e2-00.e45` |
+| `invaders-4.bin` | `23-034e2-00.e40` |
+
+The same build assembles `invaders-avo.bin` as a full 8 KiB expansion image.
+The `mame-invaders` target installs it as `23-225e4-00.e69`, the MAME
+VT100-family 8 KiB program expansion ROM name for the `8000h` window. It also
+installs the character generator ROM as `23-018e2-00.e4`.
 
 MAME can verify that the ROM set is discoverable:
 
 ```bat
-cd /d C:\code\mame
-mame.exe -verifyroms vt100 -rompath C:\code\mame\roms
+cd /d <MAMEDir>
+mame.exe -verifyroms vt100 -rompath roms
 ```
 
 Checksum differences for modified CPU ROM chunks are expected during local
-firmware experiments. Missing files are not expected.
+firmware experiments. Missing files are not expected. If the installed MAME
+`vt100` driver does not load the expansion ROM image, a driver change or an
+alternate VT100-family machine configuration may be needed for full Invaders
+coverage.
 
 ### MAME Smoke Harness
 
-The first MAME test should prove that the AVO address range is actually usable
-in the selected MAME driver configuration. The game can include a tiny test
-entry point that writes a signature to AVO RAM:
+The first MAME test should prove that the `8000h` expansion ROM entry point is
+callable and that the AVO RAM range is writable in the selected MAME driver
+configuration. The game can include a tiny test entry point that writes a
+signature to AVO RAM:
 
 ```asm
 inv_test_probe:
@@ -1212,13 +1233,14 @@ inv_test_probe:
         mvi     m,'V'
         ret
 
-inv_test_signature equ 3ff0h
+inv_test_signature equ 3ffdh
 ```
 
 A MAME script or debugger command can run long enough for the probe and then
-read `3ff0h`-`3ff2h`. If the signature cannot be read back, MAME can still test
-the base ROM hook and "AVO missing" refusal path, but it cannot validate the
-full game design without driver work.
+read `3ffdh`-`3fffh`. If the expansion entry point is not visible at `8000h` or
+the signature cannot be read back, MAME can still test the base ROM hook and
+"AVO missing" refusal path, but it cannot validate the full game design without
+driver work.
 
 After the AVO probe passes, the smoke test should:
 
@@ -1237,16 +1259,19 @@ After the AVO probe passes, the smoke test should:
 ### Scriptable Test Hooks
 
 Add test-only state bytes in AVO RAM. These make MAME assertions much easier and
-also help with real-hardware diagnostics.
+also help with real-hardware diagnostics. Keep them in the same top-down
+allocation style as the game state:
 
 ```asm
-inv_test_mode       db 0        ; non-zero enables deterministic test behavior
-inv_test_script     db 0        ; input script selector
-inv_test_stop_lo    db 0        ; stop frame for automated tests
-inv_test_stop_hi    db 0
-inv_test_result     db 0        ; 0 running/pass, non-zero failure code
-inv_test_trace_head db 0
-inv_test_trace      ds 128
+inv_test_signature  equ 3ffdh   ; 3 bytes, through 3fffh
+inv_test_mode       equ 3ffch   ; non-zero enables deterministic test behavior
+inv_test_script     equ 3ffbh   ; input script selector
+inv_test_stop_lo    equ 3ffah   ; stop frame for automated tests
+inv_test_stop_hi    equ 3ff9h
+inv_test_result     equ 3ff8h   ; 0 running/pass, non-zero failure code
+inv_test_trace_head equ 3ff7h
+inv_test_trace_top  equ 3ff6h
+inv_test_trace_base equ inv_test_trace_top-127
 ```
 
 Recommended result codes:
@@ -1266,8 +1291,9 @@ mainly means freezing entry timing and scripted input.
 ### MAME Lua Or Debugger Assertions
 
 The most useful automated MAME tests should inspect memory rather than relying
-only on pixels. A harness can load labels from the generated `vt100.sym` file,
-then read invaders state from the emulated 8080 program address space.
+only on pixels. A harness can load labels from the generated `invaders.sym` and
+`invaders-avo.sym` files, then read Invaders state from the emulated 8080
+program address space.
 
 Conceptual Lua shape:
 
@@ -1275,12 +1301,17 @@ Conceptual Lua shape:
 local cpu = manager.machine.devices[":maincpu"]
 local mem = cpu.spaces["program"]
 
-local INV_ACTIVE = 0x3800
-local INV_FRAME_LO = 0x3802
-local INV_TEST_RESULT = 0x3f82
+local base_symbols = load_symbols("<BuildDir>\\src\\invaders.sym")
+local avo_symbols = load_symbols("<BuildDir>\\src\\invaders-avo.sym")
+
+local INV_ENTER = avo_symbols.inv_enter
+local INV_ACTIVE = base_symbols.inv_active
+local INV_FRAME_LO = base_symbols.inv_frame_lo
+local INV_TEST_RESULT = base_symbols.inv_test_result
 
 emu.register_frame_done(function()
     if emu.framecount() == 600 then
+        assert(mem:read_u8(INV_ENTER) == 0xc3)
         assert(mem:read_u8(INV_ACTIVE) ~= 0)
         assert(mem:read_u8(INV_FRAME_LO) ~= 0)
         assert(mem:read_u8(INV_TEST_RESULT) == 0)
@@ -1316,15 +1347,15 @@ the 60 by 24 character grid directly.
 Manual smoke command, from `docs/mame.md`:
 
 ```bat
-cd /d C:\code\mame
-mame.exe vt100 -rompath C:\code\mame\roms -window
+cd /d <MAMEDir>
+mame.exe vt100 -rompath roms -window
 ```
 
 Automated runs should prefer the installed MAME build's script/headless options.
 Check them with:
 
 ```bat
-cd /d C:\code\mame
+cd /d <MAMEDir>
 mame.exe -showusage
 ```
 
@@ -1332,11 +1363,12 @@ The intended CI shape is:
 
 ```bat
 mame.exe vt100 ^
-  -rompath C:\code\mame\roms ^
+  -rompath roms ^
   -skip_gameinfo ^
   -nothrottle ^
+  -video none ^
   -sound none ^
-  -autoboot_script C:\code\vt100\vt100-firmware\tools\mame-invaders-smoke.lua
+  -autoboot_script <SourceDir>\tools\mame-invaders-smoke.lua
 ```
 
 If the installed MAME build cannot skip the warning screen for the `vt100`
@@ -1348,8 +1380,10 @@ before triggering the game.
 The MAME-backed gate should initially be modest:
 
 - firmware builds and CTest passes;
-- ROM set is prepared and `mame.exe -verifyroms vt100` reports no missing ROMs;
-- AVO probe signature can be written and read;
+- ROM set is prepared by `mame-invaders` and `mame.exe -verifyroms vt100`
+  reports no missing ROMs;
+- expansion ROM code is visible at `8000h` and the AVO probe signature can be
+  written and read in AVO RAM;
 - game enters through SET-UP plus `I` and advances at least 600 frames;
 - scripted movement changes `turret_x`;
 - scripted fire increments `laser_shots`;
@@ -1368,17 +1402,17 @@ AVO attribute interactions, and exact video timing.
 - Should 50 Hz machines play slower, or should frame timers be scaled?
 - Should the first implementation require AVO presence and refuse to start
   without it?
-- Can AVO attributes be disabled or ignored while game code/data occupy the AVO
-  range, or should the game reserve a safe subrange that does not conflict with
-  active attribute bytes?
-- Does the installed MAME `vt100` configuration expose the AVO RAM range well
-  enough to run game code from `3000h`-`3fffh`, or do we need a small driver
-  patch for full automated testing?
+- Can AVO attributes be disabled or ignored while game state occupies AVO RAM,
+  or should the game reserve a safe subrange that does not conflict with active
+  attribute bytes?
+- Does the installed MAME `vt100` configuration expose both the `8000h`
+  expansion ROM and the `3000h`-`3fffh` AVO RAM range, or do we need a small
+  driver patch for full automated testing?
 
 ## Implementation Order
 
 1. Add the SET-UP `I` launcher, game exit hook, and `inv_active` idle dispatch.
-2. Allocate AVO RAM symbols for code, state, and optional object map.
+2. Allocate expansion ROM code symbols and AVO RAM state/object-map symbols.
 3. Implement `inv_wait_frame`, `inv_init_screen`, `inv_putc`,
    `inv_puts_glyphs`, and optionally `inv_puts_sg`.
 4. Draw static status, ground, shields, and turret.
