@@ -662,15 +662,15 @@ inv_idle_active:
         pop     h               ; discard return to the terminal idle path
         jmp     idle_loop
 ;
-; Replaces "mov a,b / cpi 'S'" in setup_keys. Non-Invaders SET-UP keys leave
-; flags exactly as the displaced comparison would have left them.
+; Replaces "lda last_key_flags" in setup_keys. Non-Invaders SET-UP keys leave
+; A exactly as the displaced load would have left it.
 ;
 inv_setup_keys_hook_impl:
         mov     a,b
-        cpi     'I'             ; SHIFT I starts Space Invaders
+        ani     0dfh            ; convert lower-case i to upper-case I
+        cpi     'I'             ; i or I starts Space Invaders
         jz      inv_setup_start
-        mov     a,b
-        cpi     'S'             ; repeat the displaced comparison
+        lda     last_key_flags  ; repeat the displaced load
         ret
 ;
 inv_setup_start:

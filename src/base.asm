@@ -4939,15 +4939,16 @@ setup_b_only:   lda     in_setup_a
 ;
 ; In SET-UP mode, deal with keys other than digits (which are handled through a table)
 ;
-setup_keys:     lda     last_key_flags  ; All other keys will need SHIFT to be pressed
-                ani     key_flag_shift
-                rz                      ; so if it isn't, exit
+setup_keys:
         if vt100
-                mov     a,b
-                cpi     'S'             ; SHIFT S stores settings in NVR
+                lda     last_key_flags  ; All other keys will need SHIFT to be pressed
         else
                 call    inv_setup_keys_hook
         endif
+                ani     key_flag_shift
+                rz                      ; so if it isn't, exit
+                mov     a,b
+                cpi     'S'             ; SHIFT S stores settings in NVR
                 jnz     try_recall
                 call    store_nvr
                 jmp     post_nvr
