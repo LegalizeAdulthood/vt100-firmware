@@ -48,6 +48,7 @@ inv_enter_impl:
         sta     inv_turret_x_lo
         mvi     a,inv_turret_start_x_hi
         sta     inv_turret_x_hi
+        call    inv_reset_aliens
         call    inv_reset_shields
         call    inv_draw_static_screen
         lda     frame_count
@@ -123,9 +124,15 @@ inv_wait_frame:
 inv_inc_frame16:
         lxi     h,inv_frame_lo
         inr     m
+        mov     a,m
+        ani     0fh
+        mov     m,a
         rnz
-        inx     h
+        dcx     h
         inr     m
+        mov     a,m
+        ani     0fh
+        mov     m,a
         ret
 ;
 inv_frame:
@@ -133,6 +140,7 @@ inv_frame:
         lda     inv_active
         ora     a
         rz
+        call    inv_update_aliens
         call    inv_update_turret
         call    inv_update_laser
         ret
@@ -620,6 +628,444 @@ inv_laser_tick:
         rnz
         jmp     inv_move_laser
 ;
+inv_get_nibble_pair:
+        mov     a,m
+        ani     0fh
+        mov     e,a
+        dcx     h
+        mov     a,m
+        ani     0fh
+        rlc
+        rlc
+        rlc
+        rlc
+        ora     e
+        ret
+;
+inv_store_nibble_pair:
+        push    psw
+        ani     0fh
+        mov     m,a
+        pop     psw
+        dcx     h
+        rrc
+        rrc
+        rrc
+        rrc
+        ani     0fh
+        mov     m,a
+        ret
+;
+inv_inc_nibble_pair:
+        inr     m
+        mov     a,m
+        ani     0fh
+        mov     m,a
+        rnz
+        dcx     h
+        inr     m
+        mov     a,m
+        ani     0fh
+        mov     m,a
+        ret
+;
+inv_get_alien_init:
+        lxi     h,inv_alien_init_lo
+        jmp     inv_get_nibble_pair
+;
+inv_inc_alien_init:
+        lxi     h,inv_alien_init_lo
+        jmp     inv_inc_nibble_pair
+;
+inv_get_alien_live_count:
+        lxi     h,inv_alien_live_lo
+        jmp     inv_get_nibble_pair
+;
+inv_inc_alien_live_count:
+        lxi     h,inv_alien_live_lo
+        jmp     inv_inc_nibble_pair
+;
+inv_get_alien_last:
+        lxi     h,inv_alien_last_lo
+        jmp     inv_get_nibble_pair
+;
+inv_store_alien_last:
+        lxi     h,inv_alien_last_lo
+        jmp     inv_store_nibble_pair
+;
+inv_alien_live_addr:
+        mov     a,b
+        lxi     h,inv_alien_live_base
+        jmp     add_a_to_hl
+;
+inv_alien_x_lo_addr:
+        mov     a,b
+        lxi     h,inv_alien_x_lo_base
+        jmp     add_a_to_hl
+;
+inv_alien_x_hi_addr:
+        mov     a,b
+        lxi     h,inv_alien_x_hi_base
+        jmp     add_a_to_hl
+;
+inv_alien_y_lo_addr:
+        mov     a,b
+        lxi     h,inv_alien_y_lo_base
+        jmp     add_a_to_hl
+;
+inv_alien_y_hi_addr:
+        mov     a,b
+        lxi     h,inv_alien_y_hi_base
+        jmp     add_a_to_hl
+;
+inv_get_alien_x:
+        call    inv_alien_x_hi_addr
+        mov     a,m
+        ani     0fh
+        rlc
+        rlc
+        rlc
+        rlc
+        mov     d,a
+        call    inv_alien_x_lo_addr
+        mov     a,m
+        ani     0fh
+        ora     d
+        ret
+;
+inv_store_alien_x:
+        push    psw
+        call    inv_alien_x_lo_addr
+        pop     psw
+        push    psw
+        ani     0fh
+        mov     m,a
+        pop     psw
+        rrc
+        rrc
+        rrc
+        rrc
+        ani     0fh
+        push    psw
+        call    inv_alien_x_hi_addr
+        pop     psw
+        mov     m,a
+        ret
+;
+inv_get_alien_y:
+        call    inv_alien_y_hi_addr
+        mov     a,m
+        ani     0fh
+        rlc
+        rlc
+        rlc
+        rlc
+        mov     d,a
+        call    inv_alien_y_lo_addr
+        mov     a,m
+        ani     0fh
+        ora     d
+        ret
+;
+inv_store_alien_y:
+        push    psw
+        call    inv_alien_y_lo_addr
+        pop     psw
+        push    psw
+        ani     0fh
+        mov     m,a
+        pop     psw
+        rrc
+        rrc
+        rrc
+        rrc
+        ani     0fh
+        push    psw
+        call    inv_alien_y_hi_addr
+        pop     psw
+        mov     m,a
+        ret
+;
+inv_set_alien_live:
+        push    psw
+        call    inv_alien_live_addr
+        pop     psw
+        mov     m,a
+        ret
+;
+inv_alien_id_to_row_col:
+        mvi     d,0
+inv_alien_row_col_loop:
+        cpi     inv_alien_cols
+        jc      inv_alien_row_col_done
+        sui     inv_alien_cols
+        inr     d
+        jmp     inv_alien_row_col_loop
+inv_alien_row_col_done:
+        mov     e,a
+        ret
+;
+inv_alien_type_for_id:
+        call    inv_alien_id_to_row_col
+        mov     a,d
+        cpi     1
+        jc      inv_alien_type_30
+        cpi     3
+        jc      inv_alien_type_20
+        mvi     a,2
+        ret
+inv_alien_type_30:
+        xra     a
+        ret
+inv_alien_type_20:
+        mvi     a,1
+        ret
+;
+inv_reset_aliens:
+        lxi     h,inv_alien_data_base
+        lxi     b,inv_alien_data_size
+        mvi     e,0
+inv_clear_alien_data:
+        mov     m,e
+        inx     h
+        dcx     b
+        mov     a,b
+        ora     c
+        jnz     inv_clear_alien_data
+        xra     a
+        sta     inv_alien_init_lo
+        sta     inv_alien_init_hi
+        sta     inv_alien_live_lo
+        sta     inv_alien_live_hi
+        sta     inv_alien_reverse
+        sta     inv_alien_y_delta
+        sta     inv_alien_descents
+        sta     inv_alien_anim_phase
+        sta     inv_alien_min_col
+        sta     inv_alien_min_row
+        mvi     a,0fh
+        sta     inv_alien_last_lo
+        sta     inv_alien_last_hi
+        mvi     a,inv_alien_dir_right
+        sta     inv_alien_dir
+        mvi     a,inv_alien_cols-1
+        sta     inv_alien_max_col
+        mvi     a,inv_alien_rows-1
+        sta     inv_alien_max_row
+        ret
+;
+inv_spawn_alien:
+        mov     a,b
+        call    inv_alien_id_to_row_col
+        push    d
+        mov     a,e
+        add     a
+        add     a
+        add     e
+        adi     inv_alien_start_x
+        call    inv_store_alien_x
+        pop     d
+        push    d
+        mov     a,d
+        add     a
+        add     d
+        adi     inv_alien_top_row
+        call    inv_store_alien_y
+        mvi     a,0ffh
+        call    inv_set_alien_live
+        pop     d
+        jmp     inv_draw_alien
+;
+inv_next_live_alien:
+        call    inv_get_alien_last
+inv_next_live_alien_loop:
+        inr     a
+        cpi     inv_alien_count
+        jc      inv_next_live_candidate
+        xra     a
+inv_next_live_candidate:
+        mov     b,a
+        call    inv_alien_live_addr
+        mov     a,m
+        ora     a
+        mov     a,b
+        jz      inv_next_live_alien_loop
+        call    inv_store_alien_last
+        mov     a,b
+        ret
+;
+inv_cycle_aliens:
+        lda     inv_alien_anim_phase
+        xri     1
+        ani     1
+        sta     inv_alien_anim_phase
+        xra     a
+        sta     inv_alien_y_delta
+        lda     inv_alien_reverse
+        ora     a
+        rz
+        xra     a
+        sta     inv_alien_reverse
+        mvi     a,1
+        sta     inv_alien_y_delta
+        lda     inv_alien_descents
+        inr     a
+        ani     0fh
+        sta     inv_alien_descents
+        lda     inv_alien_dir
+        xri     1
+        ani     1
+        sta     inv_alien_dir
+        ret
+;
+inv_erase_alien:
+        call    inv_get_alien_x
+        mov     c,a
+        call    inv_get_alien_y
+        mov     b,a
+        push    b
+        mvi     d,inv_alien_w
+        xra     a
+        call    inv_fill_cells
+        pop     b
+        inr     b
+        mvi     d,inv_alien_w
+        xra     a
+        jmp     inv_fill_cells
+;
+inv_draw_alien:
+        push    b
+        mov     a,b
+        call    inv_alien_type_for_id
+        mov     d,a
+        pop     b
+        push    d
+        call    inv_get_alien_x
+        mov     c,a
+        call    inv_get_alien_y
+        mov     b,a
+        pop     d
+        lda     inv_alien_anim_phase
+        ora     a
+        jnz     inv_draw_alien_phase_b
+        mov     a,d
+        ora     a
+        jz      inv_draw_alien_30a
+        cpi     1
+        jz      inv_draw_alien_20a
+        lxi     h,inv_alien10a_top
+        lxi     d,inv_alien10a_bottom
+        jmp     inv_draw_alien_pair
+inv_draw_alien_30a:
+        lxi     h,inv_alien30a_top
+        lxi     d,inv_alien30a_bottom
+        jmp     inv_draw_alien_pair
+inv_draw_alien_20a:
+        lxi     h,inv_alien20a_top
+        lxi     d,inv_alien20a_bottom
+        jmp     inv_draw_alien_pair
+inv_draw_alien_phase_b:
+        mov     a,d
+        ora     a
+        jz      inv_draw_alien_30b
+        cpi     1
+        jz      inv_draw_alien_20b
+        lxi     h,inv_alien10b_top
+        lxi     d,inv_alien10b_bottom
+        jmp     inv_draw_alien_pair
+inv_draw_alien_30b:
+        lxi     h,inv_alien30b_top
+        lxi     d,inv_alien30b_bottom
+        jmp     inv_draw_alien_pair
+inv_draw_alien_20b:
+        lxi     h,inv_alien20b_top
+        lxi     d,inv_alien20b_bottom
+;
+inv_draw_alien_pair:
+        push    d
+        push    b
+        call    inv_puts_sg
+        pop     b
+        pop     d
+        inr     b
+        xchg
+        jmp     inv_puts_sg
+;
+inv_move_alien:
+        push    b
+        call    inv_erase_alien
+        pop     b
+        lda     inv_alien_y_delta
+        ora     a
+        jz      inv_move_alien_x
+        call    inv_get_alien_y
+        inr     a
+        call    inv_store_alien_y
+inv_move_alien_x:
+        lda     inv_alien_dir
+        ora     a
+        jz      inv_move_alien_left
+        call    inv_get_alien_x
+        inr     a
+        call    inv_store_alien_x
+        jmp     inv_move_alien_draw
+inv_move_alien_left:
+        call    inv_get_alien_x
+        dcr     a
+        call    inv_store_alien_x
+inv_move_alien_draw:
+        push    b
+        call    inv_draw_alien
+        pop     b
+        jmp     inv_check_alien_edge
+;
+inv_check_alien_edge:
+        call    inv_get_alien_x
+        mov     c,a
+        lda     inv_alien_dir
+        ora     a
+        jz      inv_check_alien_left_edge
+        mov     a,c
+        adi     inv_alien_w-1
+        cpi     inv_alien_right_edge
+        rc
+        jmp     inv_set_alien_reverse
+inv_check_alien_left_edge:
+        mov     a,c
+        cpi     inv_alien_start_x+1
+        rnc
+inv_set_alien_reverse:
+        mvi     a,0ffh
+        sta     inv_alien_reverse
+        ret
+;
+inv_update_aliens:
+        call    inv_get_alien_init
+        cpi     inv_alien_count
+        jnc     inv_move_next_alien
+        mov     b,a
+        call    inv_spawn_alien
+        call    inv_inc_alien_init
+        call    inv_inc_alien_live_count
+        ret
+inv_move_next_alien:
+        call    inv_get_alien_live_count
+        ora     a
+        rz
+        call    inv_get_alien_last
+        push    psw
+        call    inv_next_live_alien
+        pop     psw
+        mov     e,a
+        cpi     0ffh
+        jz      inv_move_next_alien_now
+        mov     a,b
+        cmp     e
+        jnc     inv_move_next_alien_now
+        call    inv_cycle_aliens
+inv_move_next_alien_now:
+        jmp     inv_move_alien
+;
 inv_update_turret:
         lda     inv_left_pressed
         mov     b,a
@@ -824,6 +1270,31 @@ inv_render_sg_line:
         db      'l','q','k',0
 inv_render_sg_blank:
         db      '_','a','~',0
+;
+inv_alien30a_top:
+        db      'l','a','a','k',0
+inv_alien30a_bottom:
+        db      'm','a','a','j',0
+inv_alien30b_top:
+        db      'l','q','q','k',0
+inv_alien30b_bottom:
+        db      'm','a','a','j',0
+inv_alien20a_top:
+        db      'l','q','q','k',0
+inv_alien20a_bottom:
+        db      'x','_','_','x',0
+inv_alien20b_top:
+        db      'x','q','q','x',0
+inv_alien20b_bottom:
+        db      'm','q','q','j',0
+inv_alien10a_top:
+        db      '_','l','q','k',0
+inv_alien10a_bottom:
+        db      'm','q','j','_',0
+inv_alien10b_top:
+        db      'l','q','k','_',0
+inv_alien10b_bottom:
+        db      '_','m','q','j',0
 ;
 inv_cell_glyphs:
         db      00h,02h,0dh,0ch,0eh,0bh,12h
