@@ -70,12 +70,34 @@ inv_read_keys:
         lxi     h,key_silo
 inv_check_keys:
         mov     a,m
-        cpi     7bh             ; SET-UP exits the game
+        cpi     inv_scan_setup  ; SET-UP exits the game
         jz      inv_setup_pressed
+        cpi     inv_scan_arrow_left
+        jz      inv_left_arrow_pressed
+        cpi     inv_scan_arrow_right
+        jz      inv_right_arrow_pressed
+        cpi     inv_scan_space
+        jz      inv_space_pressed
+inv_next_key:
         inx     h
         dcr     b
         jnz     inv_check_keys
         jmp     clear_keyboard
+;
+inv_left_arrow_pressed:
+        mvi     a,0ffh
+        sta     inv_left_pressed
+        jmp     inv_next_key
+;
+inv_right_arrow_pressed:
+        mvi     a,0ffh
+        sta     inv_right_pressed
+        jmp     inv_next_key
+;
+inv_space_pressed:
+        mvi     a,0ffh
+        sta     inv_fire_pressed
+        jmp     inv_next_key
 ;
 inv_setup_pressed:
         call    inv_exit
@@ -100,6 +122,10 @@ inv_inc_frame16:
 ;
 inv_frame:
         call    inv_test_tick
+        lda     inv_active
+        ora     a
+        rz
+        call    inv_update_turret
         ret
 ;
 inv_prepare_screen:
@@ -312,14 +338,109 @@ inv_draw_ground:
         jmp     inv_puts_sg
 ;
 inv_draw_turret:
+        call    inv_get_turret_x
+        mov     c,a
+        jmp     inv_draw_turret_at
+;
+inv_draw_turret_at:
+        push    b
         mvi     b,inv_turret_top_row
-        mvi     c,inv_turret_start_x
         lxi     h,inv_turret_top
         call    inv_puts_sg
+        pop     b
         mvi     b,inv_turret_top_row+1
-        mvi     c,inv_turret_start_x
         lxi     h,inv_turret_bottom
         jmp     inv_puts_sg
+;
+inv_erase_turret_at:
+        push    b
+        mvi     b,inv_turret_top_row
+        mvi     d,inv_turret_w
+        mvi     a,12h
+        call    inv_fill_cells
+        pop     b
+        mvi     b,inv_turret_top_row+1
+        mvi     d,inv_turret_w
+        xra     a
+        jmp     inv_fill_cells
+;
+inv_fill_cells:
+        mov     e,a
+inv_fill_cell:
+        mov     a,e
+        push    b
+        push    d
+        call    inv_putc
+        pop     d
+        pop     b
+        inr     c
+        dcr     d
+        jnz     inv_fill_cell
+        ret
+;
+inv_get_turret_x:
+        lda     inv_turret_x_hi
+        ani     0fh
+        rlc
+        rlc
+        rlc
+        rlc
+        mov     b,a
+        lda     inv_turret_x_lo
+        ani     0fh
+        ora     b
+        ret
+;
+inv_store_turret_x:
+        push    psw
+        ani     0fh
+        sta     inv_turret_x_lo
+        pop     psw
+        rrc
+        rrc
+        rrc
+        rrc
+        ani     0fh
+        sta     inv_turret_x_hi
+        ret
+;
+inv_update_turret:
+        lda     inv_left_pressed
+        mov     b,a
+        lda     inv_right_pressed
+        ora     b
+        rz
+        lda     inv_left_pressed
+        ora     a
+        jz      inv_update_turret_right
+        lda     inv_right_pressed
+        ora     a
+        rnz
+        call    inv_get_turret_x
+        cpi     inv_turret_min_x
+        rc
+        rz
+        mov     b,a
+        dcr     a
+        jmp     inv_move_turret
+;
+inv_update_turret_right:
+        call    inv_get_turret_x
+        cpi     inv_turret_max_x
+        rnc
+        mov     b,a
+        inr     a
+;
+inv_move_turret:
+        push    psw
+        mov     c,b
+        call    inv_erase_turret_at
+        pop     psw
+        push    psw
+        call    inv_store_turret_x
+        pop     psw
+        mov     c,a
+        jmp     inv_draw_turret_at
 ;
 inv_draw_static_screen:
         call    inv_clear_playfield
@@ -397,7 +518,37 @@ inv_test_tick:
         jz      inv_test_frame_stop
         cpi     inv_test_script_render
         jz      inv_test_render_probe
+        cpi     inv_test_script_input
+        jz      inv_test_input_probe
         jmp     inv_test_bad_script
+;
+inv_test_input_probe:
+        lda     inv_test_result
+        mov     b,a
+        lda     inv_left_pressed
+        ora     a
+        jz      inv_test_no_left
+        mov     a,b
+        ori     inv_test_input_left
+        mov     b,a
+inv_test_no_left:
+        lda     inv_right_pressed
+        ora     a
+        jz      inv_test_no_right
+        mov     a,b
+        ori     inv_test_input_right
+        mov     b,a
+inv_test_no_right:
+        lda     inv_fire_pressed
+        ora     a
+        jz      inv_test_no_fire
+        mov     a,b
+        ori     inv_test_input_fire
+        mov     b,a
+inv_test_no_fire:
+        mov     a,b
+        sta     inv_test_result
+        ret
 inv_test_frame_stop:
         lda     inv_test_stop_lo
         lxi     h,inv_test_stop_hi

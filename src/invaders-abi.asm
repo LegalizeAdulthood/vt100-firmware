@@ -34,8 +34,14 @@ inv_turret_h            equ     2
 inv_turret_start_x      equ     36
 inv_turret_start_x_lo   equ     04h
 inv_turret_start_x_hi   equ     02h
+inv_turret_min_x        equ     inv_play_left
+inv_turret_max_x        equ     inv_play_left+inv_play_width-inv_turret_w
 inv_initial_gunners     equ     3
 inv_initial_level       equ     1
+inv_scan_arrow_right    equ     10h
+inv_scan_arrow_left     equ     20h
+inv_scan_space          equ     77h
+inv_scan_setup          equ     7bh
 inv_cell_blank          equ     0
 inv_cell_checker        equ     1
 inv_cell_upper_left     equ     2
@@ -73,6 +79,10 @@ inv_fail_bad_sprite     equ     03h
 inv_fail_timeout        equ     04h
 inv_test_script_none    equ     00h
 inv_test_script_render  equ     01h
+inv_test_script_input   equ     02h
+inv_test_input_left     equ     01h
+inv_test_input_right    equ     02h
+inv_test_input_fire     equ     04h
 ;
 ; Persistent scalar game state.
 ;
