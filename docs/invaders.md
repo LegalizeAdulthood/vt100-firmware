@@ -513,10 +513,15 @@ inv_shelter_h   equ 3
 ```
 
 The game should render into normal VT100 screen RAM. A simple first pass can use
-a direct row-address table:
+a direct row-address table in the AVO ROM. Do not store this table in AVO RAM:
+the AVO RAM is nibble-wide, so it is unsuitable for 16-bit screen pointers.
 
 ```asm
-inv_row_addr    ds 24 * 2       ; physical screen RAM pointer for each row
+inv_row_addr:
+        dw      main_video+(inv_row_stride*0)
+        dw      main_video+(inv_row_stride*1)
+        ; ...
+        dw      main_video+(inv_row_stride*23)
 ```
 
 `inv_init_screen` should:
@@ -1468,22 +1473,6 @@ same-size trampoline replacements of existing bytes with calls into the AVO ROM.
 The AVO ROM must repeat the displaced base-ROM bytes on normal terminal paths.
 Static tests should fail if `invaders.bin` differs from `vt100.bin` outside the
 explicit trampoline spans and checksum bytes.
-
-## 5. Screen And Glyph Rendering Primitives
-
-Implement the direct screen writer before game objects. Build a row-address
-table for the 24 visible playfield rows, then add `inv_putc`,
-`inv_puts_glyphs`, and `inv_puts_sg`. The Special Graphics helper should
-convert printable Special Graphics source bytes to the character-generator glyph
-numbers already expected by the firmware. Keep rendering routines separate from
-game logic so screen RAM tests can exercise them directly.
-
-Test this slice with a CTest test whose CMake driver launches
-`src/tests/mame-invaders-render.lua`. In test mode, call a small rendering probe
-that clears the playfield, writes a few normal and Special Graphics glyphs at
-known logical coordinates, and stops. The Lua script should read screen RAM and
-compare the affected cells with expected glyph values, including row-boundary
-and right-edge cases.
 
 ## 6. Static Playfield, Turret, Shields, And LEDs
 

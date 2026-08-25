@@ -86,13 +86,142 @@ inv_frame:
         call    inv_test_tick
         ret
 ;
+; Return HL pointing at the screen cell for row B and column C.
+;
+inv_cell_addr:
+        mov     a,b
+        add     a
+        lxi     h,inv_row_addr
+        call    add_a_to_hl
+        mov     e,m
+        inx     h
+        mov     d,m
+        xchg
+        mvi     b,0
+        dad     b
+        ret
+;
+; Write already-mapped glyph A at row B, column C.
+;
+inv_putc:
+        mov     e,a
+        mov     a,b
+        cpi     inv_screen_rows
+        rnc
+        mov     a,c
+        cpi     inv_screen_cols
+        rnc
+        push    d
+        call    inv_cell_addr
+        pop     d
+        mov     m,e
+        ret
+;
+; Write zero-terminated already-mapped glyph bytes from HL.
+;
+inv_puts_glyphs:
+        mov     a,m
+        ora     a
+        rz
+        push    h
+        push    b
+        call    inv_putc
+        pop     b
+        pop     h
+        inx     h
+        inr     c
+        jmp     inv_puts_glyphs
+;
+; Write zero-terminated DEC Special Graphics source bytes from HL.
+;
+inv_puts_sg:
+        mov     a,m
+        ora     a
+        rz
+        cpi     inv_sg_source_base
+        jc      inv_puts_sg_emit
+        cpi     inv_sg_source_limit
+        jnc     inv_puts_sg_emit
+        sui     inv_sg_source_base
+inv_puts_sg_emit:
+        push    h
+        push    b
+        call    inv_putc
+        pop     b
+        pop     h
+        inx     h
+        inr     c
+        jmp     inv_puts_sg
+;
+inv_clear_playfield:
+        lxi     h,inv_row_addr
+        mvi     b,inv_screen_rows
+inv_clear_row:
+        mov     e,m
+        inx     h
+        mov     d,m
+        inx     h
+        push    h
+        xchg
+        mvi     c,inv_screen_cols
+        xra     a
+inv_clear_col:
+        mov     m,a
+        inx     h
+        dcr     c
+        jnz     inv_clear_col
+        pop     h
+        dcr     b
+        jnz     inv_clear_row
+        ret
+;
+inv_test_render_probe:
+        call    inv_clear_playfield
+        mvi     b,0
+        mvi     c,0
+        lxi     h,inv_render_text
+        call    inv_puts_glyphs
+        mvi     b,1
+        mvi     c,78
+        lxi     h,inv_render_edge
+        call    inv_puts_glyphs
+        mvi     b,2
+        mvi     c,4
+        lxi     h,inv_render_sg_line
+        call    inv_puts_sg
+        mvi     b,3
+        mvi     c,10
+        lxi     h,inv_render_sg_blank
+        call    inv_puts_sg
+        mvi     b,23
+        mvi     c,79
+        mvi     a,'!'
+        call    inv_putc
+        mvi     b,24
+        mvi     c,0
+        mvi     a,'B'
+        call    inv_putc
+        mvi     b,0
+        mvi     c,80
+        mvi     a,'C'
+        call    inv_putc
+        mvi     a,inv_pass
+        sta     inv_test_result
+        xra     a
+        sta     inv_active
+        ret
+;
 inv_test_tick:
         lda     inv_test_mode
         ora     a
         rz
         lda     inv_test_script
         ora     a
-        jnz     inv_test_bad_script
+        jz      inv_test_frame_stop
+        cpi     inv_test_script_render
+        jz      inv_test_render_probe
+        jmp     inv_test_bad_script
+inv_test_frame_stop:
         lda     inv_test_stop_lo
         lxi     h,inv_test_stop_hi
         ora     m
@@ -116,6 +245,41 @@ inv_test_bad_script:
         xra     a
         sta     inv_active
         ret
+;
+inv_row_addr:
+        dw      main_video+(inv_row_stride*0)
+        dw      main_video+(inv_row_stride*1)
+        dw      main_video+(inv_row_stride*2)
+        dw      main_video+(inv_row_stride*3)
+        dw      main_video+(inv_row_stride*4)
+        dw      main_video+(inv_row_stride*5)
+        dw      main_video+(inv_row_stride*6)
+        dw      main_video+(inv_row_stride*7)
+        dw      main_video+(inv_row_stride*8)
+        dw      main_video+(inv_row_stride*9)
+        dw      main_video+(inv_row_stride*10)
+        dw      main_video+(inv_row_stride*11)
+        dw      main_video+(inv_row_stride*12)
+        dw      main_video+(inv_row_stride*13)
+        dw      main_video+(inv_row_stride*14)
+        dw      main_video+(inv_row_stride*15)
+        dw      main_video+(inv_row_stride*16)
+        dw      main_video+(inv_row_stride*17)
+        dw      main_video+(inv_row_stride*18)
+        dw      main_video+(inv_row_stride*19)
+        dw      main_video+(inv_row_stride*20)
+        dw      main_video+(inv_row_stride*21)
+        dw      main_video+(inv_row_stride*22)
+        dw      main_video+(inv_row_stride*23)
+;
+inv_render_text:
+        db      'R','O','M',0
+inv_render_edge:
+        db      'X','Y','Z',0
+inv_render_sg_line:
+        db      'l','q','k',0
+inv_render_sg_blank:
+        db      '_','a','~',0
 ;
 inv_exit_impl:
         xra     a
