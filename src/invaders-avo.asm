@@ -19,13 +19,29 @@
         jmp     inv_setup_keys_hook_impl
 
 inv_enter_impl:
+        call    inv_prepare_screen
+        call    inv_save_leds
         xra     a
         sta     inv_frame_lo
         sta     inv_frame_hi
         sta     inv_left_pressed
         sta     inv_right_pressed
         sta     inv_fire_pressed
+        sta     inv_score0
+        sta     inv_score1
+        sta     inv_score2
+        sta     inv_game_over
         sta     inv_test_result
+        mvi     a,inv_initial_gunners
+        sta     inv_gunners
+        mvi     a,inv_initial_level
+        sta     inv_level
+        mvi     a,inv_turret_start_x_lo
+        sta     inv_turret_x_lo
+        mvi     a,inv_turret_start_x_hi
+        sta     inv_turret_x_hi
+        call    inv_reset_shields
+        call    inv_draw_static_screen
         lda     frame_count
         sta     inv_last_vframe
         mvi     a,0ffh
@@ -84,6 +100,66 @@ inv_inc_frame16:
 ;
 inv_frame:
         call    inv_test_tick
+        ret
+;
+inv_prepare_screen:
+        xra     a
+        sta     columns_132
+        sta     scroll_pending
+        sta     smooth_scroll
+        mvi     c,inv_screen_cols
+        call    make_screen
+        call    make_line_t
+        mvi     a,inv_screen_cols
+        sta     screen_cols
+        call    update_dc011
+        ret
+;
+inv_save_leds:
+        lda     led_state
+        ani     0fh
+        sta     inv_saved_led_state
+        ret
+;
+inv_restore_leds:
+        lda     led_state
+        ani     0f0h
+        mov     b,a
+        lda     inv_saved_led_state
+        ani     0fh
+        ora     b
+        sta     led_state
+        ret
+;
+inv_led_for_gunners:
+        ora     a
+        rz
+        cpi     1
+        jz      inv_led_one
+        cpi     2
+        jz      inv_led_two
+        cpi     3
+        jz      inv_led_three
+        mvi     a,0fh
+        ret
+inv_led_one:
+        mvi     a,01h
+        ret
+inv_led_two:
+        mvi     a,03h
+        ret
+inv_led_three:
+        mvi     a,07h
+        ret
+;
+inv_update_gunner_leds:
+        lda     inv_gunners
+        call    inv_led_for_gunners
+        mov     b,a
+        lda     led_state
+        ani     0f0h
+        ora     b
+        sta     led_state
         ret
 ;
 ; Return HL pointing at the screen cell for row B and column C.
@@ -152,6 +228,107 @@ inv_puts_sg_emit:
         inx     h
         inr     c
         jmp     inv_puts_sg
+;
+inv_cell_code_to_glyph:
+        ani     0fh
+        lxi     h,inv_cell_glyphs
+        call    add_a_to_hl
+        mov     a,m
+        ret
+;
+inv_put_cell_row:
+        mov     a,m
+        push    h
+        call    inv_cell_code_to_glyph
+        push    b
+        push    d
+        call    inv_putc
+        pop     d
+        pop     b
+        pop     h
+        inx     h
+        inr     c
+        dcr     e
+        jnz     inv_put_cell_row
+        ret
+;
+inv_draw_shield:
+        mvi     d,inv_shield_h
+inv_draw_shield_row:
+        push    d
+        push    b
+        mvi     e,inv_shield_w
+        call    inv_put_cell_row
+        pop     b
+        pop     d
+        inr     b
+        dcr     d
+        jnz     inv_draw_shield_row
+        ret
+;
+inv_reset_shields:
+        lxi     d,inv_shield_cells_base
+        mvi     b,inv_shield_count
+inv_reset_shield:
+        lxi     h,inv_initial_shield_cells
+        mvi     c,inv_shield_cells_each
+inv_reset_shield_cell:
+        mov     a,m
+        stax    d
+        inx     h
+        inx     d
+        dcr     c
+        jnz     inv_reset_shield_cell
+        dcr     b
+        jnz     inv_reset_shield
+        ret
+;
+inv_draw_shields:
+        lxi     h,inv_shield_cells_base
+        mvi     b,inv_shield_top_row
+        mvi     c,inv_shield0_x
+        call    inv_draw_shield
+        mvi     b,inv_shield_top_row
+        mvi     c,inv_shield1_x
+        call    inv_draw_shield
+        mvi     b,inv_shield_top_row
+        mvi     c,inv_shield2_x
+        call    inv_draw_shield
+        mvi     b,inv_shield_top_row
+        mvi     c,inv_shield3_x
+        call    inv_draw_shield
+        ret
+;
+inv_draw_status:
+        mvi     b,inv_score_row
+        mvi     c,0
+        lxi     h,inv_status_text
+        jmp     inv_puts_glyphs
+;
+inv_draw_ground:
+        mvi     b,inv_ground_row
+        mvi     c,inv_play_left
+        lxi     h,inv_ground_line
+        jmp     inv_puts_sg
+;
+inv_draw_turret:
+        mvi     b,inv_turret_top_row
+        mvi     c,inv_turret_start_x
+        lxi     h,inv_turret_top
+        call    inv_puts_sg
+        mvi     b,inv_turret_top_row+1
+        mvi     c,inv_turret_start_x
+        lxi     h,inv_turret_bottom
+        jmp     inv_puts_sg
+;
+inv_draw_static_screen:
+        call    inv_clear_playfield
+        call    inv_draw_status
+        call    inv_draw_ground
+        call    inv_draw_shields
+        call    inv_draw_turret
+        call    inv_update_gunner_leds
+        ret
 ;
 inv_clear_playfield:
         lxi     h,inv_row_addr
@@ -281,9 +458,41 @@ inv_render_sg_line:
 inv_render_sg_blank:
         db      '_','a','~',0
 ;
+inv_cell_glyphs:
+        db      00h,02h,0dh,0ch,0eh,0bh,12h
+        db      00h,00h,00h,00h,00h,00h,00h,00h,00h
+;
+inv_initial_shield_cells:
+        db      inv_cell_blank,inv_cell_upper_left,inv_cell_hline
+        db      inv_cell_hline,inv_cell_hline,inv_cell_upper_right
+        db      inv_cell_blank
+        db      inv_cell_upper_left,inv_cell_checker,inv_cell_checker
+        db      inv_cell_checker,inv_cell_checker,inv_cell_checker
+        db      inv_cell_upper_right
+        db      inv_cell_checker,inv_cell_checker,inv_cell_checker
+        db      inv_cell_blank,inv_cell_checker,inv_cell_checker
+        db      inv_cell_checker
+;
+inv_status_text:
+        db      'S','C','O','R','E',' ','0','0','0','0',' '
+        db      ' ','L','E','V','E','L',' ','1',0
+inv_ground_line:
+        db      'q','q','q','q','q','q','q','q','q','q'
+        db      'q','q','q','q','q','q','q','q','q','q'
+        db      'q','q','q','q','q','q','q','q','q','q'
+        db      'q','q','q','q','q','q','q','q','q','q'
+        db      'q','q','q','q','q','q','q','q','q','q'
+        db      'q','q','q','q','q','q','q','q','q','q'
+        db      0
+inv_turret_top:
+        db      '_','_','_','a','_','_','_',0
+inv_turret_bottom:
+        db      '_','a','a','a','a','a','_',0
+;
 inv_exit_impl:
         xra     a
         sta     inv_active
+        call    inv_restore_leds
         ret
 ;
 ; Replaces the idle-loop call to keyboard_tick in the Invaders base ROM.

@@ -34,6 +34,10 @@ test.run(function()
         { "inv_gunners", 1 },
         { "inv_level", 1 },
         { "inv_saved_led_state", 1 },
+        { "inv_game_over", 1 },
+        { "inv_turret_x_lo", 1 },
+        { "inv_turret_x_hi", 1 },
+        { "inv_shield_cells_base", 84 },
         { "inv_dirty_queue_base", 64 },
         { "inv_object_map_base", 1440 },
     }
