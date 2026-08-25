@@ -141,29 +141,32 @@ The existing flow is:
   SET-UP actions through `setup_keys`;
 - `setup_keys` currently handles shifted `S`, `R`, and `A`.
 
-Use `I` on the SET-UP screen as the game launcher. Since the stock `setup_keys`
-path currently requires SHIFT for non-digit SET-UP actions, the base ROM patch
-replaces the existing `mov a,b / cpi 'S'` bytes with a same-size call into the
-AVO ROM:
+Use `i` or `I` on the SET-UP screen as the game launcher. Since the stock
+`setup_keys` path normally rejects non-digit SET-UP actions unless SHIFT is
+pressed, the base ROM patch replaces the existing `lda last_key_flags` bytes
+with a same-size call into the AVO ROM before the SHIFT gate:
 
 ```asm
-setup_keys:     lda     last_key_flags
+setup_keys:     call    inv_setup_keys_hook
                 ani     key_flag_shift
                 rz
-                call    inv_setup_keys_hook
+                mov     a,b
+                cpi     'S'
                 jnz     try_recall
 ```
 
-The AVO hook repeats the displaced `S` comparison for normal SET-UP behavior,
-but intercepts `I` first:
+The AVO hook intercepts `i` and `I` first by clearing the ASCII lowercase bit
+and comparing once against upper-case `I`. For normal SET-UP behavior, it
+repeats the displaced `lda last_key_flags` so the base ROM can continue through
+the stock SHIFT gate and shifted `S`, `R`, and `A` handling:
 
 ```asm
 inv_setup_keys_hook:
                 mov     a,b
-                cpi     'I'             ; SHIFT I starts Invaders
+                ani     0dfh            ; convert lower-case i to upper-case I
+                cpi     'I'             ; i or I starts Invaders
                 jz      inv_setup_start
-                mov     a,b
-                cpi     'S'             ; existing SET-UP actions continue
+                lda     last_key_flags  ; existing SET-UP actions continue
                 ret
 ```
 
@@ -201,10 +204,8 @@ inv_key_setup:
         ret
 ```
 
-If a plain, unshifted `i` is preferred on hardware, check for `I` before the
-SHIFT gate or normalize lowercase `i` in the new launcher branch. `q`/`Q` can
-remain as a development or MAME convenience exit, but the hardware-facing
-launcher and escape hatch should be SET-UP based.
+`q`/`Q` can remain as a development or MAME convenience exit, but the
+hardware-facing launcher and escape hatch should be SET-UP based.
 
 ## Invaders ROM And AVO Memory Plan
 

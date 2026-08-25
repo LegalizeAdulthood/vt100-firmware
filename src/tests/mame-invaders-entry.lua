@@ -61,7 +61,7 @@ local function make_entry_step()
     local stage = "boot"
     local stage_frame = 0
     local setup_key_repeats = 0
-    local shift_i_repeats = 0
+    local lower_i_repeats = 0
     local exit_key_repeats = 0
     local saved_action_value = 0
 
@@ -115,7 +115,7 @@ local function make_entry_step()
             if stage == "wait-setup" then
                 if read_u8(in_setup) ~= 0 then
                     saved_action_value = read_u16(saved_action)
-                    enter_stage("shift-i")
+                    enter_stage("lower-i")
                     return
                 end
                 if frame - stage_frame > 120 then
@@ -124,10 +124,10 @@ local function make_entry_step()
                 return
             end
 
-            if stage == "shift-i" then
-                if shift_i_repeats < 2 then
-                    inject_key(scan_i, key_flag_shift)
-                    shift_i_repeats = shift_i_repeats + 1
+            if stage == "lower-i" then
+                if lower_i_repeats < 2 then
+                    inject_key(scan_i, 0)
+                    lower_i_repeats = lower_i_repeats + 1
                     return
                 end
                 enter_stage("wait-active")
