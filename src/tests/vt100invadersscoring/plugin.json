@@ -1,0 +1,8 @@
+{
+  "plugin": {
+    "name": "vt100invadersscoring",
+    "description": "VT100 Invaders scoring and level reset test",
+    "type": "plugin",
+    "start": "false"
+  }
+}
