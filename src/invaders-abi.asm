@@ -40,6 +40,19 @@ inv_laser_start_row     equ     inv_turret_top_row-1
 inv_laser_top_row       equ     0
 inv_laser_period        equ     1
 inv_laser_glyph         equ     19h
+inv_alien_rows          equ     5
+inv_alien_cols          equ     11
+inv_alien_count         equ     inv_alien_rows*inv_alien_cols
+inv_alien_w             equ     4
+inv_alien_h             equ     2
+inv_alien_slot_w        equ     5
+inv_alien_slot_h        equ     3
+inv_alien_start_x       equ     inv_play_left
+inv_alien_bottom_row    equ     16
+inv_alien_top_row       equ     inv_alien_bottom_row-((inv_alien_rows-1)*inv_alien_slot_h)
+inv_alien_right_edge    equ     inv_play_left+inv_play_width-1
+inv_alien_dir_left      equ     0
+inv_alien_dir_right     equ     1
 inv_initial_gunners     equ     3
 inv_initial_level       equ     1
 inv_scan_arrow_right    equ     10h
@@ -115,7 +128,39 @@ inv_laser_col_hi        equ     inv_laser_col_lo-1
 inv_laser_timer         equ     inv_laser_col_hi-1
 inv_laser_shots_lo      equ     inv_laser_timer-1
 inv_laser_shots_hi      equ     inv_laser_shots_lo-1
-inv_state_low           equ     inv_laser_shots_hi
+inv_alien_init_lo       equ     inv_laser_shots_hi-1
+inv_alien_init_hi       equ     inv_alien_init_lo-1
+inv_alien_live_lo       equ     inv_alien_init_hi-1
+inv_alien_live_hi       equ     inv_alien_live_lo-1
+inv_alien_last_lo       equ     inv_alien_live_hi-1
+inv_alien_last_hi       equ     inv_alien_last_lo-1
+inv_alien_dir           equ     inv_alien_last_hi-1
+inv_alien_reverse       equ     inv_alien_dir-1
+inv_alien_y_delta       equ     inv_alien_reverse-1
+inv_alien_descents      equ     inv_alien_y_delta-1
+inv_alien_anim_phase    equ     inv_alien_descents-1
+inv_alien_min_col       equ     inv_alien_anim_phase-1
+inv_alien_max_col       equ     inv_alien_min_col-1
+inv_alien_min_row       equ     inv_alien_max_col-1
+inv_alien_max_row       equ     inv_alien_min_row-1
+inv_alien_scalar_low    equ     inv_alien_max_row
+;
+; Alien arrays store one 4-bit cell per coordinate nibble or live flag.
+;
+inv_alien_live_top      equ     inv_alien_scalar_low-1
+inv_alien_live_base     equ     inv_alien_live_top-inv_alien_count+1
+inv_alien_x_lo_top      equ     inv_alien_live_base-1
+inv_alien_x_lo_base     equ     inv_alien_x_lo_top-inv_alien_count+1
+inv_alien_x_hi_top      equ     inv_alien_x_lo_base-1
+inv_alien_x_hi_base     equ     inv_alien_x_hi_top-inv_alien_count+1
+inv_alien_y_lo_top      equ     inv_alien_x_hi_base-1
+inv_alien_y_lo_base     equ     inv_alien_y_lo_top-inv_alien_count+1
+inv_alien_y_hi_top      equ     inv_alien_y_lo_base-1
+inv_alien_y_hi_base     equ     inv_alien_y_hi_top-inv_alien_count+1
+inv_alien_data_top      equ     inv_alien_live_top
+inv_alien_data_base     equ     inv_alien_y_hi_base
+inv_alien_data_size     equ     inv_alien_data_top-inv_alien_data_base+1
+inv_state_low           equ     inv_alien_data_base
 ;
 ; Larger buffers live below the fixed scalar state.
 ;

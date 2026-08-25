@@ -179,6 +179,30 @@ function(assert_mutable_state_layout EQUATE_FILE RAM_START RAM_TOP DATA_FLOOR)
         inv_game_over 1
         inv_turret_x_lo 1
         inv_turret_x_hi 1
+        inv_laser_active 1
+        inv_laser_row_lo 1
+        inv_laser_row_hi 1
+        inv_laser_col_lo 1
+        inv_laser_col_hi 1
+        inv_laser_timer 1
+        inv_laser_shots_lo 1
+        inv_laser_shots_hi 1
+        inv_alien_init_lo 1
+        inv_alien_init_hi 1
+        inv_alien_live_lo 1
+        inv_alien_live_hi 1
+        inv_alien_last_lo 1
+        inv_alien_last_hi 1
+        inv_alien_dir 1
+        inv_alien_reverse 1
+        inv_alien_y_delta 1
+        inv_alien_descents 1
+        inv_alien_anim_phase 1
+        inv_alien_min_col 1
+        inv_alien_max_col 1
+        inv_alien_min_row 1
+        inv_alien_max_row 1
+        inv_alien_data_base 275
         inv_shield_cells_base 84
         inv_dirty_queue_base 64
         inv_object_map_base 1440
@@ -256,6 +280,13 @@ read_symbol("${INVADERS_AVO_SYMBOLS}" inv_erase_turret_at INV_ERASE_TURRET_AT)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_fill_cells INV_FILL_CELLS)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_get_turret_x INV_GET_TURRET_X)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_store_turret_x INV_STORE_TURRET_X)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_reset_aliens INV_RESET_ALIENS)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_spawn_alien INV_SPAWN_ALIEN)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_next_live_alien INV_NEXT_LIVE_ALIEN)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_cycle_aliens INV_CYCLE_ALIENS)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_draw_alien INV_DRAW_ALIEN)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_move_alien INV_MOVE_ALIEN)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_update_aliens INV_UPDATE_ALIENS)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_update_turret INV_UPDATE_TURRET)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_draw_static_screen INV_DRAW_STATIC_SCREEN)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_clear_playfield INV_CLEAR_PLAYFIELD)
@@ -311,6 +342,13 @@ assert_address_in_window(inv_erase_turret_at "${INV_ERASE_TURRET_AT}")
 assert_address_in_window(inv_fill_cells "${INV_FILL_CELLS}")
 assert_address_in_window(inv_get_turret_x "${INV_GET_TURRET_X}")
 assert_address_in_window(inv_store_turret_x "${INV_STORE_TURRET_X}")
+assert_address_in_window(inv_reset_aliens "${INV_RESET_ALIENS}")
+assert_address_in_window(inv_spawn_alien "${INV_SPAWN_ALIEN}")
+assert_address_in_window(inv_next_live_alien "${INV_NEXT_LIVE_ALIEN}")
+assert_address_in_window(inv_cycle_aliens "${INV_CYCLE_ALIENS}")
+assert_address_in_window(inv_draw_alien "${INV_DRAW_ALIEN}")
+assert_address_in_window(inv_move_alien "${INV_MOVE_ALIEN}")
+assert_address_in_window(inv_update_aliens "${INV_UPDATE_ALIENS}")
 assert_address_in_window(inv_update_turret "${INV_UPDATE_TURRET}")
 assert_address_in_window(inv_draw_static_screen "${INV_DRAW_STATIC_SCREEN}")
 assert_address_in_window(inv_clear_playfield "${INV_CLEAR_PLAYFIELD}")

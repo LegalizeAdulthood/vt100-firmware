@@ -12,6 +12,9 @@ endforeach()
 if(NOT DEFINED MAME_MACHINE)
     set(MAME_MACHINE vt102)
 endif()
+if(NOT DEFINED MAME_SECONDS_TO_RUN)
+    set(MAME_SECONDS_TO_RUN 5)
+endif()
 
 set(MAME_TEST_ROMPATH "${VT100_BINARY_DIRECTORY}/mame-roms")
 set(MAME_TEST_OUTPUT_DIRECTORY "${VT100_BINARY_DIRECTORY}/mame-test")
@@ -85,7 +88,7 @@ execute_process(
                 -nothrottle
                 -video none
                 -sound none
-                -seconds_to_run 5
+                -seconds_to_run "${MAME_SECONDS_TO_RUN}"
     WORKING_DIRECTORY
         "${MAME_WORKING_DIRECTORY}"
     RESULT_VARIABLE MAME_RESULT

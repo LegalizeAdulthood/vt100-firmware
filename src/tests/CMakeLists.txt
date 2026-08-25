@@ -37,10 +37,15 @@ if(MAME_COMMAND)
     get_filename_component(MAME_WORKING_DIRECTORY "${MAME_COMMAND}" DIRECTORY)
 
     function(add_mame_invaders_test TEST_NAME LUA_SCRIPT)
+        set(MAME_SECONDS_TO_RUN 5)
+        if(ARGC GREATER 3)
+            set(MAME_SECONDS_TO_RUN "${ARGV3}")
+        endif()
         set(MAME_TEST_DRIVER_ARGUMENTS
             "-DMAME_COMMAND=${MAME_COMMAND}"
             "-DMAME_WORKING_DIRECTORY=${MAME_WORKING_DIRECTORY}"
             "-DMAME_MACHINE=vt102"
+            "-DMAME_SECONDS_TO_RUN=${MAME_SECONDS_TO_RUN}"
             "-DVT100_BINARY_DIRECTORY=${VT100_BINARY_DIRECTORY}"
             "-DVT100_PROJECT_SOURCE_DIRECTORY=${CMAKE_SOURCE_DIR}"
             "-DMAME_LUA_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/${LUA_SCRIPT}"
@@ -71,4 +76,5 @@ if(MAME_COMMAND)
     add_mame_invaders_test(mame-invaders-static-screen vt100invadersstatic/init.lua vt100invadersstatic)
     add_mame_invaders_test(mame-invaders-input vt100invadersinput/init.lua vt100invadersinput)
     add_mame_invaders_test(mame-invaders-laser vt100invaderslaser/init.lua vt100invaderslaser)
+    add_mame_invaders_test(mame-invaders-aliens vt100invadersaliens/init.lua vt100invadersaliens 10)
 endif()

@@ -1463,21 +1463,6 @@ The AVO ROM must repeat the displaced base-ROM bytes on normal terminal paths.
 Static tests should fail if `invaders.bin` differs from `vt100.bin` outside the
 explicit trampoline spans and checksum bytes.
 
-## 9. Alien Formation And One-Alien Movement
-
-Implement alien state and formation initialization. Spawn 55 aliens over the
-first 55 frames or through an equivalent deterministic initialization path.
-Move one live alien per frame, track formation bounds, reverse direction at the
-edges, descend on direction changes, and accelerate naturally as aliens are
-removed by iterating only live aliens.
-
-Test this slice with a CTest test whose CMake driver launches
-`src/tests/mame-invaders-aliens.lua`. Stop at frames 55, 128, and at least one
-edge-turn frame. Assert live alien count, selected alien index, formation bounds,
-direction, descent count, and representative screen cells. Include a test case
-with removed aliens so the one-alien-per-frame iterator skips dead entries
-correctly.
-
 ## 10. Alien Kills, Scoring, And Level Reset
 
 Connect the player laser to alien collision. On hit, remove the alien, update
