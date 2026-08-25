@@ -177,6 +177,7 @@ function(assert_mutable_state_layout EQUATE_FILE RAM_START RAM_TOP DATA_FLOOR)
         inv_level 1
         inv_saved_led_state 1
         inv_game_over 1
+        inv_level_timer 1
         inv_turret_x_lo 1
         inv_turret_x_hi 1
         inv_laser_active 1
@@ -187,6 +188,10 @@ function(assert_mutable_state_layout EQUATE_FILE RAM_START RAM_TOP DATA_FLOOR)
         inv_laser_timer 1
         inv_laser_shots_lo 1
         inv_laser_shots_hi 1
+        inv_hit_row_lo 1
+        inv_hit_row_hi 1
+        inv_hit_col_lo 1
+        inv_hit_col_hi 1
         inv_alien_init_lo 1
         inv_alien_init_hi 1
         inv_alien_live_lo 1
@@ -280,9 +285,21 @@ read_symbol("${INVADERS_AVO_SYMBOLS}" inv_erase_turret_at INV_ERASE_TURRET_AT)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_fill_cells INV_FILL_CELLS)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_get_turret_x INV_GET_TURRET_X)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_store_turret_x INV_STORE_TURRET_X)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_draw_score INV_DRAW_SCORE)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_draw_level INV_DRAW_LEVEL)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_try_alien_collision INV_TRY_ALIEN_COLLISION)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_laser_hits_alien INV_LASER_HITS_ALIEN)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_dec_alien_live_count INV_DEC_ALIEN_LIVE_COUNT)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_inc_score_digit INV_INC_SCORE_DIGIT)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_add_alien_score INV_ADD_ALIEN_SCORE)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_update_level_reset INV_UPDATE_LEVEL_RESET)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_next_level INV_NEXT_LEVEL)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_reset_aliens INV_RESET_ALIENS)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_alien_level_y_offset INV_ALIEN_LEVEL_Y_OFFSET)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_spawn_alien INV_SPAWN_ALIEN)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_next_live_alien INV_NEXT_LIVE_ALIEN)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_kill_alien INV_KILL_ALIEN)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_recompute_alien_bounds INV_RECOMPUTE_ALIEN_BOUNDS)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_cycle_aliens INV_CYCLE_ALIENS)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_draw_alien INV_DRAW_ALIEN)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_move_alien INV_MOVE_ALIEN)
@@ -342,9 +359,21 @@ assert_address_in_window(inv_erase_turret_at "${INV_ERASE_TURRET_AT}")
 assert_address_in_window(inv_fill_cells "${INV_FILL_CELLS}")
 assert_address_in_window(inv_get_turret_x "${INV_GET_TURRET_X}")
 assert_address_in_window(inv_store_turret_x "${INV_STORE_TURRET_X}")
+assert_address_in_window(inv_draw_score "${INV_DRAW_SCORE}")
+assert_address_in_window(inv_draw_level "${INV_DRAW_LEVEL}")
+assert_address_in_window(inv_try_alien_collision "${INV_TRY_ALIEN_COLLISION}")
+assert_address_in_window(inv_laser_hits_alien "${INV_LASER_HITS_ALIEN}")
+assert_address_in_window(inv_dec_alien_live_count "${INV_DEC_ALIEN_LIVE_COUNT}")
+assert_address_in_window(inv_inc_score_digit "${INV_INC_SCORE_DIGIT}")
+assert_address_in_window(inv_add_alien_score "${INV_ADD_ALIEN_SCORE}")
+assert_address_in_window(inv_update_level_reset "${INV_UPDATE_LEVEL_RESET}")
+assert_address_in_window(inv_next_level "${INV_NEXT_LEVEL}")
 assert_address_in_window(inv_reset_aliens "${INV_RESET_ALIENS}")
+assert_address_in_window(inv_alien_level_y_offset "${INV_ALIEN_LEVEL_Y_OFFSET}")
 assert_address_in_window(inv_spawn_alien "${INV_SPAWN_ALIEN}")
 assert_address_in_window(inv_next_live_alien "${INV_NEXT_LIVE_ALIEN}")
+assert_address_in_window(inv_kill_alien "${INV_KILL_ALIEN}")
+assert_address_in_window(inv_recompute_alien_bounds "${INV_RECOMPUTE_ALIEN_BOUNDS}")
 assert_address_in_window(inv_cycle_aliens "${INV_CYCLE_ALIENS}")
 assert_address_in_window(inv_draw_alien "${INV_DRAW_ALIEN}")
 assert_address_in_window(inv_move_alien "${INV_MOVE_ALIEN}")

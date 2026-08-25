@@ -40,6 +40,7 @@ inv_laser_start_row     equ     inv_turret_top_row-1
 inv_laser_top_row       equ     0
 inv_laser_period        equ     1
 inv_laser_glyph         equ     19h
+inv_level_pause_frames  equ     0fh
 inv_alien_rows          equ     5
 inv_alien_cols          equ     11
 inv_alien_count         equ     inv_alien_rows*inv_alien_cols
@@ -117,7 +118,8 @@ inv_gunners             equ     inv_score2-1
 inv_level               equ     inv_gunners-1
 inv_saved_led_state     equ     inv_level-1
 inv_game_over           equ     inv_saved_led_state-1
-inv_turret_x            equ     inv_game_over-1
+inv_level_timer         equ     inv_game_over-1
+inv_turret_x            equ     inv_level_timer-1
 inv_turret_x_lo         equ     inv_turret_x
 inv_turret_x_hi         equ     inv_turret_x_lo-1
 inv_laser_active        equ     inv_turret_x_hi-1
@@ -128,7 +130,11 @@ inv_laser_col_hi        equ     inv_laser_col_lo-1
 inv_laser_timer         equ     inv_laser_col_hi-1
 inv_laser_shots_lo      equ     inv_laser_timer-1
 inv_laser_shots_hi      equ     inv_laser_shots_lo-1
-inv_alien_init_lo       equ     inv_laser_shots_hi-1
+inv_hit_row_lo          equ     inv_laser_shots_hi-1
+inv_hit_row_hi          equ     inv_hit_row_lo-1
+inv_hit_col_lo          equ     inv_hit_row_hi-1
+inv_hit_col_hi          equ     inv_hit_col_lo-1
+inv_alien_init_lo       equ     inv_hit_col_hi-1
 inv_alien_init_hi       equ     inv_alien_init_lo-1
 inv_alien_live_lo       equ     inv_alien_init_hi-1
 inv_alien_live_hi       equ     inv_alien_live_lo-1

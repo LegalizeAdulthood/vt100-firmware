@@ -31,6 +31,7 @@ inv_enter_impl:
         sta     inv_score1
         sta     inv_score2
         sta     inv_game_over
+        sta     inv_level_timer
         sta     inv_test_result
         sta     inv_laser_active
         sta     inv_laser_row_lo
@@ -140,6 +141,8 @@ inv_frame:
         lda     inv_active
         ora     a
         rz
+        call    inv_update_level_reset
+        rnz
         call    inv_update_aliens
         call    inv_update_turret
         call    inv_update_laser
@@ -346,7 +349,38 @@ inv_draw_status:
         mvi     b,inv_score_row
         mvi     c,0
         lxi     h,inv_status_text
-        jmp     inv_puts_glyphs
+        call    inv_puts_glyphs
+        call    inv_draw_score
+        jmp     inv_draw_level
+;
+inv_draw_score:
+        mvi     b,inv_score_row
+        mvi     c,6
+        lda     inv_score2
+        call    inv_draw_digit
+        mvi     b,inv_score_row
+        mvi     c,7
+        lda     inv_score1
+        call    inv_draw_digit
+        mvi     b,inv_score_row
+        mvi     c,8
+        lda     inv_score0
+        call    inv_draw_digit
+        mvi     b,inv_score_row
+        mvi     c,9
+        mvi     a,'0'
+        jmp     inv_putc
+;
+inv_draw_level:
+        mvi     b,inv_score_row
+        mvi     c,18
+        lda     inv_level
+        jmp     inv_draw_digit
+;
+inv_draw_digit:
+        ani     0fh
+        adi     '0'
+        jmp     inv_putc
 ;
 inv_draw_ground:
         mvi     b,inv_ground_row
@@ -428,10 +462,10 @@ inv_get_laser_row:
         rlc
         rlc
         rlc
-        mov     b,a
+        mov     d,a
         lda     inv_laser_row_lo
         ani     0fh
-        ora     b
+        ora     d
         ret
 ;
 inv_store_laser_row:
@@ -454,10 +488,10 @@ inv_get_laser_col:
         rlc
         rlc
         rlc
-        mov     b,a
+        mov     d,a
         lda     inv_laser_col_lo
         ani     0fh
-        ora     b
+        ora     d
         ret
 ;
 inv_store_laser_col:
@@ -569,8 +603,74 @@ inv_try_shield_collision:
         mvi     a,0ffh
         ret
 ;
+inv_try_alien_collision:
+        push    b
+        mov     a,b
+        lxi     h,inv_hit_row_lo
+        call    inv_store_nibble_pair
+        mov     a,c
+        lxi     h,inv_hit_col_lo
+        call    inv_store_nibble_pair
+        mvi     b,0
+inv_try_alien_collision_loop:
+        call    inv_alien_live_addr
+        mov     a,m
+        ora     a
+        jz      inv_try_alien_collision_next
+        call    inv_laser_hits_alien
+        ora     a
+        jz      inv_try_alien_collision_next
+        call    inv_kill_alien
+        pop     b
+        mvi     a,0ffh
+        ret
+inv_try_alien_collision_next:
+        inr     b
+        mov     a,b
+        cpi     inv_alien_count
+        jc      inv_try_alien_collision_loop
+        pop     b
+        xra     a
+        ret
+;
+inv_laser_hits_alien:
+        call    inv_get_alien_y
+        mov     d,a
+        lxi     h,inv_hit_row_lo
+        call    inv_get_nibble_pair
+        cmp     d
+        jc      inv_laser_misses_alien
+        mov     a,d
+        adi     inv_alien_h
+        mov     d,a
+        lxi     h,inv_hit_row_lo
+        call    inv_get_nibble_pair
+        cmp     d
+        jnc     inv_laser_misses_alien
+        call    inv_get_alien_x
+        mov     d,a
+        lxi     h,inv_hit_col_lo
+        call    inv_get_nibble_pair
+        cmp     d
+        jc      inv_laser_misses_alien
+        mov     a,d
+        adi     inv_alien_w
+        mov     d,a
+        lxi     h,inv_hit_col_lo
+        call    inv_get_nibble_pair
+        cmp     d
+        jnc     inv_laser_misses_alien
+        mvi     a,0ffh
+        ret
+inv_laser_misses_alien:
+        xra     a
+        ret
+;
 inv_place_laser:
         call    inv_try_shield_collision
+        ora     a
+        jnz     inv_deactivate_laser
+        call    inv_try_alien_collision
         ora     a
         jz      inv_draw_laser
         jmp     inv_deactivate_laser
@@ -668,6 +768,94 @@ inv_inc_nibble_pair:
         ani     0fh
         mov     m,a
         ret
+;
+inv_dec_alien_live_count:
+        lxi     h,inv_alien_live_lo
+        mov     a,m
+        ani     0fh
+        jz      inv_dec_alien_live_borrow
+        dcr     a
+        mov     m,a
+        ret
+inv_dec_alien_live_borrow:
+        dcx     h
+        mov     a,m
+        ani     0fh
+        rz
+        dcr     a
+        mov     m,a
+        inx     h
+        mvi     m,0fh
+        ret
+;
+inv_add_score_units:
+        mov     e,a
+inv_add_score_unit:
+        lxi     h,inv_score0
+        call    inv_inc_score_digit
+        jnc     inv_add_score_unit_done
+        dcx     h
+        call    inv_inc_score_digit
+        jnc     inv_add_score_unit_done
+        dcx     h
+        call    inv_inc_score_digit
+inv_add_score_unit_done:
+        dcr     e
+        jnz     inv_add_score_unit
+        jmp     inv_draw_score
+;
+inv_inc_score_digit:
+        inr     m
+        mov     a,m
+        ani     0fh
+        cpi     10
+        jc      inv_inc_score_digit_store
+        xra     a
+        mov     m,a
+        stc
+        ret
+inv_inc_score_digit_store:
+        mov     m,a
+        ora     a
+        ret
+;
+inv_add_alien_score:
+        mov     a,b
+        call    inv_alien_type_for_id
+        ora     a
+        jz      inv_add_alien_score30
+        cpi     1
+        jz      inv_add_alien_score20
+        mvi     a,1
+        jmp     inv_add_score_units
+inv_add_alien_score30:
+        mvi     a,3
+        jmp     inv_add_score_units
+inv_add_alien_score20:
+        mvi     a,2
+        jmp     inv_add_score_units
+;
+inv_update_level_reset:
+        lda     inv_level_timer
+        ora     a
+        rz
+        dcr     a
+        sta     inv_level_timer
+        jnz     inv_level_pause_active
+        call    inv_next_level
+inv_level_pause_active:
+        mvi     a,0ffh
+        ret
+;
+inv_next_level:
+        lda     inv_level
+        cpi     9
+        jnc     inv_next_level_store
+        inr     a
+inv_next_level_store:
+        sta     inv_level
+        call    inv_reset_aliens
+        jmp     inv_draw_static_screen
 ;
 inv_get_alien_init:
         lxi     h,inv_alien_init_lo
@@ -821,6 +1009,16 @@ inv_alien_type_20:
         mvi     a,1
         ret
 ;
+inv_alien_level_y_offset:
+        lda     inv_level
+        cpi     2
+        jc      inv_alien_level_y_top
+        mvi     a,1
+        ret
+inv_alien_level_y_top:
+        xra     a
+        ret
+;
 inv_reset_aliens:
         lxi     h,inv_alien_data_base
         lxi     b,inv_alien_data_size
@@ -870,6 +1068,9 @@ inv_spawn_alien:
         add     a
         add     d
         adi     inv_alien_top_row
+        mov     e,a
+        call    inv_alien_level_y_offset
+        add     e
         call    inv_store_alien_y
         mvi     a,0ffh
         call    inv_set_alien_live
@@ -892,6 +1093,83 @@ inv_next_live_candidate:
         jz      inv_next_live_alien_loop
         call    inv_store_alien_last
         mov     a,b
+        ret
+;
+inv_kill_alien:
+        push    b
+        call    inv_erase_alien
+        pop     b
+        push    b
+        xra     a
+        call    inv_set_alien_live
+        pop     b
+        call    inv_dec_alien_live_count
+        push    b
+        call    inv_add_alien_score
+        pop     b
+        call    inv_recompute_alien_bounds
+        call    inv_deactivate_laser
+        call    inv_get_alien_live_count
+        ora     a
+        rnz
+        mvi     a,inv_level_pause_frames
+        sta     inv_level_timer
+        ret
+;
+inv_recompute_alien_bounds:
+        call    inv_get_alien_live_count
+        ora     a
+        jnz     inv_recompute_alien_bounds_live
+        sta     inv_alien_min_col
+        sta     inv_alien_max_col
+        sta     inv_alien_min_row
+        sta     inv_alien_max_row
+        ret
+inv_recompute_alien_bounds_live:
+        mvi     a,inv_alien_cols
+        sta     inv_alien_min_col
+        xra     a
+        sta     inv_alien_max_col
+        mvi     a,inv_alien_rows
+        sta     inv_alien_min_row
+        xra     a
+        sta     inv_alien_max_row
+        mvi     b,0
+inv_recompute_alien_bounds_loop:
+        call    inv_alien_live_addr
+        mov     a,m
+        ora     a
+        jz      inv_recompute_alien_bounds_next
+        mov     a,b
+        call    inv_alien_id_to_row_col
+        mov     a,e
+        lxi     h,inv_alien_min_col
+        cmp     m
+        jnc     inv_recompute_alien_min_col_done
+        mov     m,a
+inv_recompute_alien_min_col_done:
+        lda     inv_alien_max_col
+        cmp     e
+        jnc     inv_recompute_alien_max_col_done
+        mov     a,e
+        sta     inv_alien_max_col
+inv_recompute_alien_max_col_done:
+        mov     a,d
+        lxi     h,inv_alien_min_row
+        cmp     m
+        jnc     inv_recompute_alien_min_row_done
+        mov     m,a
+inv_recompute_alien_min_row_done:
+        lda     inv_alien_max_row
+        cmp     d
+        jnc     inv_recompute_alien_bounds_next
+        mov     a,d
+        sta     inv_alien_max_row
+inv_recompute_alien_bounds_next:
+        inr     b
+        mov     a,b
+        cpi     inv_alien_count
+        jc      inv_recompute_alien_bounds_loop
         ret
 ;
 inv_cycle_aliens:

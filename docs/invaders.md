@@ -1463,19 +1463,6 @@ The AVO ROM must repeat the displaced base-ROM bytes on normal terminal paths.
 Static tests should fail if `invaders.bin` differs from `vt100.bin` outside the
 explicit trampoline spans and checksum bytes.
 
-## 10. Alien Kills, Scoring, And Level Reset
-
-Connect the player laser to alien collision. On hit, remove the alien, update
-the score from the alien row, erase or animate the destroyed alien, and delay
-formation motion if a kill animation needs visible time. When no aliens remain,
-pause briefly, increment the level, reset formation state, and redraw the new
-round.
-
-Test this slice with a CTest test whose CMake driver launches
-`src/tests/mame-invaders-scoring.lua`. Use deterministic setup to fire at a
-chosen alien. Assert live count, dead flag, score bytes, screen erasure or
-explosion glyphs, and level reset behavior after clearing the last alien.
-
 ## 11. Enemy Missiles, Turret Death, And Game Over
 
 Implement enemy fire using the deterministic shooter order. Track a small fixed
