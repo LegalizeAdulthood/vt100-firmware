@@ -113,6 +113,13 @@ The `vt100` system is still flagged by MAME as not working and having imperfect
 graphics, so expect the startup warning screen. Type `OK` when MAME asks for
 acknowledgement.
 
+Use the `vt102` machine instead of `vt100` in MAME when testing firmware that
+needs the AVO program expansion ROM. This is a MAME `vt100` driver limitation,
+not a VT100 hardware limitation: a real VT100 can use an AVO board with an
+expansion ROM, but MAME's `vt100` machine currently loads only the base CPU ROMs
+and does not expose the AVO expansion ROM at `8000h`; MAME's `vt102` machine
+does.
+
 ### Machine Configuration Menu
 
 Because the VT100 has its own keyboard, MAME normally sends keyboard input to
