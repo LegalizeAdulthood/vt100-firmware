@@ -1,0 +1,10 @@
+{
+  "plugin": {
+    "name": "vt100invadersframe",
+    "description": "VT100 Invaders frame test",
+    "version": "0.0.1",
+    "author": "VT100 Firmware",
+    "type": "plugin",
+    "start": "false"
+  }
+}

@@ -1,4 +1,4 @@
-vt100	equ	1
+vt100   equ     1
 
-	include	"base.asm"
-	end
+        include "base.asm"
+        end

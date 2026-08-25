@@ -278,6 +278,7 @@ inv_wait_frame:
         cmp     m
         jz      inv_wait_frame
         mov     m,a
+        call    inv_inc_frame16
         ret
 
 inv_inc_frame16:
@@ -308,8 +309,6 @@ The firmware loop should keep the same ordering:
 
 ```asm
 inv_frame:
-        call    inv_inc_frame16
-
         call    inv_spawn_one_alien     ; Z while still spawning
         rz
 
@@ -1469,21 +1468,6 @@ same-size trampoline replacements of existing bytes with calls into the AVO ROM.
 The AVO ROM must repeat the displaced base-ROM bytes on normal terminal paths.
 Static tests should fail if `invaders.bin` differs from `vt100.bin` outside the
 explicit trampoline spans and checksum bytes.
-
-## 4. Frame Loop And Test Mode
-
-Implement the frame scheduler. `inv_wait_frame` should wait for
-`frame_count` to change, then update a 16-bit Invaders frame counter. `inv_idle`
-should service keyboard hardware, consume game input, honor exit requests, wait
-for a frame, and call `inv_frame`. Add deterministic test-mode controls in AVO
-RAM so tests can select an input script, stop at a requested frame, and report a
-result code without depending on wall-clock timing.
-
-Test this slice with a CTest test whose CMake driver launches
-`src/tests/mame-invaders-frame.lua`. Enable test mode, enter the game, run for a
-fixed number of frames with `-nothrottle`, and assert that the Invaders frame
-counter advances monotonically. Set a stop frame and assert that
-`inv_test_result` reports pass before MAME exits.
 
 ## 5. Screen And Glyph Rendering Primitives
 
