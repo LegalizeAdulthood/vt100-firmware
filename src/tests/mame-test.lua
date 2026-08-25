@@ -29,10 +29,22 @@ function M.load_symbols(path)
     return symbols
 end
 
+function M.load_equates(path)
+    return M.load_symbols(path)
+end
+
 function M.required_symbol(symbols, name)
     local value = symbols[name]
     if value == nil then
         error("missing symbol " .. name, 0)
+    end
+    return value
+end
+
+function M.required_equate(equates, name)
+    local value = equates[name]
+    if value == nil then
+        error("missing equate " .. name, 0)
     end
     return value
 end

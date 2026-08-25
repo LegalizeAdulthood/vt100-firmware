@@ -12,18 +12,18 @@ local frame_subscription
 
 local function make_entry_step()
     local binary_directory = test.required_env("VT100_INVADERS_BINARY_DIRECTORY")
-    local symbols = test.load_symbols(binary_directory .. "/invaders-base.inc")
+    local equates = test.load_equates(binary_directory .. "/invaders.equ")
 
-    local inv_active = test.required_symbol(symbols, "inv_active")
-    local in_setup = test.required_symbol(symbols, "in_setup")
-    local char_action = test.required_symbol(symbols, "char_action")
-    local saved_action = test.required_symbol(symbols, "saved_action")
-    local new_key_scan = test.required_symbol(symbols, "new_key_scan")
-    local key_flags = test.required_symbol(symbols, "key_flags")
-    local key_silo = test.required_symbol(symbols, "key_silo")
-    local key_history = test.required_symbol(symbols, "key_history")
-    local latest_key_scan = test.required_symbol(symbols, "latest_key_scan")
-    local pending_setup = test.required_symbol(symbols, "pending_setup")
+    local inv_active = test.required_equate(equates, "inv_active")
+    local in_setup = test.required_equate(equates, "in_setup")
+    local char_action = test.required_equate(equates, "char_action")
+    local saved_action = test.required_equate(equates, "saved_action")
+    local new_key_scan = test.required_equate(equates, "new_key_scan")
+    local key_flags = test.required_equate(equates, "key_flags")
+    local key_silo = test.required_equate(equates, "key_silo")
+    local key_history = test.required_equate(equates, "key_history")
+    local latest_key_scan = test.required_equate(equates, "latest_key_scan")
+    local pending_setup = test.required_equate(equates, "pending_setup")
 
     local key_flag_shift = 0x20
     local key_flag_eos = 0x80
