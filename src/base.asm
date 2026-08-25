@@ -590,7 +590,12 @@ init_devices:	call	clear_display
 		call	update_dc012
 		jmp	update_dc011
 ;
-idle_loop:	call	keyboard_tick
+idle_loop:
+	if vt100
+		call	keyboard_tick
+	else
+		call	inv_idle_hook
+	endif
 		call	receiver_tick
 		lxi	h,pending_setup
 		mov	a,m
@@ -4937,8 +4942,12 @@ setup_b_only:	lda	in_setup_a
 setup_keys:	lda	last_key_flags	; All other keys will need SHIFT to be pressed
 		ani	key_flag_shift
 		rz			; so if it isn't, exit
+	if vt100
 		mov	a,b
 		cpi	'S'		; SHIFT S stores settings in NVR
+	else
+		call	inv_setup_keys_hook
+	endif
 		jnz	try_recall
 		call	store_nvr
 		jmp	post_nvr

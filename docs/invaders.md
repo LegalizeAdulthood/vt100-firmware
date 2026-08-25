@@ -80,20 +80,32 @@ The stock firmware already provides the scheduling pieces needed by the game:
 - `kbd_click_mask` is ORed into the keyboard status byte by `update_kbd` and
   then cleared, making it a one-shot click latch suitable for the heartbeat.
 
-The game should add an `inv_active` mode flag. When it is clear, the firmware
-runs normally. When it is set, `idle_loop` dispatches to an invaders idle loop
-that keeps keyboard hardware service alive but does not transmit normal key
-reports to the host.
+The game should add an `inv_active` mode flag, but the base ROM has too little
+slack for inline game dispatch. Every Invaders change in `base.asm` should be a
+same-size replacement of existing bytes with a call into the AVO ROM. The AVO
+hook must repeat the displaced stock bytes on the normal terminal path and only
+skip them when game mode owns control.
+
+The idle-loop patch replaces the existing `call keyboard_tick` with
+`call inv_idle_hook`:
 
 ```asm
 idle_loop:
-        lda     inv_active
-        ora     a
-        jnz     inv_idle
-
-        call    keyboard_tick
+        call    inv_idle_hook       ; Invaders build only
         call    receiver_tick
         ; existing setup/local handling remains here
+        jmp     idle_loop
+
+inv_idle_hook:
+        lda     inv_active
+        ora     a
+        jnz     inv_idle_active
+        call    keyboard_tick       ; displaced base-ROM call
+        ret
+
+inv_idle_active:
+        call    inv_idle
+        pop     h                   ; discard return into terminal idle path
         jmp     idle_loop
 
 inv_idle:
@@ -130,18 +142,29 @@ The existing flow is:
 - `setup_keys` currently handles shifted `S`, `R`, and `A`.
 
 Use `I` on the SET-UP screen as the game launcher. Since the stock `setup_keys`
-path currently requires SHIFT for non-digit SET-UP actions, the smallest
-firmware change is to add an `I` case there:
+path currently requires SHIFT for non-digit SET-UP actions, the base ROM patch
+replaces the existing `mov a,b / cpi 'S'` bytes with a same-size call into the
+AVO ROM:
 
 ```asm
 setup_keys:     lda     last_key_flags
                 ani     key_flag_shift
                 rz
+                call    inv_setup_keys_hook
+                jnz     try_recall
+```
+
+The AVO hook repeats the displaced `S` comparison for normal SET-UP behavior,
+but intercepts `I` first:
+
+```asm
+inv_setup_keys_hook:
                 mov     a,b
                 cpi     'I'             ; SHIFT I starts Invaders
                 jz      inv_setup_start
+                mov     a,b
                 cpi     'S'             ; existing SET-UP actions continue
-                jnz     try_recall
+                ret
 ```
 
 `setup_action` pushes `setup_ready` before dispatching a SET-UP key action.
@@ -152,6 +175,7 @@ and then enter the game:
 
 ```asm
 inv_setup_start:
+        pop     h                   ; discard return to setup_keys
         pop     h                   ; discard setup_ready return address
         xra     a
         sta     in_setup
@@ -159,13 +183,12 @@ inv_setup_start:
         jmp     inv_enter
 ```
 
-`inv_leave_setup_for_game` should share the display and dispatch restoration
-work from `exit_setup`: restore `char_action` from `saved_action`, restore the
-saved cursor bookkeeping and `line1_dma`, clear keyboard/report scratch state,
-and leave the normal terminal in a known state before `inv_enter` takes over
-the screen. For game launch, avoid emitting an unsolicited DECREPTPARM report
-to the host; either factor the non-reporting part of `exit_setup` or add a
-small skip path around the final `setup_tparm` section.
+`inv_leave_setup_for_game` lives in the AVO ROM and repeats the display and
+dispatch restoration work from `exit_setup`: restore `char_action` from
+`saved_action`, restore the saved cursor bookkeeping and `line1_dma`, clear
+keyboard/report scratch state, and leave the normal terminal in a known state
+before `inv_enter` takes over the screen. For game launch, it must not emit an
+unsolicited DECREPTPARM report to the host.
 
 The game exits to normal terminal mode. If the operator presses SET-UP while
 the game is active, treat it the same way SET-UP behaves while the SET-UP
@@ -1439,23 +1462,11 @@ working directory to `<MAMEDir>`, run `mame.exe` against the staged ROMs, and
 pass the matching Lua script with `-autoboot_script`. MAME Lua test scripts and
 shared Lua helpers also live under `src/tests`.
 
-## 2. Entry Glue And Mode Ownership
-
-Implement the smallest base-ROM hook that can enter and leave the game. Add the
-SET-UP `I` launcher in the existing `setup_keys` path, discard the synthetic
-`setup_ready` return before entering the game, restore normal SET-UP dispatch
-state, and jump to `inv_enter` in the `8000h` expansion ROM. Add `inv_active`
-and an idle-loop branch so normal terminal code runs when the flag is clear and
-Invaders code runs when it is set. Implement `inv_exit` enough to clear
-`inv_active` and return control to the normal terminal path.
-
-Test this slice with a CTest test whose CMake driver launches a Lua script such
-as `src/tests/mame-invaders-entry.lua`. The script should boot MAME, enter
-SET-UP, press `I`, wait for a bounded number of frames, and assert that
-`inv_active` became non-zero. It should then press SET-UP or trigger the test
-exit path and assert that `inv_active` returns to zero. A CTest static symbol
-test should verify that `inv_enter`, `inv_idle`, and `inv_exit` resolve in the
-`8000h`-`9fffh` expansion ROM window.
+The base ROM is space constrained. Invaders changes in `base.asm` must remain
+same-size trampoline replacements of existing bytes with calls into the AVO ROM.
+The AVO ROM must repeat the displaced base-ROM bytes on normal terminal paths.
+Static tests should fail if `invaders.bin` differs from `vt100.bin` outside the
+explicit trampoline spans and checksum bytes.
 
 ## 3. Top-Down AVO RAM State Allocation
 

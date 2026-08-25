@@ -18,6 +18,11 @@ function M.load_symbols(path)
         local address, name = line:match("^%s*([0-9A-Fa-f]+)%s+([%w_]+)%s*$")
         if address and name then
             symbols[name] = tonumber(address, 16)
+        else
+            name, address = line:match("^%s*([%w_]+)%s+[Ee][Qq][Uu]%s+([0-9A-Fa-f]+)[Hh]%s*$")
+            if address and name then
+                symbols[name] = tonumber(address, 16)
+            end
         end
     end
     file:close()
