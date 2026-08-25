@@ -61,8 +61,8 @@ local function make_static_screen_step()
     local key_flag_eos = 0x80
     local scan_setup = 0x7b
     local scan_i = 0x16
-    local original_led_state = 0x5a
-    local game_led_state = 0x57
+    local original_led_state = 0x0a
+    local game_led_state = 0x07
 
     local mem = test.program_space()
 

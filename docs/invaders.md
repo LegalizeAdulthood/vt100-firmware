@@ -1479,20 +1479,6 @@ The AVO ROM must repeat the displaced base-ROM bytes on normal terminal paths.
 Static tests should fail if `invaders.bin` differs from `vt100.bin` outside the
 explicit trampoline spans and checksum bytes.
 
-## 7. Keyboard Input And Turret Movement
-
-Implement raw game input handling. Consume the existing keyboard scan-code silo,
-set one-frame latches for left, right, and fire, and treat SET-UP as the primary
-exit key. Clamp turret movement to the playfield bounds and redraw only the
-cells affected by movement. Keep `q` or another development shortcut optional
-and behind test/development mode if it is not intended for hardware behavior.
-
-Test this slice with a CTest test whose CMake driver launches
-`src/tests/mame-invaders-input.lua`. Use MAME input scripting or the firmware
-test input selector to press left, right, fire, and SET-UP. Assert that the
-turret position changes only within bounds, fire is latched for the frame that
-consumed it, and SET-UP exits without leaking normal terminal key output.
-
 ## 8. Player Laser And Shield Collisions
 
 Implement the player laser as a single active shot. Firing should create the
