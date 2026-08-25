@@ -83,17 +83,32 @@ add_custom_command(
         invaders-avo.lst
         invaders-avo.sym
     COMMAND
-        "${ASM8080_EXECUTABLE}" "-I${CMAKE_CURRENT_SOURCE_DIR}" -linvaders-avo -oinvaders-avo "${CMAKE_CURRENT_SOURCE_DIR}/invaders-avo.asm"
+        "${ASM8080_EXECUTABLE}" "-I${CMAKE_CURRENT_SOURCE_DIR}" "-I${CMAKE_CURRENT_BINARY_DIR}" -linvaders-avo -oinvaders-avo "${CMAKE_CURRENT_SOURCE_DIR}/invaders-avo.asm"
     COMMAND
         "${CMAKE_COMMAND}" -DLST_FILE=invaders-avo.lst -DOUTPUT_FILE=invaders-avo.sym -P "${CMAKE_CURRENT_SOURCE_DIR}/lst_to_sym.cmake"
     DEPENDS
-        invaders-abi.asm
+        invaders-base.inc
         invaders-avo.asm
         lst_to_sym.cmake
     WORKING_DIRECTORY
         "${CMAKE_CURRENT_BINARY_DIR}"
     COMMENT
         "Assembling invaders-avo.asm"
+    VERBATIM
+)
+
+add_custom_command(
+    OUTPUT
+        invaders-base.inc
+    COMMAND
+        "${CMAKE_COMMAND}" -DLST_FILE=invaders.lst -DOUTPUT_FILE=invaders-base.inc -P "${CMAKE_CURRENT_SOURCE_DIR}/lst_to_asm_equ.cmake"
+    DEPENDS
+        invaders.lst
+        lst_to_asm_equ.cmake
+    WORKING_DIRECTORY
+        "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMENT
+        "Generating invaders base assembly include"
     VERBATIM
 )
 
@@ -242,6 +257,7 @@ add_custom_target(invaders-rom
     DEPENDS
         invaders.bin
         invaders.sym
+        invaders-base.inc
         ${INVADERS_SPLIT_ROM_IMAGES}
         invaders-avo.bin
         invaders-avo.sym
@@ -250,6 +266,7 @@ add_custom_target(invaders-rom
         invaders.asm
         invaders-avo.asm
         invaders-abi.asm
+        lst_to_asm_equ.cmake
         lst_to_sym.cmake
 )
 target_folder(invaders-rom "Firmware")

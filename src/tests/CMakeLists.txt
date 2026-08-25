@@ -35,21 +35,34 @@ set_tests_properties(invaders-rom-layout
 
 if(MAME_COMMAND)
     get_filename_component(MAME_WORKING_DIRECTORY "${MAME_COMMAND}" DIRECTORY)
-    add_test(NAME mame-invaders-rom-layout
-        COMMAND
-            "${CMAKE_COMMAND}"
-                "-DMAME_COMMAND=${MAME_COMMAND}"
-                "-DMAME_WORKING_DIRECTORY=${MAME_WORKING_DIRECTORY}"
-                "-DMAME_MACHINE=vt102"
-                "-DVT100_BINARY_DIRECTORY=${VT100_BINARY_DIRECTORY}"
-                "-DVT100_PROJECT_SOURCE_DIRECTORY=${CMAKE_SOURCE_DIR}"
-                "-DMAME_LUA_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/mame-invaders-rom-layout.lua"
-                -P "${CMAKE_CURRENT_SOURCE_DIR}/run-mame-test.cmake"
-    )
-    set_tests_properties(mame-invaders-rom-layout
-        PROPERTIES
-            LABELS "invaders;mame"
-            SKIP_REGULAR_EXPRESSION "^SKIP:"
-            TIMEOUT 15
-    )
+
+    function(add_mame_invaders_test TEST_NAME LUA_SCRIPT)
+        set(MAME_TEST_DRIVER_ARGUMENTS
+            "-DMAME_COMMAND=${MAME_COMMAND}"
+            "-DMAME_WORKING_DIRECTORY=${MAME_WORKING_DIRECTORY}"
+            "-DMAME_MACHINE=vt102"
+            "-DVT100_BINARY_DIRECTORY=${VT100_BINARY_DIRECTORY}"
+            "-DVT100_PROJECT_SOURCE_DIRECTORY=${CMAKE_SOURCE_DIR}"
+            "-DMAME_LUA_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/${LUA_SCRIPT}"
+        )
+        if(ARGC GREATER 2)
+            list(APPEND MAME_TEST_DRIVER_ARGUMENTS "-DMAME_TEST_PLUGIN=${ARGV2}")
+        endif()
+
+        add_test(NAME ${TEST_NAME}
+            COMMAND
+                "${CMAKE_COMMAND}"
+                    ${MAME_TEST_DRIVER_ARGUMENTS}
+                    -P "${CMAKE_CURRENT_SOURCE_DIR}/run-mame-test.cmake"
+        )
+        set_tests_properties(${TEST_NAME}
+            PROPERTIES
+                LABELS "invaders;mame"
+                SKIP_REGULAR_EXPRESSION "^SKIP:"
+                TIMEOUT 15
+        )
+    endfunction()
+
+    add_mame_invaders_test(mame-invaders-rom-layout mame-invaders-rom-layout.lua)
+    add_mame_invaders_test(mame-invaders-entry vt100invadersentry/init.lua vt100invadersentry)
 endif()

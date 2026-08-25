@@ -37,6 +37,21 @@ if(NOT MAME_MACHINE STREQUAL "vt102")
     message(FATAL_ERROR "Unsupported MAME_MACHINE for Invaders tests: ${MAME_MACHINE}")
 endif()
 
+if(DEFINED MAME_TEST_PLUGIN AND NOT MAME_TEST_PLUGIN STREQUAL "")
+    get_filename_component(MAME_TEST_PLUGIN_DIRECTORY "${MAME_LUA_SCRIPT}" DIRECTORY)
+    get_filename_component(MAME_TEST_PLUGIN_PATH "${MAME_TEST_PLUGIN_DIRECTORY}" DIRECTORY)
+    set(MAME_PLUGIN_PATH "${MAME_WORKING_DIRECTORY}/plugins\;${MAME_TEST_PLUGIN_PATH}")
+    set(MAME_SCRIPT_ARGUMENTS
+        -pluginspath "${MAME_PLUGIN_PATH}"
+        -plugin "${MAME_TEST_PLUGIN}"
+    )
+else()
+    set(MAME_SCRIPT_ARGUMENTS
+        -autoboot_delay 0
+        -autoboot_script "${MAME_LUA_SCRIPT}"
+    )
+endif()
+
 file(MAKE_DIRECTORY
     "${MAME_TEST_MACHINE_ROM_DIRECTORY}"
     "${MAME_TEST_OUTPUT_DIRECTORY}/cfg"
@@ -63,12 +78,12 @@ execute_process(
                 -input_directory "${MAME_TEST_OUTPUT_DIRECTORY}/inp"
                 -state_directory "${MAME_TEST_OUTPUT_DIRECTORY}/sta"
                 -snapshot_directory "${MAME_TEST_OUTPUT_DIRECTORY}/snap"
+                ${MAME_SCRIPT_ARGUMENTS}
                 -skip_gameinfo
                 -nothrottle
                 -video none
                 -sound none
                 -seconds_to_run 5
-                -autoboot_script "${MAME_LUA_SCRIPT}"
     WORKING_DIRECTORY
         "${MAME_WORKING_DIRECTORY}"
     RESULT_VARIABLE MAME_RESULT

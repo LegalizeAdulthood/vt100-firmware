@@ -1,0 +1,10 @@
+{
+  "plugin": {
+    "name": "vt100invadersentry",
+    "description": "VT100 Invaders entry test",
+    "version": "0.0.1",
+    "author": "VT100 Firmware",
+    "type": "plugin",
+    "start": "false"
+  }
+}
