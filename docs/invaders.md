@@ -26,7 +26,8 @@ state.
 - Borrow the stronger sprite silhouettes from `ascii-invaders`, but render them
   with the DEC Special Graphics character set.
 - Use the keyboard LEDs to show the number of player gunners remaining.
-- Use the VT100 keyboard click as the alien heartbeat sound effect.
+- Use the VT100 keyboard click/bell bit for alien heartbeat and turret death
+  sound effects.
 
 ## Reference Comparison
 
@@ -77,8 +78,12 @@ The stock firmware already provides the scheduling pieces needed by the game:
   visible display.
 - `led_state` is ORed into the keyboard status byte by `update_kbd`, making the
   four keyboard LEDs available as a game status display.
-- `kbd_click_mask` is ORed into the keyboard status byte by `update_kbd` and
-  then cleared, making it a one-shot click latch suitable for the heartbeat.
+- `kbd_click_mask` and `kbd_online_mask` are ORed into the keyboard status
+  byte by `update_kbd`; the former is a one-shot keyclick latch and the latter
+  carries the stock BEL bit pattern.
+- Game sound should trampoline the keyboard status-byte assembly path so
+  Invaders can own only the click/bell bit while active and leave LEDs,
+  local/online state, lock state, and scan-start behavior under stock control.
 
 The game should add an `inv_active` mode flag, but the base ROM has too little
 slack for inline game dispatch. Every Invaders change in `base.asm` should be a
@@ -409,53 +414,56 @@ terminal mode gets its previous LEDs back. Gunner LEDs should be refreshed on
 game start, after losing a gunner, after earning an extra gunner, and when
 entering game-over state.
 
-## Heartbeat Sound
+## Game Sound
 
-The game should use the VT100 keyboard click for the Space Invaders heartbeat.
-The stock firmware already sends the click bit through `update_kbd`: it ORs
-`kbd_click_mask` into the keyboard status byte, writes `iow_keyboard`, and then
-clears `kbd_click_mask`. That makes `kbd_click_mask` a good one-frame,
-one-shot sound latch.
+The game should use the VT100 keyboard click/bell bit for sound effects, but it
+should do so at the same point where the stock firmware assembles the keyboard
+status word. The base-ROM patch should replace existing bytes in `update_kbd`
+with a same-size call into the AVO ROM. The AVO hook must repeat the displaced
+stock instructions when the game is inactive. When the game is active, it must
+preserve every keyboard status bit except bit 7, then merge in the current game
+sound bit before the status word is written to `iow_keyboard`.
 
-Do not call `make_keyclick` for the heartbeat. That routine checks
-`setup_b2 & sb2_keyclick`, which is appropriate for typing but not for an
-intentional game sound effect. Also avoid `bell_duration`: the bell path is a
-longer alert and uses `kbd_online_mask` during vertical interrupt processing,
-so it is not the right shape for a rhythmic heartbeat.
+This keeps keyboard LEDs, local/online indication, keyboard lock, scan start,
+and normal key scanning on the stock path while allowing Invaders to pattern
+the click/bell bit per keyboard status word. The status-word cadence matters:
+the VT100 technical manual describes BEL as about 200 consecutive keyboard
+status words with the bell bit set, producing an approximately 0.25 second
+tone from the keyboard speaker circuit.
 
-The heartbeat routine can write `iow_kbd_click` directly:
+Do not call `make_keyclick` for game audio. That routine checks
+`setup_b2 & sb2_keyclick`, which is appropriate for normal typing but not for
+intentional game sound. Likewise, do not write `iow_keyboard` directly from
+gameplay code; that risks corrupting unrelated keyboard status bits.
+
+The heartbeat state should select periodic one-status-word pulses. The turret
+death state should take priority over the heartbeat and emit a longer patterned
+stream, such as a short descending or raspy pulse train. MAME is expected to
+make the result audible, but real hardware remains the final test for whether
+non-stock click-bit patterns produce distinct tones.
 
 ```asm
-inv_click:
-        mvi     a,iow_kbd_click
-        sta     kbd_click_mask
-        ret
-```
-
-Call `inv_update_heartbeat` once per game frame after `inv_update_alien`. The
-sound should stop while the turret is exploding, during level pauses, and after
-game over. The period should shrink as aliens are killed so the click cadence
-accelerates with the game:
-
-```asm
-inv_heartbeat_timer db 0
-inv_heartbeat_phase db 0
-
-inv_update_heartbeat:
-        lda     turret_state
+inv_sound_status_hook:
+        ; A = stock keyboard status byte after displaced merge work
+        ; Return A = keyboard status byte to write to iow_keyboard
+        mov     b,a
+        lda     inv_active
         ora     a
-        rnz
-        lda     alien_dead_count
-        call    inv_heartbeat_period   ; A = period in frames
-        lxi     h,inv_heartbeat_timer
-        dcr     m
-        rnz
-        mov     m,a
-        call    inv_click
-        lxi     h,inv_heartbeat_phase
-        inr     m
+        mov     a,b
+        rz
+        ; Preserve bits 0-6 from the stock status byte and replace bit 7 with
+        ; the game sound sequencer's current output.
+        ani     7fh
+        mov     b,a
+        call    inv_next_sound_mask ; A = 00h or iow_kbd_click
+        ora     b
         ret
 ```
+
+Call `inv_update_heartbeat` once per game frame after `inv_update_alien` to
+schedule heartbeat pulses. The sound should stop during level pauses and after
+game over, and the period should shrink as aliens are killed so the click
+cadence accelerates with the game:
 
 Suggested 50/60 Hz frame periods:
 
@@ -467,10 +475,11 @@ Suggested 50/60 Hz frame periods:
 6-1 aliens remaining:   6 frames
 ```
 
-The VT100 click has fixed pitch and duration, so `inv_heartbeat_phase` cannot
-produce true four-tone arcade audio. It is still useful for patterning: every
-fourth beat can be skipped or doubled if playtesting needs a stronger
-"marching" feel. The simplest implementation should use one click per beat.
+MAME currently makes the VT100 keyboard click audible, but it may model the
+speaker as a gated fixed-frequency beeper rather than the exact RC discharge
+circuit. Automated tests should therefore verify the status-word bit pattern,
+not sampled audio. Real hardware remains the final gate for the exact timbre of
+heartbeat and death-sound patterns.
 
 ## Screen Model
 
@@ -1478,15 +1487,47 @@ until a missile hits a shield, then until a missile hits the turret. Assert
 missile slots, shield damage, gunner count, LED mask, death timer, respawn
 state, and final game-over state.
 
-## 12. UFO, Heartbeat, Exit, And Regression Gate
+## 11.5. Keyboard Click Bit, Heartbeat, And Turret Death Sound
+
+Take ownership of the keyboard click/bell bit while the game is active. Add a
+same-size trampoline in `base.asm` near the end of `update_kbd`'s keyboard
+status-byte assembly path, before the byte is written to `iow_keyboard`. The
+AVO hook must repeat the displaced stock instructions exactly when `inv_active`
+is zero. When the game is active, the hook must preserve stock bits 0-6 and
+replace only bit 7 with the current Invaders sound-sequencer output.
+
+Add AVO RAM state for the game sound sequencer: mode, timer, phase, heartbeat
+timer, and death-sound timer. The heartbeat should schedule one-status-word
+pulses at the alien cadence and accelerate as aliens are killed. The turret
+death sound should take priority over the heartbeat and emit a longer
+status-word pattern for the explosion/respawn interval. Level pauses, game
+over, and inactive terminal mode should silence game sound and leave normal
+terminal keyclick and BEL behavior unchanged.
+
+Update turret death handling from slice 11 so a missile hit starts the death
+sound mode at the same time it starts the turret explosion/death timer. The
+sound sequencer should be independent of video-frame duration once a sound has
+started: game-frame code selects the sound mode, while the keyboard status hook
+advances the per-status-word output pattern.
+
+Test this slice with a CTest test whose CMake driver launches
+`src/tests/mame-invaders-sound.lua`, conditional on non-empty `MAME_COMMAND`.
+Use MAME Lua to enter the game, capture writes to the keyboard UART/status port,
+and verify that only bit 7 differs from the stock status byte while game sound
+is active. Assert that heartbeat pulses occur at the expected alien-count
+cadence, turret death suppresses heartbeat and produces the expected longer
+bit-7 pattern, game-over silences game sound, and exiting the game restores the
+stock keyclick/BEL path. The test should check status-word patterns and timers,
+not sampled audio; real hardware testing remains required for final timbre.
+
+## 12. UFO, Exit, And Regression Gate
 
 Finish the remaining arcade polish and close the regression loop. Add UFO
-timing, movement, collision, and score selection. Drive the keyboard click
-heartbeat from alien movement cadence. Harden `inv_exit` so it restores or
-rebuilds terminal state, clears transient game state, restores LEDs, and returns
-the terminal to normal input handling. Add CTest entries for the MAME Lua smoke
-tests once the local MAME invocation is stable, and include them in the workflow
-preset's normal test pass.
+timing, movement, collision, and score selection. Harden `inv_exit` so it
+restores or rebuilds terminal state, clears transient game state, restores LEDs,
+silences game sound, and returns the terminal to normal input handling. Add
+CTest entries for the MAME Lua smoke tests once the local MAME invocation is
+stable, and include them in the workflow preset's normal test pass.
 
 Test this slice with a CTest test whose CMake driver launches
 `src/tests/mame-invaders-full-smoke.lua`. Run from a clean ROM install, enter
