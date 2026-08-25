@@ -229,6 +229,94 @@ The socket is a raw serial byte stream, not a Telnet protocol server. A telnet
 client is fine for simple local typing, but a client with a raw TCP mode avoids
 Telnet option-negotiation bytes if those become visible on the VT100.
 
+### Connecting to SIMH
+
+[OpenSIMH](https://github.com/open-simh/simh) can move a simulated machine's console
+from the SIMH process window to a TCP port. Add these commands to the SIMH
+setup file, using any unused local TCP port:
+
+```text
+set console telnet=<SIMHPort>
+set console telnet=buffered
+```
+
+Start SIMH first and wait for it to listen on the console port. Then start MAME
+and connect the VT100 serial port to that socket:
+
+```bat
+cd /d <MAMEDir>
+mame.exe vt100 -rompath roms -window -rs232 null_modem -bitbanger socket.127.0.0.1:<SIMHPort>
+```
+
+When the VT100 completes self-test, start or boot the simulated machine from
+the SIMH command prompt. The simulated machine's console I/O will appear on the
+MAME VT100. If the SIMH setup file boots automatically before MAME connects,
+either enable console buffering as shown above or move the boot command later so
+the VT100 is connected before the operating system starts writing to the
+console.
+
+Some SIMH machines also have terminal multiplexer devices for additional login
+lines. The device name depends on the simulated hardware. For example, a PDP-11
+configuration using a DZ11-style multiplexer can listen for terminal
+connections like this:
+
+```text
+set dz lines=8
+attach dz <SIMHPort>
+```
+
+Connect MAME to that port with the same `-rs232 null_modem -bitbanger
+socket.127.0.0.1:<SIMHPort>` command. The simulated operating system must also
+be configured to use that terminal line.
+
+### Connecting to the Internet
+
+MAME's socket bitbanger can open a raw outbound TCP connection, but it is not a
+Telnet or SSH client. For BBSs or remote hosts, run a local bridge program that
+looks like a modem to the VT100 and connects to the remote site from the host
+machine.
+
+With [`tcpser`](https://github.com/go4retro/tcpser), start a virtual modem on a
+local TCP port:
+
+```bat
+tcpser -v 25232 -s 9600 -l 4
+```
+
+Then connect MAME to it:
+
+```bat
+cd /d <MAMEDir>
+mame.exe vt100 -rompath roms -window -rs232 null_modem -bitbanger socket.127.0.0.1:25232
+```
+
+From the VT100, type `AT` and expect `OK`, then dial a site:
+
+```text
+ATDT bbs.example.com:23
+```
+
+`tcpser` handles Telnet negotiation for Telnet services. It does not provide an
+SSH client.
+
+Windows bridge programs such as
+[InternetModem](https://github.com/tolsen64/InternetModem) and
+[ModemBridge](https://sourceforge.net/projects/atari-usb-modem/) can be used
+the same way if they provide a TCP listener for the emulated serial side. If
+the bridge only talks to a Windows COM port, create a virtual null-modem
+COM-port pair, configure the bridge for one port, and connect MAME to the
+other:
+
+```bat
+cd /d <MAMEDir>
+mame.exe vt100 -rompath roms -window -rs232 null_modem -bitbanger \\.\<COMPort>
+```
+
+[InternetModem](https://github.com/tolsen64/InternetModem) provides
+Hayes-style `ATDT <host>[:port]` dialing for Telnet.
+[ModemBridge](https://sourceforge.net/projects/atari-usb-modem/) is the bridge
+to try when the remote side requires SSH.
+
 ## Diagnostics
 
 List the ROM files that the current MAME driver expects:
@@ -257,3 +345,8 @@ one of the MAME file names is wrong.
 - [MAME compiling instructions](https://docs.mamedev.org/initialsetup/compilingmame.html)
 - [MAME VT100 driver](https://github.com/mamedev/mame/blob/master/src/mame/dec/vt100.cpp)
 - [MAME media search rules](https://docs.mamedev.org/usingmame/assetsearch.html)
+- [MAME and SIMH](https://wiki.mamedev.org/index.php/MAME_and_SIMH)
+- [OpenSIMH Source Repository](https://github.com/open-simh/simh)
+- [tcpser](https://github.com/go4retro/tcpser)
+- [InternetModem](https://github.com/tolsen64/InternetModem)
+- [ModemBridge 2k26](https://sourceforge.net/projects/atari-usb-modem/)
