@@ -1311,7 +1311,8 @@ local mem = cpu.spaces["program"]
 local base_symbols = load_symbols("<BuildDir>\\src\\invaders.sym")
 local avo_symbols = load_symbols("<BuildDir>\\src\\invaders-avo.sym")
 
-local INV_ENTER = avo_symbols.inv_enter
+local INV_ENTER = 0x8000
+local INV_ENTER_IMPL = avo_symbols.inv_enter_impl
 local INV_ACTIVE = base_symbols.inv_active
 local INV_FRAME_LO = base_symbols.inv_frame_lo
 local INV_TEST_RESULT = base_symbols.inv_test_result
@@ -1319,6 +1320,8 @@ local INV_TEST_RESULT = base_symbols.inv_test_result
 emu.register_frame_done(function()
     if emu.framecount() == 600 then
         assert(mem:read_u8(INV_ENTER) == 0xc3)
+        assert(mem:read_u8(INV_ENTER + 1) + mem:read_u8(INV_ENTER + 2) * 256
+            == INV_ENTER_IMPL)
         assert(mem:read_u8(INV_ACTIVE) ~= 0)
         assert(mem:read_u8(INV_FRAME_LO) ~= 0)
         assert(mem:read_u8(INV_TEST_RESULT) == 0)
@@ -1372,15 +1375,22 @@ headless/scripted mode. The driver command shape is:
 cmake ^
   -DMAME_COMMAND=<MAMEDir>\mame.exe ^
   -DMAME_WORKING_DIRECTORY=<MAMEDir> ^
-  -DMAME_LUA_SCRIPT=<SourceDir>\src\tests\mame-invaders-smoke.lua ^
+  -DMAME_MACHINE=vt102 ^
+  -DMAME_LUA_SCRIPT=<SourceDir>\src\tests\mame-invaders-rom-layout.lua ^
   -P <SourceDir>\src\tests\run-mame-test.cmake
 ```
 
-The CMake script should run `mame.exe vt100 -rompath roms -skip_gameinfo
--nothrottle -video none -sound none -autoboot_script <script>` with
-`<MAMEDir>` as the working directory.
+The CMake script should run `mame.exe <Machine> -rompath
+<BuildDir>\src\mame-roms -skip_gameinfo -nothrottle -video none -sound none
+-autoboot_script <script>` with `<MAMEDir>` as the working directory. The
+current ROM-layout probe uses `vt102`, because MAME's `vt100` driver loads the
+four 2 KiB CPU ROMs but does not expose the 8 KiB AVO program expansion ROM at
+`8000h`. The driver script stages a private VT102 ROM set under
+`<BuildDir>\src\mame-roms` by copying `invaders.bin` as `23-226e4-00.e71`,
+`invaders-avo.bin` as `23-225e4-00.e69`, and the character generator ROM as
+`23-018e2-00.e3`.
 
-If the installed MAME build cannot skip the warning screen for the `vt100`
+If the installed MAME build cannot skip the warning screen for the selected
 driver, the Lua script or input script must send the equivalent of typing `OK`
 before triggering the game.
 
@@ -1428,35 +1438,6 @@ scripts from `src/tests`. For MAME-backed tests, those CMake scripts set the
 working directory to `<MAMEDir>`, run `mame.exe` against the staged ROMs, and
 pass the matching Lua script with `-autoboot_script`. MAME Lua test scripts and
 shared Lua helpers also live under `src/tests`.
-
-## 1. ROM Layout And MAME Test Harness
-
-Implement the automated test foundation before adding gameplay. Keep
-`vt100-rom` in the `invaders` build preset so every Invaders workflow run also
-builds the stock VT100 ROM images used by the existing CTest regression checks.
-Keep the existing `invaders-rom` target as the build entry point for
-`invaders.bin`, `invaders-[1-4].bin`, `invaders-avo.bin`, and the matching
-symbol files. Keep `mame-invaders` as the MAME installation target. Add
-`src/tests` for CMake test driver scripts and MAME Lua scripts, starting with
-shared Lua helpers to load `.sym` files, read and write the 8080 program space,
-fail with a clear message, and exit MAME with a non-zero host-visible result
-when an assertion fails.
-
-Test this slice by adding CTest tests for the ROM layout checks, then running
-the `invaders` workflow preset:
-
-```bat
-cmake --workflow --preset invaders
-```
-
-Add a CMake driver such as `src/tests/mame-invaders-rom-layout.cmake` and a Lua
-script such as `src/tests/mame-invaders-rom-layout.lua`. The CMake driver sets
-MAME's working directory and runs MAME with the Lua script. The Lua script
-checks `inv_enter` is visible at `8000h`, verifies that the first byte is the
-expected `jmp` opcode, confirms that the top of AVO RAM can be written and read,
-and exits. Register the CMake driver as a CTest test. The static host checks
-should also be CTest tests, using CMake scripts to assert that
-`invaders-[1-4].bin` are 2048 bytes each and `invaders-avo.bin` is 8192 bytes.
 
 ## 2. Entry Glue And Mode Ownership
 
