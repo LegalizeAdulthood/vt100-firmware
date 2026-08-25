@@ -1157,51 +1157,48 @@ row occupies rows 17 and 18, immediately above the shelter rows. If this feels
 cramped on hardware, keep the visual sprites but reduce the formation to 4 rows
 rather than shrinking the sprites.
 
-## Automatic Testing
+## Testing
 
-Yes, MAME can be used for automatic testing. It should be treated as the main
-repeatable regression environment for firmware builds, with final confidence
-still coming from real VT100 hardware or a hardware-equivalent emulator setup.
-The repository already has a MAME setup note in [mame.md](mame.md). The current
-CMake build also has Invaders-specific targets: `invaders-rom` builds the
-checksummed base firmware, splits it into four 2 KiB ROM chunks, and builds the
-8 KiB AVO expansion image; `mame-invaders` installs those images into MAME's
-`vt100` ROM directory.
+MAME is the main repeatable regression environment for Invaders firmware
+changes. CTest owns the host orchestration, CMake scripts stage a private MAME
+ROM set, and Lua code running inside MAME drives the emulated VT100 and asserts
+against memory. Final confidence still comes from real VT100 hardware or a
+hardware-equivalent emulator setup.
 
-The current MAME VT100 driver is useful enough for smoke tests, input tests,
-memory-state assertions, and screenshot comparisons, but the local MAME note
-also records that MAME flags the system as not working and having imperfect
-graphics. Game tests should therefore distinguish between "MAME regression
-failed" and "hardware acceptance failed."
+The repository MAME setup note is in [mame.md](mame.md). Configure with a
+non-empty `MAME_COMMAND` to enable the `mame-invaders` staging target and the
+MAME-backed CTest tests. When `MAME_COMMAND` is empty, the normal ROM build and
+non-MAME CTest tests still run, but MAME-dependent tests are not registered.
+
+The current MAME VT100-family driver is useful for ROM layout checks, input
+tests, frame sequencing, memory-state assertions, and screen-RAM assertions.
+The tests use `vt102` because the MAME `vt100` machine does not currently load
+the AVO program expansion ROM. This is an emulator limitation, not a firmware
+requirement: the real VT100 supports the AVO expansion ROM.
 
 ### Test Layers
 
-Use several layers so most bugs are caught before opening MAME:
+Use several layers so most bugs are caught before manual MAME or hardware
+testing:
 
-1. Build test: run the `invaders` CMake workflow and CTest suite.
-2. Static ROM test: verify that Invaders entry hooks assemble at the expected
-   labels, ROM checksum bytes were refreshed, `invaders-[1-4].bin` are exactly
-   2048 bytes each, and `invaders-avo.bin` is exactly 8192 bytes.
-3. AVO layout test: parse code labels from the generated `.sym` files and
-   address equates from the generated `.equ` files. Assert that Invaders code
-   stays inside the `8000h`-`9fffh` expansion ROM window, while entity state,
-   object map, trace buffers, and other mutable data are allocated downward
-   from `3fffh` and stay inside AVO RAM, `3000h`-`3fffh`.
-4. Sprite table test: verify that every Special Graphics source row has the
-   expected width, height, glyph conversion, and object-ID mask, with
-   right-padding made explicit.
-5. Pure logic test: build a host-side model of the small deterministic tables
-   such as alien spawn positions, shooter-column replacement, UFO score table,
-   shield damage tables, and frame-gate timings.
-6. MAME smoke test: boot the ROM set, enter SET-UP, press `I`,
-   run a fixed number of frames, and assert that the game reaches expected AVO
-   RAM states.
-7. MAME visual test: capture a screenshot after deterministic frame counts and
-   compare it with golden images.
-8. MAME input test: script left, right, fire, and SET-UP inputs, then assert
-   turret position, shot count, laser state, and exit behavior.
-9. MAME sound-status test: verify that heartbeat frames latch
-   `kbd_click_mask`/`iow_kbd_click` at the expected cadence.
+1. Stock VT100 ROM tests compare `vt100.bin` and the four split VT100 ROM
+   images against the checked-in originals.
+2. Static Invaders ROM tests verify that `invaders.bin` remains compatible with
+   the base-ROM trampoline constraints, that `invaders-[1-4].bin` are exactly
+   2048 bytes each, and that `invaders-avo.bin` is exactly 8192 bytes.
+3. AVO layout tests parse labels from generated `.sym` files and address
+   equates from generated `.equ` files. Invaders code must stay in the
+   `8000h`-`9fffh` expansion ROM window, while mutable state grows downward
+   from `3fffh` inside AVO RAM.
+4. Direct MAME Lua smoke tests inspect ROM entry points and AVO RAM without
+   needing frame-by-frame input.
+5. Plugin-backed MAME Lua tests boot the terminal, enter SET-UP, launch the
+   game, inject keyboard input, wait for frames, and inspect game state and
+   screen RAM.
+6. Future host-side logic tests should cover deterministic tables such as alien
+   spawn order, UFO scoring, shield damage, and frame gates.
+7. Future visual tests should prefer screen-RAM character assertions over raw
+   screenshots when possible.
 
 ### Existing Build And ROM Preparation
 
@@ -1224,10 +1221,10 @@ cmake --workflow --preset invaders
 The workflow configures the build tree, runs the `invaders` build preset, and
 runs the `invaders` CTest preset. The `invaders` build preset selects
 `vt100-rom` so stock VT100 ROM regression tests have fresh build artifacts, and
-`mame-invaders` to build and stage the Invaders ROMs for MAME. Invaders-specific
-CTest tests should run CMake scripts from `src/tests`. Those scripts set the
-MAME working directory, invoke `mame.exe` with the staged ROMs, and pass the
-appropriate Lua script with `-autoboot_script`.
+`mame-invaders` to build and stage the Invaders ROMs for manual MAME runs.
+Invaders-specific CTest tests run CMake scripts from `src/tests`. Those scripts
+create a private ROM path under the build tree, set the MAME working directory,
+run `mame.exe` headlessly, and pass either a direct Lua script or a MAME plugin.
 
 The `invaders-rom` target assembles and checksum-patches `invaders.bin`, then
 splits it into these files:
@@ -1244,7 +1241,7 @@ The `mame-invaders` target installs it as `23-225e4-00.e69`, the MAME
 VT100-family 8 KiB program expansion ROM name for the `8000h` window. It also
 installs the character generator ROM as `23-018e2-00.e4`.
 
-MAME can verify that the ROM set is discoverable:
+MAME can verify that the manual ROM set is discoverable:
 
 ```bat
 cd /d <MAMEDir>
@@ -1257,65 +1254,67 @@ firmware experiments. Missing files are not expected. If the installed MAME
 alternate VT100-family machine configuration may be needed for full Invaders
 coverage.
 
-### MAME Smoke Harness
+### MAME Test Driver
 
-The first MAME test should prove that the `8000h` expansion ROM entry point is
-callable and that the AVO RAM range is writable in the selected MAME driver
-configuration. The game can include a tiny test entry point that writes a
-signature to AVO RAM:
+`src/tests/CMakeLists.txt` registers MAME tests inside `if(MAME_COMMAND)`.
+Each test invokes `src/tests/run-mame-test.cmake`, which validates the required
+inputs, stages ROMs into a private directory, runs MAME, and converts the Lua
+test result into a CTest pass or failure.
 
-```asm
-inv_test_probe:
-        lxi     h,inv_test_signature
-        mvi     m,'I'
-        inx     h
-        mvi     m,'N'
-        inx     h
-        mvi     m,'V'
-        ret
+The test driver uses a build-local ROM path:
 
-inv_test_signature equ 3ffdh
+| Built file | Private MAME file name |
+|---|---|
+| `invaders.bin` | `vt102/23-226e4-00.e71` |
+| `invaders-avo.bin` | `vt102/23-225e4-00.e69` |
+| `bin/23-018E2.bin` | `vt102/23-018e2-00.e3` |
+
+It also creates isolated `cfg`, `nvram`, `inp`, `sta`, and `snap` directories
+under the build tree so automated tests do not depend on, or mutate, the user's
+normal MAME state.
+
+The MAME command shape is:
+
+```bat
+cd /d <MAMEDir>
+mame.exe vt102 ^
+  -rompath <BuildDir>\src\mame-roms ^
+  -cfg_directory <BuildDir>\src\mame-test\cfg ^
+  -nvram_directory <BuildDir>\src\mame-test\nvram ^
+  -input_directory <BuildDir>\src\mame-test\inp ^
+  -state_directory <BuildDir>\src\mame-test\sta ^
+  -snapshot_directory <BuildDir>\src\mame-test\snap ^
+  -skip_gameinfo ^
+  -nothrottle ^
+  -video none ^
+  -sound none ^
+  -seconds_to_run 5
 ```
 
-A MAME script or debugger command can run long enough for the probe and then
-read `3ffdh`-`3fffh`. If the expansion entry point is not visible at `8000h` or
-the signature cannot be read back, MAME can still test the base ROM hook and
-"AVO missing" refusal path, but it cannot validate the full game design without
-driver work.
-
-After the AVO probe passes, the smoke test should:
-
-1. boot the firmware;
-2. dismiss any MAME startup warning screen;
-3. press SET-UP to enter the stock SET-UP screen;
-4. press `I` to run `inv_setup_start`;
-5. wait for at least 128 game frames;
-6. assert that `inv_active` is non-zero;
-7. assert that `inv_frame_lo` advanced;
-8. assert that 55 aliens were initialized or are in progress;
-9. assert that the turret appears at row 22 and the score line appears at row
-   24;
-10. assert that `led_state & 0fh` matches the current gunner count.
+Direct scripts append `-autoboot_delay 0 -autoboot_script <LuaScript>`.
+Plugin-backed tests append `-pluginspath <MAMEDir>\plugins;<SourceDir>\src\tests`
+and `-plugin <PluginName>`.
 
 ### Scriptable Test Hooks
 
-Add test-only state bytes in AVO RAM. These make MAME assertions much easier and
-also help with real-hardware diagnostics. Keep them in the same top-down
-allocation style as the game state:
+Test-only state bytes live in AVO RAM and are defined in `src/invaders-abi.asm`
+alongside the rest of the game ABI. Keep these in the same top-down allocation
+style as the game state, and load their addresses from `invaders.equ` in tests
+instead of duplicating numeric addresses.
 
 ```asm
-inv_test_signature  equ 3ffdh   ; 3 bytes, through 3fffh
-inv_test_mode       equ 3ffch   ; non-zero enables deterministic test behavior
-inv_test_script     equ 3ffbh   ; input script selector
-inv_test_stop_lo    equ 3ffah   ; stop frame for automated tests
-inv_test_stop_hi    equ 3ff9h
-inv_test_result     equ 3ff8h   ; 0 running/pass, non-zero failure code
-inv_test_trace_head equ 3ff7h
-inv_test_trace_top  equ 3ff6h
-inv_test_trace_base equ inv_test_trace_top-127
+inv_test_signature  equ     inv_data_top-2        ; 3 bytes, through 3fffh
+inv_test_mode       equ     inv_test_signature-1
+inv_test_script     equ     inv_test_mode-1
+inv_test_stop_lo    equ     inv_test_script-1
+inv_test_stop_hi    equ     inv_test_stop_lo-1
+inv_test_result     equ     inv_test_stop_hi-1
+inv_test_trace_head equ     inv_test_result-1
+inv_test_trace_top  equ     inv_test_trace_head-1
+inv_test_trace_base equ     inv_test_trace_top-inv_test_trace_size+1
 ```
 
-Recommended result codes:
+Current result codes:
 
 ```asm
 inv_pass            equ 00h
@@ -1329,45 +1328,29 @@ In test mode, replace any random or timing-dependent choices with deterministic
 tables. The `vtinvaders` reference is already mostly deterministic, so this
 mainly means freezing entry timing and scripted input.
 
-### MAME Lua Or Debugger Assertions
+### MAME Lua Tests And Plugins
 
-The most useful automated MAME tests should inspect memory rather than relying
-only on pixels. A harness should load code labels from the generated
-`invaders.sym` and `invaders-avo.sym` files, load address constants from
-`invaders.equ`, then read Invaders state from the emulated 8080 program address
-space.
+All Lua tests live under `src/tests`. The shared `mame-test.lua` helper loads
+addresses from generated `.equ` files, loads labels from generated `.sym`
+files, returns the `:maincpu` program address space, and reports test status by
+printing `VT100_INVADERS_TEST_PASS` or `VT100_INVADERS_TEST_FAIL`.
 
-Conceptual Lua shape:
+Direct Lua scripts are enough for immediate checks that do not need to stay
+attached to the emulator frame loop. These tests are run with
+`-autoboot_delay 0 -autoboot_script <LuaScript>`.
 
-```lua
-local cpu = manager.machine.devices[":maincpu"]
-local mem = cpu.spaces["program"]
+Temporal tests use MAME's plugin mechanism. Each plugin-backed test has a
+small directory such as `src/tests/vt100invaderslaser` containing `plugin.json`
+and `init.lua`. The plugin's `exports.startplugin()` function loads the shared
+test module from `src/tests`, then that module registers MAME callbacks such as
+`emu.register_prestart` and `emu.add_machine_frame_notifier`. This lets the test
+wait for boot, enter SET-UP, inject keys at precise frames, observe game state,
+and exit MAME when the assertions pass or fail.
 
-local base_equates = load_equates("<BuildDir>\\src\\invaders.equ")
-local avo_symbols = load_symbols("<BuildDir>\\src\\invaders-avo.sym")
-
-local INV_ENTER = base_equates.inv_enter
-local INV_ENTER_IMPL = avo_symbols.inv_enter_impl
-local INV_ACTIVE = base_equates.inv_active
-local INV_FRAME_LO = base_equates.inv_frame_lo
-local INV_TEST_RESULT = base_equates.inv_test_result
-
-emu.register_frame_done(function()
-    if emu.framecount() == 600 then
-        assert(mem:read_u8(INV_ENTER) == 0xc3)
-        assert(mem:read_u8(INV_ENTER + 1) + mem:read_u8(INV_ENTER + 2) * 256
-            == INV_ENTER_IMPL)
-        assert(mem:read_u8(INV_ACTIVE) ~= 0)
-        assert(mem:read_u8(INV_FRAME_LO) ~= 0)
-        assert(mem:read_u8(INV_TEST_RESULT) == 0)
-        manager.machine:exit()
-    end
-end)
-```
-
-The exact Lua device names and exit API should be confirmed with the installed
-MAME build, but the core strategy is stable: run a deterministic number of
-frames, read AVO RAM, and fail the host test if state does not match.
+Use plugin-backed tests for anything that depends on time or input sequencing:
+entry through SET-UP, frame advancement, rendering after boot, static screen
+state, keyboard input, laser movement, collisions, missiles, and game-over
+behavior. Use direct scripts for ROM layout and memory layout probes.
 
 ### Screenshot Regression
 
@@ -1387,7 +1370,7 @@ window scaling, and imperfect graphics flags can otherwise cause noisy diffs.
 For this game, a better visual assertion is often to read screen RAM and compare
 the 60 by 24 character grid directly.
 
-### Suggested MAME Test Commands
+### Running The Test Harness
 
 Manual smoke command, from `docs/mame.md`:
 
@@ -1396,15 +1379,14 @@ cd /d <MAMEDir>
 mame.exe vt100 -rompath roms -window
 ```
 
-Automated runs should go through CTest. The top-level command is:
+Automated runs go through CTest. The normal entry point is:
 
 ```bat
 cmake --workflow --preset invaders
 ```
 
-Each MAME-backed CTest entry should run a CMake driver script from `src/tests`.
-That driver script sets MAME's working directory and then invokes MAME in
-headless/scripted mode. The driver command shape is:
+To run one test directly through the same CMake driver, use the same variables
+CTest passes:
 
 ```bat
 cmake ^
@@ -1415,40 +1397,41 @@ cmake ^
   -P <SourceDir>\src\tests\run-mame-test.cmake
 ```
 
-The CMake script should run `mame.exe <Machine> -rompath
-<BuildDir>\src\mame-roms -skip_gameinfo -nothrottle -video none -sound none
--autoboot_script <script>` with `<MAMEDir>` as the working directory. The
-current ROM-layout probe uses `vt102`, because MAME's `vt100` driver loads the
-four 2 KiB CPU ROMs but does not expose the 8 KiB AVO program expansion ROM at
-`8000h`. The driver script stages a private VT102 ROM set under
-`<BuildDir>\src\mame-roms` by copying `invaders.bin` as `23-226e4-00.e71`,
-`invaders-avo.bin` as `23-225e4-00.e69`, and the character generator ROM as
-`23-018e2-00.e3`.
+For a plugin-backed test, use the plugin wrapper script and plugin name:
 
-If the installed MAME build cannot skip the warning screen for the selected
-driver, the Lua script or input script must send the equivalent of typing `OK`
-before triggering the game.
+```bat
+cmake ^
+  -DMAME_COMMAND=<MAMEDir>\mame.exe ^
+  -DMAME_WORKING_DIRECTORY=<MAMEDir> ^
+  -DMAME_MACHINE=vt102 ^
+  -DVT100_BINARY_DIRECTORY=<BuildDir>\src ^
+  -DVT100_PROJECT_SOURCE_DIRECTORY=<SourceDir> ^
+  -DMAME_LUA_SCRIPT=<SourceDir>\src\tests\vt100invaderslaser\init.lua ^
+  -DMAME_TEST_PLUGIN=vt100invaderslaser ^
+  -P <SourceDir>\src\tests\run-mame-test.cmake
+```
+
+The CMake driver treats a non-zero MAME exit code, a
+`VT100_INVADERS_TEST_FAIL` marker, or the absence of
+`VT100_INVADERS_TEST_PASS` as a test failure.
 
 ### CI Acceptance Gates
 
-The MAME-backed gate should initially be modest:
+The current `invaders` workflow gate is:
 
-- firmware builds and CTest passes;
-- the stock VT100 ROM and split-ROM CTest checks still pass;
-- ROM set is prepared by `mame-invaders` and `mame.exe -verifyroms vt100`
-  reports no missing ROMs;
-- expansion ROM code is visible at `8000h` and the AVO probe signature can be
-  written and read in AVO RAM;
-- game enters through SET-UP plus `I` and advances at least 600 frames;
-- scripted movement changes `turret_x`;
-- scripted fire increments `laser_shots`;
-- losing a gunner updates the keyboard LED mask;
-- heartbeat cadence produces keyboard click writes while aliens are active;
-- SET-UP during gameplay exits and clears `inv_active`.
+- firmware builds successfully;
+- the stock VT100 ROM and split-ROM regression tests pass;
+- the Invaders ROM layout test passes;
+- direct MAME scripts can see the staged ROMs, generated equates, generated
+  symbols, and writable AVO RAM;
+- plugin-backed MAME tests can enter SET-UP, start Invaders, advance frames,
+  verify screen rendering, inject input, move the turret, fire the laser, and
+  damage a shield cell.
 
-Once those are stable, add golden screen-RAM tests for specific gameplay frames.
-Hardware testing should remain the final gate for keyboard feel, brightness,
-AVO attribute interactions, and exact video timing.
+As new gameplay slices land, extend the MAME gate with alien formation, scoring,
+enemy missile, game-over, UFO, heartbeat, and exit-regression tests. Hardware
+testing remains the final gate for keyboard feel, brightness, AVO attribute
+interactions, and exact video timing.
 
 ## Open Implementation Questions
 
