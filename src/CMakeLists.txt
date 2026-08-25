@@ -3,6 +3,15 @@ if(NOT ASM8080_EXECUTABLE)
     message(FATAL_ERROR "asm8080 was not found. Configure with the vcpkg manifest so the asm8080 host tool is installed.")
 endif()
 
+set(MAME_COMMAND "" CACHE FILEPATH "Path to the MAME executable")
+if(NOT MAME_COMMAND)
+    unset(MAME_COMMAND CACHE)
+    find_program(MAME_COMMAND NAMES mame mame.exe DOC "Path to the MAME executable")
+    if(NOT MAME_COMMAND)
+        set(MAME_COMMAND "" CACHE FILEPATH "Path to the MAME executable" FORCE)
+    endif()
+endif()
+
 add_custom_command(
     OUTPUT
         vt100.bin
@@ -128,6 +137,43 @@ add_custom_target(vt100-rom ALL
         lst_to_sym.cmake
 )
 target_folder(vt100-rom "Firmware")
+
+if(MAME_COMMAND)
+    get_filename_component(MAME_ROOT "${MAME_COMMAND}" DIRECTORY)
+    set(MAME_ROM_DIRECTORY "${MAME_ROOT}/roms/vt100")
+
+    add_custom_target(mame
+        COMMAND
+            "${CMAKE_COMMAND}" -E make_directory "${MAME_ROM_DIRECTORY}"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+                "${CMAKE_CURRENT_BINARY_DIR}/23-061E2.bin"
+                "${MAME_ROM_DIRECTORY}/23-061e2-00.e56"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+                "${CMAKE_CURRENT_BINARY_DIR}/23-032E2.bin"
+                "${MAME_ROM_DIRECTORY}/23-032e2-00.e52"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+                "${CMAKE_CURRENT_BINARY_DIR}/23-033E2.bin"
+                "${MAME_ROM_DIRECTORY}/23-033e2-00.e45"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+                "${CMAKE_CURRENT_BINARY_DIR}/23-034E2.bin"
+                "${MAME_ROM_DIRECTORY}/23-034e2-00.e40"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+                "${CMAKE_SOURCE_DIR}/bin/23-018E2.bin"
+                "${MAME_ROM_DIRECTORY}/23-018e2-00.e4"
+        DEPENDS
+            ${VT100_SPLIT_ROM_IMAGES}
+            "${CMAKE_SOURCE_DIR}/bin/23-018E2.bin"
+        COMMENT
+            "Copying VT100 ROM images to ${MAME_ROM_DIRECTORY}"
+        VERBATIM
+    )
+    target_folder(mame "Firmware")
+endif()
 
 add_custom_target(invaders-rom
     DEPENDS
