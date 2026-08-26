@@ -1,0 +1,8 @@
+{
+  "plugin": {
+    "name": "vt100invaderssound",
+    "description": "VT100 Invaders sound test",
+    "type": "plugin",
+    "start": "false"
+  }
+}

@@ -3782,8 +3782,13 @@ kbd_not_locked: lxi     h,local_mode
                 ora     m
                 mvi     m,0             ; zero "click" after use: kbd_click_mask <- 0
                 inx     h               ; HL <- kbd_scan_mask
+kb_scan_status:
+        if vt100
                 ora     m
                 mvi     m,0             ; zero "start scan" after use: kbd_scan_mask <- 0
+        else
+                call    inv_sound_status_hook
+        endif
                 out     iow_keyboard
                 lxi     h,num_kbd_updates
                 inr     m

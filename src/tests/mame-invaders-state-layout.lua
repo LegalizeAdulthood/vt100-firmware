@@ -42,6 +42,13 @@ test.run(function()
         { "inv_missile_active_count", 1 },
         { "inv_missile_shot_index", 1 },
         { "inv_missile_slot_tmp", 1 },
+        { "inv_sound_mode", 1 },
+        { "inv_sound_timer", 1 },
+        { "inv_sound_phase", 1 },
+        { "inv_heartbeat_timer", 1 },
+        { "inv_death_sound_timer", 1 },
+        { "inv_last_stock_kbd_status", 1 },
+        { "inv_last_output_kbd_status", 1 },
         { "inv_turret_x_lo", 1 },
         { "inv_turret_x_hi", 1 },
         { "inv_laser_active", 1 },
@@ -74,7 +81,7 @@ test.run(function()
         { "inv_alien_data_base", 275 },
         { "inv_missile_data_base", 12 },
         { "inv_shield_cells_base", 84 },
-        { "inv_dirty_queue_base", 48 },
+        { "inv_dirty_queue_base", 32 },
         { "inv_object_map_base", 1440 },
     }
 

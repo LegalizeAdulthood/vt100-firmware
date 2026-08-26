@@ -17,6 +17,8 @@
         jmp     inv_idle_hook_impl
         org     inv_setup_keys_hook
         jmp     inv_setup_keys_hook_impl
+        org     inv_sound_status_hook
+        jmp     inv_sound_status_hook_impl
 
 inv_enter_impl:
         call    inv_prepare_screen
@@ -42,6 +44,7 @@ inv_enter_impl:
         sta     inv_laser_shots_lo
         sta     inv_laser_shots_hi
         call    inv_reset_enemy_fire
+        call    inv_reset_sound
         mvi     a,inv_initial_gunners
         sta     inv_gunners
         mvi     a,inv_initial_level
@@ -118,7 +121,10 @@ inv_wait_frame:
         lda     frame_count
         lxi     h,inv_last_vframe
         cmp     m
-        jz      inv_wait_frame
+        jnz     inv_frame_ready
+        call    update_kbd
+        jmp     inv_wait_frame
+inv_frame_ready:
         mov     m,a
         call    inv_inc_frame16
         ret
@@ -147,6 +153,7 @@ inv_frame:
         call    inv_update_turret_death
         rnz
         call    inv_update_aliens
+        call    inv_update_heartbeat
         call    inv_update_enemy_fire
         lda     inv_game_over
         ora     a
@@ -757,6 +764,97 @@ inv_clear_missile_data:
         sta     inv_missile_fire_timer
         ret
 ;
+inv_reset_sound:
+        xra     a
+        sta     inv_sound_mode
+        sta     inv_sound_timer
+        sta     inv_sound_phase
+        sta     inv_heartbeat_timer
+        sta     inv_death_sound_timer
+        sta     inv_last_stock_kbd_status
+        sta     inv_last_output_kbd_status
+        ret
+;
+inv_sound_status_hook_impl:
+        ora     m
+        mvi     m,0
+        sta     inv_last_stock_kbd_status
+        mov     b,a
+        lda     inv_active
+        ora     a
+        jz      inv_sound_status_stock
+        lda     inv_game_over
+        ora     a
+        jnz     inv_sound_status_reset_stock
+        lda     inv_level_timer
+        ora     a
+        jnz     inv_sound_status_reset_stock
+        mov     a,b
+        ani     7fh
+        mov     b,a
+        call    inv_next_sound_mask
+        ora     b
+        jmp     inv_sound_status_store
+inv_sound_status_reset_stock:
+        push    b
+        call    inv_reset_sound
+        pop     b
+        mov     a,b
+        sta     inv_last_stock_kbd_status
+inv_sound_status_stock:
+        mov     a,b
+inv_sound_status_store:
+        sta     inv_last_output_kbd_status
+        ret
+;
+inv_next_sound_mask:
+        lda     inv_death_sound_timer
+        ora     a
+        jnz     inv_next_death_sound
+        lda     inv_sound_mode
+        cpi     inv_sound_mode_heartbeat
+        jz      inv_next_heartbeat_sound
+        xra     a
+        ret
+;
+inv_next_heartbeat_sound:
+        lda     inv_sound_timer
+        ora     a
+        jz      inv_stop_sound
+        dcr     a
+        sta     inv_sound_timer
+        jnz     inv_heartbeat_sound_click
+        xra     a
+        sta     inv_sound_mode
+inv_heartbeat_sound_click:
+        mvi     a,iow_kbd_click
+        ret
+;
+inv_next_death_sound:
+        lda     inv_death_sound_timer
+        dcr     a
+        sta     inv_death_sound_timer
+        jz      inv_stop_sound
+        lda     inv_sound_phase
+        inr     a
+        ani     07h
+        sta     inv_sound_phase
+        ani     03h
+        cpi     02h
+        jc      inv_death_sound_click
+        xra     a
+        ret
+inv_death_sound_click:
+        mvi     a,iow_kbd_click
+        ret
+;
+inv_stop_sound:
+        xra     a
+        sta     inv_sound_mode
+        sta     inv_sound_timer
+        sta     inv_sound_phase
+        ret
+;
 inv_missile_active_addr:
         mov     a,b
         lxi     h,inv_missile_active_base
@@ -1120,6 +1218,7 @@ inv_start_turret_death:
         call    inv_draw_turret_explosion
         call    inv_deactivate_laser
         call    inv_clear_active_missiles
+        call    inv_start_death_sound
         lda     inv_gunners
         ora     a
         jz      inv_set_game_over
@@ -1133,11 +1232,79 @@ inv_start_turret_death:
         sta     inv_turret_death_timer
         ret
 ;
+inv_start_death_sound:
+        mvi     a,inv_sound_mode_death
+        sta     inv_sound_mode
+        xra     a
+        sta     inv_sound_timer
+        sta     inv_sound_phase
+        sta     inv_heartbeat_timer
+        mvi     a,inv_sound_death_words
+        sta     inv_death_sound_timer
+        ret
+;
 inv_set_game_over:
         mvi     a,0ffh
         sta     inv_game_over
         xra     a
         sta     inv_turret_death_timer
+        call    inv_reset_sound
+        ret
+;
+inv_update_heartbeat:
+        lda     inv_game_over
+        ora     a
+        rnz
+        lda     inv_level_timer
+        ora     a
+        rnz
+        lda     inv_turret_death_timer
+        ora     a
+        rnz
+        lda     inv_death_sound_timer
+        ora     a
+        rnz
+        call    inv_get_alien_live_count
+        ora     a
+        rz
+        lda     inv_heartbeat_timer
+        ora     a
+        jz      inv_schedule_heartbeat
+        dcr     a
+        sta     inv_heartbeat_timer
+        rnz
+inv_schedule_heartbeat:
+        call    inv_heartbeat_period
+        sta     inv_heartbeat_timer
+        mvi     a,inv_sound_mode_heartbeat
+        sta     inv_sound_mode
+        mvi     a,1
+        sta     inv_sound_timer
+        ret
+;
+inv_heartbeat_period:
+        call    inv_get_alien_live_count
+        cpi     45
+        jnc     inv_heartbeat_period_32
+        cpi     30
+        jnc     inv_heartbeat_period_24
+        cpi     15
+        jnc     inv_heartbeat_period_16
+        cpi     7
+        jnc     inv_heartbeat_period_10
+        mvi     a,6
+        ret
+inv_heartbeat_period_32:
+        mvi     a,32
+        ret
+inv_heartbeat_period_24:
+        mvi     a,24
+        ret
+inv_heartbeat_period_16:
+        mvi     a,16
+        ret
+inv_heartbeat_period_10:
+        mvi     a,10
         ret
 ;
 inv_update_turret_death:
@@ -1301,6 +1468,7 @@ inv_next_level_store:
         sta     inv_level
         call    inv_reset_aliens
         call    inv_reset_enemy_fire
+        call    inv_reset_sound
         jmp     inv_draw_static_screen
 ;
 inv_get_alien_init:
@@ -2064,6 +2232,7 @@ inv_missile_shoot_order:
 inv_exit_impl:
         xra     a
         sta     inv_active
+        call    inv_reset_sound
         call    inv_restore_leds
         ret
 ;
