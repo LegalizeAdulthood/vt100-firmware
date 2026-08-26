@@ -45,6 +45,7 @@ inv_enter_impl:
         sta     inv_laser_shots_hi
         call    inv_reset_enemy_fire
         call    inv_reset_sound
+        call    inv_reset_ufo
         mvi     a,inv_initial_gunners
         sta     inv_gunners
         mvi     a,inv_initial_level
@@ -154,6 +155,7 @@ inv_frame:
         rnz
         call    inv_update_aliens
         call    inv_update_heartbeat
+        call    inv_update_ufo
         call    inv_update_enemy_fire
         lda     inv_game_over
         ora     a
@@ -538,6 +540,10 @@ inv_inc_laser_shots:
         mov     m,a
         ret
 ;
+inv_get_laser_shots:
+        lxi     h,inv_laser_shots_lo
+        jmp     inv_get_nibble_pair
+;
 inv_deactivate_laser:
         xra     a
         sta     inv_laser_active
@@ -687,6 +693,9 @@ inv_place_laser:
         call    inv_try_shield_collision
         ora     a
         jnz     inv_deactivate_laser
+        call    inv_try_ufo_collision
+        ora     a
+        jnz     inv_deactivate_laser
         call    inv_try_alien_collision
         ora     a
         jz      inv_draw_laser
@@ -727,6 +736,330 @@ inv_move_laser:
         call    inv_get_laser_col
         mov     c,a
         jmp     inv_place_laser
+;
+inv_reset_ufo:
+        xra     a
+        sta     inv_ufo_state
+        sta     inv_ufo_x
+        sta     inv_ufo_dx
+        sta     inv_ufo_move_timer
+        sta     inv_ufo_state_timer
+        sta     inv_ufo_points
+        sta     inv_ufo_disabled
+        mvi     a,inv_ufo_first_delay_lo
+        sta     inv_ufo_timer_lo
+        mvi     a,inv_ufo_first_delay_hi
+        sta     inv_ufo_timer_hi
+        ret
+;
+inv_clear_ufo:
+        lda     inv_ufo_state
+        ora     a
+        jz      inv_reset_ufo
+        call    inv_erase_ufo
+        jmp     inv_reset_ufo
+;
+inv_disable_ufo:
+        lda     inv_ufo_state
+        ora     a
+        jz      inv_disable_ufo_clear
+        call    inv_erase_ufo
+inv_disable_ufo_clear:
+        xra     a
+        sta     inv_ufo_state
+        sta     inv_ufo_move_timer
+        sta     inv_ufo_state_timer
+        sta     inv_ufo_points
+        sta     inv_ufo_timer_lo
+        sta     inv_ufo_timer_hi
+        mvi     a,0ffh
+        sta     inv_ufo_disabled
+        ret
+;
+inv_set_ufo_interval:
+        mvi     a,inv_ufo_interval_lo
+        sta     inv_ufo_timer_lo
+        mvi     a,inv_ufo_interval_hi
+        sta     inv_ufo_timer_hi
+        ret
+;
+inv_tick_ufo_timer:
+        lda     inv_ufo_timer_hi
+        mov     d,a
+        lda     inv_ufo_timer_lo
+        ora     d
+        rz
+        lxi     h,inv_ufo_timer_lo
+        mov     a,m
+        ora     a
+        jz      inv_tick_ufo_timer_borrow
+        dcr     m
+        mov     a,m
+        dcx     h
+        ora     m
+        ret
+inv_tick_ufo_timer_borrow:
+        mvi     m,0ffh
+        dcx     h
+        dcr     m
+        mov     a,m
+        inx     h
+        ora     m
+        ret
+;
+inv_update_ufo:
+        lda     inv_game_over
+        ora     a
+        rnz
+        call    inv_get_alien_init
+        cpi     inv_alien_count
+        rc
+        call    inv_get_alien_live_count
+        cpi     inv_ufo_disable_count
+        jc      inv_disable_ufo
+        call    inv_tick_ufo_timer
+        lda     inv_ufo_state
+        ora     a
+        jz      inv_update_ufo_idle
+        cpi     inv_ufo_state_active
+        jz      inv_update_active_ufo
+        cpi     inv_ufo_state_explode
+        jz      inv_update_ufo_explosion
+        cpi     inv_ufo_state_score
+        jz      inv_update_ufo_score
+        ret
+;
+inv_update_ufo_idle:
+        lda     inv_ufo_disabled
+        ora     a
+        rnz
+        lda     inv_ufo_timer_hi
+        mov     b,a
+        lda     inv_ufo_timer_lo
+        ora     b
+        rnz
+        jmp     inv_spawn_ufo
+;
+inv_spawn_ufo:
+        call    inv_set_ufo_interval
+        call    inv_get_laser_shots
+        ani     1
+        jz      inv_spawn_ufo_right
+        mvi     a,inv_ufo_right_x
+        sta     inv_ufo_x
+        mvi     a,0ffh
+        sta     inv_ufo_dx
+        jmp     inv_spawn_ufo_draw
+inv_spawn_ufo_right:
+        mvi     a,inv_ufo_left_x
+        sta     inv_ufo_x
+        mvi     a,1
+        sta     inv_ufo_dx
+inv_spawn_ufo_draw:
+        mvi     a,inv_ufo_state_active
+        sta     inv_ufo_state
+        mvi     a,inv_ufo_move_period
+        sta     inv_ufo_move_timer
+        jmp     inv_draw_ufo
+;
+inv_update_active_ufo:
+        lda     inv_ufo_move_timer
+        ora     a
+        jz      inv_move_ufo_now
+        dcr     a
+        sta     inv_ufo_move_timer
+        rnz
+inv_move_ufo_now:
+        mvi     a,inv_ufo_move_period
+        sta     inv_ufo_move_timer
+        call    inv_erase_ufo
+        lda     inv_ufo_dx
+        cpi     1
+        jz      inv_move_ufo_right
+        lda     inv_ufo_x
+        dcr     a
+        sta     inv_ufo_x
+        cpi     inv_ufo_left_x
+        jc      inv_finish_ufo
+        jmp     inv_draw_ufo
+inv_move_ufo_right:
+        lda     inv_ufo_x
+        inr     a
+        sta     inv_ufo_x
+        cpi     inv_ufo_right_x+1
+        jnc     inv_finish_ufo
+        jmp     inv_draw_ufo
+;
+inv_finish_ufo:
+        xra     a
+        sta     inv_ufo_state
+        sta     inv_ufo_move_timer
+        sta     inv_ufo_state_timer
+        sta     inv_ufo_points
+        ret
+;
+inv_update_ufo_explosion:
+        lda     inv_ufo_state_timer
+        ora     a
+        jz      inv_show_ufo_score
+        dcr     a
+        sta     inv_ufo_state_timer
+        rnz
+inv_show_ufo_score:
+        call    inv_draw_ufo_score
+        lda     inv_ufo_points
+        call    inv_add_score_units
+        mvi     a,inv_ufo_state_score
+        sta     inv_ufo_state
+        mvi     a,inv_ufo_score_frames
+        sta     inv_ufo_state_timer
+        ret
+;
+inv_update_ufo_score:
+        lda     inv_ufo_state_timer
+        ora     a
+        jz      inv_clear_scored_ufo
+        dcr     a
+        sta     inv_ufo_state_timer
+        rnz
+inv_clear_scored_ufo:
+        call    inv_erase_ufo
+        jmp     inv_finish_ufo
+;
+inv_try_ufo_collision:
+        lda     inv_ufo_state
+        cpi     inv_ufo_state_active
+        jnz     inv_laser_misses_ufo
+        mov     a,b
+        cpi     inv_ufo_row
+        jc      inv_laser_misses_ufo
+        cpi     inv_ufo_row+inv_ufo_h
+        jnc     inv_laser_misses_ufo
+        lda     inv_ufo_x
+        mov     d,a
+        mov     a,c
+        cmp     d
+        jc      inv_laser_misses_ufo
+        mov     a,d
+        adi     inv_ufo_w
+        mov     d,a
+        mov     a,c
+        cmp     d
+        jnc     inv_laser_misses_ufo
+        call    inv_kill_ufo
+        mvi     a,0ffh
+        ret
+inv_laser_misses_ufo:
+        xra     a
+        ret
+;
+inv_kill_ufo:
+        call    inv_select_ufo_points
+        call    inv_erase_ufo
+        call    inv_draw_ufo_explosion
+        mvi     a,inv_ufo_state_explode
+        sta     inv_ufo_state
+        mvi     a,inv_ufo_explosion_frames
+        sta     inv_ufo_state_timer
+        ret
+;
+inv_select_ufo_points:
+        call    inv_get_laser_shots
+inv_select_ufo_points_mod:
+        cpi     inv_ufo_point_count
+        jc      inv_select_ufo_points_lookup
+        sui     inv_ufo_point_count
+        jmp     inv_select_ufo_points_mod
+inv_select_ufo_points_lookup:
+        lxi     h,inv_ufo_points_table
+        call    add_a_to_hl
+        mov     a,m
+        sta     inv_ufo_points
+        ret
+;
+inv_draw_ufo:
+        lda     inv_ufo_x
+        mov     c,a
+        mvi     b,inv_ufo_row
+        lxi     h,inv_ufo_top
+        call    inv_puts_sg
+        lda     inv_ufo_x
+        mov     c,a
+        mvi     b,inv_ufo_row+1
+        lxi     h,inv_ufo_bottom
+        jmp     inv_puts_sg
+;
+inv_draw_ufo_explosion:
+        lda     inv_ufo_x
+        mov     c,a
+        mvi     b,inv_ufo_row
+        lxi     h,inv_ufo_explosion_top
+        call    inv_puts_sg
+        lda     inv_ufo_x
+        mov     c,a
+        mvi     b,inv_ufo_row+1
+        lxi     h,inv_ufo_explosion_bottom
+        jmp     inv_puts_sg
+;
+inv_erase_ufo:
+        lda     inv_ufo_x
+        mov     c,a
+        mvi     b,inv_ufo_row
+        mvi     d,inv_ufo_w
+        xra     a
+        call    inv_fill_cells
+        lda     inv_ufo_x
+        mov     c,a
+        mvi     b,inv_ufo_row+1
+        mvi     d,inv_ufo_w
+        xra     a
+        jmp     inv_fill_cells
+;
+inv_draw_ufo_score:
+        call    inv_erase_ufo
+        lda     inv_ufo_x
+        adi     2
+        mov     c,a
+        mvi     b,inv_ufo_row
+        lda     inv_ufo_points
+        cpi     5
+        jz      inv_draw_ufo_score_50
+        cpi     15
+        jz      inv_draw_ufo_score_150
+        cpi     30
+        jz      inv_draw_ufo_score_300
+        mvi     a,'1'
+        call    inv_put_ufo_score_char
+        mvi     a,'0'
+        call    inv_put_ufo_score_char
+        mvi     a,'0'
+        jmp     inv_put_ufo_score_char
+inv_draw_ufo_score_50:
+        mvi     a,'5'
+        call    inv_put_ufo_score_char
+        mvi     a,'0'
+        jmp     inv_put_ufo_score_char
+inv_draw_ufo_score_150:
+        mvi     a,'1'
+        call    inv_put_ufo_score_char
+        mvi     a,'5'
+        call    inv_put_ufo_score_char
+        mvi     a,'0'
+        jmp     inv_put_ufo_score_char
+inv_draw_ufo_score_300:
+        mvi     a,'3'
+        call    inv_put_ufo_score_char
+        mvi     a,'0'
+        call    inv_put_ufo_score_char
+        mvi     a,'0'
+        jmp     inv_put_ufo_score_char
+;
+inv_put_ufo_score_char:
+        push    b
+        call    inv_putc
+        pop     b
+        inr     c
+        ret
 ;
 inv_update_laser:
         lda     inv_laser_active
@@ -1249,6 +1582,7 @@ inv_set_game_over:
         xra     a
         sta     inv_turret_death_timer
         call    inv_reset_sound
+        call    inv_clear_ufo
         ret
 ;
 inv_update_heartbeat:
@@ -1469,6 +1803,7 @@ inv_next_level_store:
         call    inv_reset_aliens
         call    inv_reset_enemy_fire
         call    inv_reset_sound
+        call    inv_reset_ufo
         jmp     inv_draw_static_screen
 ;
 inv_get_alien_init:
@@ -2223,6 +2558,17 @@ inv_turret_explosion_top:
 inv_turret_explosion_bottom:
         db      'a','*','a','*','a','*','a',0
 ;
+inv_ufo_top:
+        db      '_','l','q','q','q','k','_',0
+inv_ufo_bottom:
+        db      'l','a','a','a','a','a','k',0
+inv_ufo_explosion_top:
+        db      '_','q','n','n','n','q','_',0
+inv_ufo_explosion_bottom:
+        db      '_','a','a','a','a','a','_',0
+inv_ufo_points_table:
+        db      10,5,5,10,15,10,10,5,30,10,10,10,5,15,10
+;
 inv_missile_shoot_order:
         db      0,1,11,1,0,7,0,1,6,3,0,1,1,0,1,1,0,4,11
         db      9,2,0,11,0,1,8,2,0,6,0,3,11,4,0,1,7,0,1
@@ -2232,7 +2578,17 @@ inv_missile_shoot_order:
 inv_exit_impl:
         xra     a
         sta     inv_active
+        sta     inv_left_pressed
+        sta     inv_right_pressed
+        sta     inv_fire_pressed
+        sta     inv_game_over
+        sta     inv_level_timer
+        sta     inv_turret_death_timer
+        call    inv_deactivate_laser
+        call    inv_reset_enemy_fire
         call    inv_reset_sound
+        call    inv_clear_ufo
+        call    inv_clear_playfield
         call    inv_restore_leds
         ret
 ;

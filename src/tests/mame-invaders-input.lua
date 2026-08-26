@@ -112,6 +112,18 @@ local function make_input_step()
         end
     end
 
+    local function keyboard_cleared()
+        if read_u8(key_flags) ~= 0 then
+            return false
+        end
+        for index = 0, 3 do
+            if read_u8(key_silo + index) ~= 0 then
+                return false
+            end
+        end
+        return true
+    end
+
     local function assert_latch_seen(bit, description)
         if not has_bit(read_u8(inv_test_result), bit) then
             test.fail(description .. " was not latched")
@@ -330,7 +342,7 @@ local function make_input_step()
             end
 
             if stage == "wait-exit" then
-                if read_u8(inv_active) == 0 then
+                if read_u8(inv_active) == 0 and keyboard_cleared() then
                     assert_keyboard_cleared()
                     assert_no_function_key_output()
                     test.pass()

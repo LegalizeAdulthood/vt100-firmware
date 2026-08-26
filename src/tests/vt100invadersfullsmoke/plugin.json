@@ -1,0 +1,8 @@
+{
+  "plugin": {
+    "name": "vt100invadersfullsmoke",
+    "description": "VT100 Invaders full smoke test",
+    "type": "plugin",
+    "start": "false"
+  }
+}
