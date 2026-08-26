@@ -1472,39 +1472,6 @@ The AVO ROM must repeat the displaced base-ROM bytes on normal terminal paths.
 Static tests should fail if `invaders.bin` differs from `vt100.bin` outside the
 explicit trampoline spans and checksum bytes.
 
-## 11.5. Keyboard Click Bit, Heartbeat, And Turret Death Sound
-
-Take ownership of the keyboard click/bell bit while the game is active. Add a
-same-size trampoline in `base.asm` near the end of `update_kbd`'s keyboard
-status-byte assembly path, before the byte is written to `iow_keyboard`. The
-AVO hook must repeat the displaced stock instructions exactly when `inv_active`
-is zero. When the game is active, the hook must preserve stock bits 0-6 and
-replace only bit 7 with the current Invaders sound-sequencer output.
-
-Add AVO RAM state for the game sound sequencer: mode, timer, phase, heartbeat
-timer, and death-sound timer. The heartbeat should schedule one-status-word
-pulses at the alien cadence and accelerate as aliens are killed. The turret
-death sound should take priority over the heartbeat and emit a longer
-status-word pattern for the explosion/respawn interval. Level pauses, game
-over, and inactive terminal mode should silence game sound and leave normal
-terminal keyclick and BEL behavior unchanged.
-
-Update turret death handling from slice 11 so a missile hit starts the death
-sound mode at the same time it starts the turret explosion/death timer. The
-sound sequencer should be independent of video-frame duration once a sound has
-started: game-frame code selects the sound mode, while the keyboard status hook
-advances the per-status-word output pattern.
-
-Test this slice with a CTest test whose CMake driver launches
-`src/tests/mame-invaders-sound.lua`, conditional on non-empty `MAME_COMMAND`.
-Use MAME Lua to enter the game, capture writes to the keyboard UART/status port,
-and verify that only bit 7 differs from the stock status byte while game sound
-is active. Assert that heartbeat pulses occur at the expected alien-count
-cadence, turret death suppresses heartbeat and produces the expected longer
-bit-7 pattern, game-over silences game sound, and exiting the game restores the
-stock keyclick/BEL path. The test should check status-word patterns and timers,
-not sampled audio; real hardware testing remains required for final timbre.
-
 ## 12. UFO, Exit, And Regression Gate
 
 Finish the remaining arcade polish and close the regression loop. Add UFO

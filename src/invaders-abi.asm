@@ -9,6 +9,7 @@ inv_idle                equ     inv_code_base+3
 inv_exit                equ     inv_code_base+6
 inv_idle_hook           equ     inv_code_base+9
 inv_setup_keys_hook     equ     inv_code_base+12
+inv_sound_status_hook   equ     inv_code_base+15
 inv_screen_rows         equ     24
 inv_screen_cols         equ     80
 inv_row_stride          equ     inv_screen_cols+3
@@ -48,6 +49,10 @@ inv_missile_empty_delay equ     4
 inv_missile_glyph       equ     18h
 inv_missile_shoot_order_count equ 76
 inv_turret_death_frames equ     55
+inv_sound_mode_silent   equ     0
+inv_sound_mode_heartbeat equ    1
+inv_sound_mode_death    equ     2
+inv_sound_death_words   equ     200
 inv_level_pause_frames  equ     0fh
 inv_alien_rows          equ     5
 inv_alien_cols          equ     11
@@ -133,7 +138,14 @@ inv_missile_fire_timer  equ     inv_missile_tick_timer-1
 inv_missile_active_count equ    inv_missile_fire_timer-1
 inv_missile_shot_index  equ     inv_missile_active_count-1
 inv_missile_slot_tmp    equ     inv_missile_shot_index-1
-inv_turret_x            equ     inv_missile_slot_tmp-1
+inv_sound_mode          equ     inv_missile_slot_tmp-1
+inv_sound_timer         equ     inv_sound_mode-1
+inv_sound_phase         equ     inv_sound_timer-1
+inv_heartbeat_timer     equ     inv_sound_phase-1
+inv_death_sound_timer   equ     inv_heartbeat_timer-1
+inv_last_stock_kbd_status equ    inv_death_sound_timer-1
+inv_last_output_kbd_status equ   inv_last_stock_kbd_status-1
+inv_turret_x            equ     inv_last_output_kbd_status-1
 inv_turret_x_lo         equ     inv_turret_x
 inv_turret_x_hi         equ     inv_turret_x_lo-1
 inv_laser_active        equ     inv_turret_x_hi-1
@@ -202,7 +214,7 @@ inv_state_low           equ     inv_missile_data_base
 inv_shield_cells_top    equ     inv_state_low-1
 inv_shield_cells_base   equ     inv_shield_cells_top-inv_shield_cell_count+1
 inv_dirty_queue_top     equ     inv_shield_cells_base-1
-inv_dirty_queue_size    equ     48
+inv_dirty_queue_size    equ     32
 inv_dirty_queue_base    equ     inv_dirty_queue_top-inv_dirty_queue_size+1
 inv_object_map_top      equ     inv_dirty_queue_base-1
 inv_object_map_size     equ     1440
