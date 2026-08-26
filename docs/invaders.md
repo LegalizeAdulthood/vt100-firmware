@@ -1471,21 +1471,3 @@ same-size trampoline replacements of existing bytes with calls into the AVO ROM.
 The AVO ROM must repeat the displaced base-ROM bytes on normal terminal paths.
 Static tests should fail if `invaders.bin` differs from `vt100.bin` outside the
 explicit trampoline spans and checksum bytes.
-
-## 12. UFO, Exit, And Regression Gate
-
-Finish the remaining arcade polish and close the regression loop. Add UFO
-timing, movement, collision, and score selection. Harden `inv_exit` so it
-restores or rebuilds terminal state, clears transient game state, restores LEDs,
-silences game sound, and returns the terminal to normal input handling. Add
-CTest entries for the MAME Lua smoke tests once the local MAME invocation is
-stable, and include them in the workflow preset's normal test pass.
-
-Test this slice with a CTest test whose CMake driver launches
-`src/tests/mame-invaders-full-smoke.lua`. Run from a clean ROM install, enter
-the game, execute scripted movement and firing, wait through alien movement,
-enemy fire, UFO appearance, and exit. Assert the high-level acceptance gates
-listed above, add screen-RAM golden checks for a small set of deterministic
-frames, and exercise the whole suite with `cmake --workflow --preset invaders`.
-Keep hardware testing as the final gate for keyboard feel, brightness, AVO
-attribute behavior, and exact video timing.

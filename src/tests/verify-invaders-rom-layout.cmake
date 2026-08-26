@@ -191,6 +191,15 @@ function(assert_mutable_state_layout EQUATE_FILE RAM_START RAM_TOP DATA_FLOOR)
         inv_death_sound_timer 1
         inv_last_stock_kbd_status 1
         inv_last_output_kbd_status 1
+        inv_ufo_state 1
+        inv_ufo_x 1
+        inv_ufo_dx 1
+        inv_ufo_timer_lo 1
+        inv_ufo_timer_hi 1
+        inv_ufo_move_timer 1
+        inv_ufo_state_timer 1
+        inv_ufo_points 1
+        inv_ufo_disabled 1
         inv_turret_x_lo 1
         inv_turret_x_hi 1
         inv_laser_active 1
@@ -302,8 +311,22 @@ read_symbol("${INVADERS_AVO_SYMBOLS}" inv_erase_turret_at INV_ERASE_TURRET_AT)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_fill_cells INV_FILL_CELLS)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_get_turret_x INV_GET_TURRET_X)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_store_turret_x INV_STORE_TURRET_X)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_get_laser_shots INV_GET_LASER_SHOTS)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_draw_score INV_DRAW_SCORE)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_draw_level INV_DRAW_LEVEL)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_reset_ufo INV_RESET_UFO)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_clear_ufo INV_CLEAR_UFO)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_disable_ufo INV_DISABLE_UFO)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_tick_ufo_timer INV_TICK_UFO_TIMER)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_update_ufo INV_UPDATE_UFO)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_spawn_ufo INV_SPAWN_UFO)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_update_active_ufo INV_UPDATE_ACTIVE_UFO)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_try_ufo_collision INV_TRY_UFO_COLLISION)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_kill_ufo INV_KILL_UFO)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_select_ufo_points INV_SELECT_UFO_POINTS)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_draw_ufo INV_DRAW_UFO)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_draw_ufo_explosion INV_DRAW_UFO_EXPLOSION)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_draw_ufo_score INV_DRAW_UFO_SCORE)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_try_alien_collision INV_TRY_ALIEN_COLLISION)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_laser_hits_alien INV_LASER_HITS_ALIEN)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_dec_alien_live_count INV_DEC_ALIEN_LIVE_COUNT)
@@ -387,8 +410,22 @@ assert_address_in_window(inv_erase_turret_at "${INV_ERASE_TURRET_AT}")
 assert_address_in_window(inv_fill_cells "${INV_FILL_CELLS}")
 assert_address_in_window(inv_get_turret_x "${INV_GET_TURRET_X}")
 assert_address_in_window(inv_store_turret_x "${INV_STORE_TURRET_X}")
+assert_address_in_window(inv_get_laser_shots "${INV_GET_LASER_SHOTS}")
 assert_address_in_window(inv_draw_score "${INV_DRAW_SCORE}")
 assert_address_in_window(inv_draw_level "${INV_DRAW_LEVEL}")
+assert_address_in_window(inv_reset_ufo "${INV_RESET_UFO}")
+assert_address_in_window(inv_clear_ufo "${INV_CLEAR_UFO}")
+assert_address_in_window(inv_disable_ufo "${INV_DISABLE_UFO}")
+assert_address_in_window(inv_tick_ufo_timer "${INV_TICK_UFO_TIMER}")
+assert_address_in_window(inv_update_ufo "${INV_UPDATE_UFO}")
+assert_address_in_window(inv_spawn_ufo "${INV_SPAWN_UFO}")
+assert_address_in_window(inv_update_active_ufo "${INV_UPDATE_ACTIVE_UFO}")
+assert_address_in_window(inv_try_ufo_collision "${INV_TRY_UFO_COLLISION}")
+assert_address_in_window(inv_kill_ufo "${INV_KILL_UFO}")
+assert_address_in_window(inv_select_ufo_points "${INV_SELECT_UFO_POINTS}")
+assert_address_in_window(inv_draw_ufo "${INV_DRAW_UFO}")
+assert_address_in_window(inv_draw_ufo_explosion "${INV_DRAW_UFO_EXPLOSION}")
+assert_address_in_window(inv_draw_ufo_score "${INV_DRAW_UFO_SCORE}")
 assert_address_in_window(inv_try_alien_collision "${INV_TRY_ALIEN_COLLISION}")
 assert_address_in_window(inv_laser_hits_alien "${INV_LASER_HITS_ALIEN}")
 assert_address_in_window(inv_dec_alien_live_count "${INV_DEC_ALIEN_LIVE_COUNT}")
