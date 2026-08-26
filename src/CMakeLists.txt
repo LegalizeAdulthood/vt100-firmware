@@ -97,13 +97,17 @@ add_custom_command(
         invaders-avo.hex
         invaders-avo.lst
         invaders-avo.sym
+        invaders-avo.equ
     COMMAND
         "${ASM8080_EXECUTABLE}" "-I${CMAKE_CURRENT_SOURCE_DIR}" "-I${CMAKE_CURRENT_BINARY_DIR}" -linvaders-avo -oinvaders-avo "${CMAKE_CURRENT_SOURCE_DIR}/invaders-avo.asm"
     COMMAND
         "${CMAKE_COMMAND}" -DLST_FILE=invaders-avo.lst -DOUTPUT_FILE=invaders-avo.sym -P "${CMAKE_CURRENT_SOURCE_DIR}/lst_to_sym.cmake"
+    COMMAND
+        "${CMAKE_COMMAND}" -DLST_FILE=invaders-avo.lst -DOUTPUT_FILE=invaders-avo.equ -P "${CMAKE_CURRENT_SOURCE_DIR}/lst_to_equ.cmake"
     DEPENDS
         invaders-base.inc
         invaders-avo.asm
+        lst_to_equ.cmake
         lst_to_sym.cmake
     WORKING_DIRECTORY
         "${CMAKE_CURRENT_BINARY_DIR}"
@@ -261,6 +265,7 @@ if(MAME_COMMAND)
             ${INVADERS_SPLIT_ROM_IMAGES}
             invaders.equ
             invaders-avo.bin
+            invaders-avo.equ
             "${CMAKE_SOURCE_DIR}/bin/23-018E2.bin"
         COMMENT
             "Copying Invaders ROM images to ${MAME_ROM_DIRECTORY}"
@@ -278,6 +283,7 @@ add_custom_target(invaders-rom
         ${INVADERS_SPLIT_ROM_IMAGES}
         invaders-avo.bin
         invaders-avo.sym
+        invaders-avo.equ
     SOURCES
         base.asm
         invaders.asm

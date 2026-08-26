@@ -9,7 +9,7 @@ local test = dofile(script_directory .. "/mame-test.lua")
 
 test.run(function()
     local binary_directory = test.required_env("VT100_INVADERS_BINARY_DIRECTORY")
-    local equates = test.load_equates(binary_directory .. "/invaders.equ")
+    local equates = test.load_equates(binary_directory .. "/invaders-avo.equ")
     local mem = test.program_space()
 
     local mutable_ranges = {
