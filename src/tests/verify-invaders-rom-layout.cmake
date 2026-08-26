@@ -10,6 +10,7 @@ set(INVADERS_BASE_SYMBOLS "${VT100_BINARY_DIRECTORY}/invaders.sym")
 set(INVADERS_BASE_EQUATES "${VT100_BINARY_DIRECTORY}/invaders.equ")
 set(INVADERS_BASE_INCLUDE "${VT100_BINARY_DIRECTORY}/invaders-base.inc")
 set(INVADERS_AVO_SYMBOLS "${VT100_BINARY_DIRECTORY}/invaders-avo.sym")
+set(INVADERS_AVO_EQUATES "${VT100_BINARY_DIRECTORY}/invaders-avo.equ")
 
 set(INVADERS_SPLIT_ROM_IMAGES
     invaders-1.bin
@@ -27,6 +28,7 @@ set(REQUIRED_INVADERS_FILES
     "${INVADERS_BASE_EQUATES}"
     "${INVADERS_BASE_INCLUDE}"
     "${INVADERS_AVO_SYMBOLS}"
+    "${INVADERS_AVO_EQUATES}"
 )
 foreach(INVADERS_SPLIT_ROM_IMAGE IN LISTS INVADERS_SPLIT_ROM_IMAGES)
     list(APPEND REQUIRED_INVADERS_FILES "${VT100_BINARY_DIRECTORY}/${INVADERS_SPLIT_ROM_IMAGE}")
@@ -78,6 +80,29 @@ function(read_equate EQUATE_FILE EQUATE_NAME OUTPUT_VARIABLE)
     list(GET EQUATE_ADDRESSES 0 EQUATE_ADDRESS)
     string(TOUPPER "${EQUATE_ADDRESS}" EQUATE_ADDRESS)
     set(${OUTPUT_VARIABLE} "${EQUATE_ADDRESS}" PARENT_SCOPE)
+endfunction()
+
+function(assert_base_abi_equates EQUATE_FILE)
+    set(EXPECTED_INVADERS_ABI_EQUATES
+        inv_idle_hook
+        inv_setup_keys_hook
+        inv_sound_status_hook
+    )
+
+    file(STRINGS "${EQUATE_FILE}" EQUATE_FILE_LINES)
+    foreach(EQUATE_LINE IN LISTS EQUATE_FILE_LINES)
+        if(EQUATE_LINE MATCHES "^[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][ \t]+(inv_[A-Za-z0-9_]+)$")
+            set(EQUATE_NAME "${CMAKE_MATCH_1}")
+            list(FIND EXPECTED_INVADERS_ABI_EQUATES "${EQUATE_NAME}" ABI_INDEX)
+            if(ABI_INDEX EQUAL -1)
+                message(FATAL_ERROR "${EQUATE_FILE} exports private Invaders equate ${EQUATE_NAME}")
+            endif()
+        endif()
+    endforeach()
+
+    foreach(EXPECTED_INVADERS_ABI_EQUATE IN LISTS EXPECTED_INVADERS_ABI_EQUATES)
+        read_equate("${EQUATE_FILE}" "${EXPECTED_INVADERS_ABI_EQUATE}" ABI_EQUATE_ADDRESS)
+    endforeach()
 endfunction()
 
 function(assert_address_in_window ADDRESS_NAME ADDRESS_VALUE)
@@ -356,16 +381,17 @@ read_symbol("${INVADERS_AVO_SYMBOLS}" inv_test_render_probe INV_TEST_RENDER_PROB
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_test_input_probe INV_TEST_INPUT_PROBE)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_test_tick INV_TEST_TICK)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_row_addr INV_ROW_ADDR)
-read_equate("${INVADERS_BASE_EQUATES}" inv_enter INV_ENTER)
-read_equate("${INVADERS_BASE_EQUATES}" inv_idle INV_IDLE)
-read_equate("${INVADERS_BASE_EQUATES}" inv_exit INV_EXIT)
+assert_base_abi_equates("${INVADERS_BASE_EQUATES}")
+read_equate("${INVADERS_AVO_EQUATES}" inv_enter INV_ENTER)
+read_equate("${INVADERS_AVO_EQUATES}" inv_idle INV_IDLE)
+read_equate("${INVADERS_AVO_EQUATES}" inv_exit INV_EXIT)
 read_equate("${INVADERS_BASE_EQUATES}" inv_idle_hook INV_IDLE_HOOK)
 read_equate("${INVADERS_BASE_EQUATES}" inv_setup_keys_hook INV_SETUP_KEYS_HOOK)
 read_equate("${INVADERS_BASE_EQUATES}" inv_sound_status_hook INV_SOUND_STATUS_HOOK)
-read_equate("${INVADERS_BASE_EQUATES}" inv_avo_ram_start INV_AVO_RAM_START)
-read_equate("${INVADERS_BASE_EQUATES}" inv_avo_ram_top INV_AVO_RAM_TOP)
-read_equate("${INVADERS_BASE_EQUATES}" inv_data_top INV_DATA_TOP)
-read_equate("${INVADERS_BASE_EQUATES}" inv_data_floor INV_DATA_FLOOR)
+read_equate("${INVADERS_AVO_EQUATES}" inv_avo_ram_start INV_AVO_RAM_START)
+read_equate("${INVADERS_AVO_EQUATES}" inv_avo_ram_top INV_AVO_RAM_TOP)
+read_equate("${INVADERS_AVO_EQUATES}" inv_data_top INV_DATA_TOP)
+read_equate("${INVADERS_AVO_EQUATES}" inv_data_floor INV_DATA_FLOOR)
 read_equate("${INVADERS_BASE_EQUATES}" last_key_flags LAST_KEY_FLAGS)
 read_symbol("${INVADERS_BASE_SYMBOLS}" idle_loop INVADERS_IDLE_LOOP)
 read_symbol("${INVADERS_BASE_SYMBOLS}" keyboard_tick INVADERS_KEYBOARD_TICK)
@@ -473,7 +499,7 @@ assert_address_equals(setup_keys "${INVADERS_SETUP_KEYS}" "${VT100_SETUP_KEYS}")
 math(EXPR INVADERS_RAM_START "0x${INV_AVO_RAM_START}")
 math(EXPR INVADERS_RAM_TOP "0x${INV_AVO_RAM_TOP}")
 math(EXPR INVADERS_DATA_FLOOR_VALUE "0x${INV_DATA_FLOOR}")
-assert_mutable_state_layout("${INVADERS_BASE_EQUATES}" ${INVADERS_RAM_START} ${INVADERS_RAM_TOP} ${INVADERS_DATA_FLOOR_VALUE})
+assert_mutable_state_layout("${INVADERS_AVO_EQUATES}" ${INVADERS_RAM_START} ${INVADERS_RAM_TOP} ${INVADERS_DATA_FLOOR_VALUE})
 
 file(READ "${VT100_BASE_ROM}" VT100_BASE_HEX HEX)
 file(READ "${INVADERS_BASE_ROM}" INVADERS_BASE_HEX HEX)

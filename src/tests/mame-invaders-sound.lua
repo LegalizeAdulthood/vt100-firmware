@@ -13,7 +13,7 @@ local output_tap
 
 local function make_sound_step()
     local binary_directory = test.required_env("VT100_INVADERS_BINARY_DIRECTORY")
-    local equates = test.load_equates(binary_directory .. "/invaders.equ")
+    local equates = test.load_equates(binary_directory .. "/invaders-avo.equ")
 
     local iow_keyboard = test.required_equate(equates, "iow_keyboard")
     local iow_kbd_click = test.required_equate(equates, "iow_kbd_click")

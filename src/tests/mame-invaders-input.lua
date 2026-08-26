@@ -12,7 +12,7 @@ local frame_subscription
 
 local function make_input_step()
     local binary_directory = test.required_env("VT100_INVADERS_BINARY_DIRECTORY")
-    local equates = test.load_equates(binary_directory .. "/invaders.equ")
+    local equates = test.load_equates(binary_directory .. "/invaders-avo.equ")
     local symbols = test.load_symbols(binary_directory .. "/invaders-avo.sym")
 
     local inv_active = test.required_equate(equates, "inv_active")
