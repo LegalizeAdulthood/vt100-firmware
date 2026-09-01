@@ -194,16 +194,40 @@ host-side settings. To change the MAME-side serial format or enable XON/XOFF
 flow control, open MAME's Machine Configuration menu while the emulator is
 running and edit the RS-232 null modem settings.
 
-To play back a VT100 animation file through the serial port, mount the animation
-file as the bitbanger stream:
+### Animation Playback
+
+For VT100 animation playback, use `scat` from the
+[vteffect repository](https://github.com/LegalizeAdulthood/vteffect) as the
+serial byte source.  The `scat` source is in the
+[scat directory](https://github.com/LegalizeAdulthood/vteffect/tree/master/scat).
+Check the
+[vteffect releases page](https://github.com/LegalizeAdulthood/vteffect/releases)
+for published binaries; if there is no suitable release, clone the repository
+and build the `scat` target with CMake.
+
+Start `scat` first so it can listen on a local raw TCP socket.  The examples
+below use port `25250` and 9600 baud, matching the default MAME null modem and
+stock VT100 SET-UP speeds:
+
+```bat
+scat.exe --listen 25250 --hold-open 9600 "<AnimationFile>"
+```
+
+Then start MAME in another command prompt and connect the emulated serial port
+to the `scat` socket:
 
 ```bat
 cd /d <MAMEDir>
-mame.exe vt100 -rompath roms -window -rs232 null_modem -bitbanger "<AnimationFile>"
+mame.exe vt100 -rompath roms -window -rs232 null_modem -bitbanger socket.127.0.0.1:25250
 ```
 
-If playback overruns the terminal, enable XON/XOFF flow control for the
-`null_modem` device or lower the receive speed in both MAME and the VT100 setup.
+`scat` understands XON/XOFF bytes returned by the terminal over the socket:
+`DC3` pauses playback and `DC1` resumes it.  Use `--start-delay <Seconds>` when
+MAME needs time to finish booting before the animation starts.  Omit
+`--hold-open` for scripted captures where MAME should exit after a fixed
+runtime.
+
+### Host Serial Connections
 
 To connect the emulated terminal to a physical serial port on the Windows host,
 configure the host port first, then use the Windows device path as the
