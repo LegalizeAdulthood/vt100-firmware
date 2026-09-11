@@ -200,78 +200,105 @@ target_folder(vt100-rom "Firmware")
 
 if(MAME_COMMAND)
     get_filename_component(MAME_ROOT "${MAME_COMMAND}" DIRECTORY)
-    set(MAME_ROM_DIRECTORY "${MAME_ROOT}/roms/vt100")
+    set(MAME_VT100_ROM_DIRECTORY "${MAME_ROOT}/roms/vt100")
+    set(MAME_INVADERS_ROM_DIRECTORY "${MAME_ROOT}/roms/vt102")
 
     add_custom_target(mame
         COMMAND
-            "${CMAKE_COMMAND}" -E make_directory "${MAME_ROM_DIRECTORY}"
+            "${CMAKE_COMMAND}" -E make_directory "${MAME_VT100_ROM_DIRECTORY}"
         COMMAND
             "${CMAKE_COMMAND}" -E copy_if_different
                 "${CMAKE_CURRENT_BINARY_DIR}/23-061E2.bin"
-                "${MAME_ROM_DIRECTORY}/23-061e2-00.e56"
+                "${MAME_VT100_ROM_DIRECTORY}/23-061e2-00.e56"
         COMMAND
             "${CMAKE_COMMAND}" -E copy_if_different
                 "${CMAKE_CURRENT_BINARY_DIR}/23-032E2.bin"
-                "${MAME_ROM_DIRECTORY}/23-032e2-00.e52"
+                "${MAME_VT100_ROM_DIRECTORY}/23-032e2-00.e52"
         COMMAND
             "${CMAKE_COMMAND}" -E copy_if_different
                 "${CMAKE_CURRENT_BINARY_DIR}/23-033E2.bin"
-                "${MAME_ROM_DIRECTORY}/23-033e2-00.e45"
+                "${MAME_VT100_ROM_DIRECTORY}/23-033e2-00.e45"
         COMMAND
             "${CMAKE_COMMAND}" -E copy_if_different
                 "${CMAKE_CURRENT_BINARY_DIR}/23-034E2.bin"
-                "${MAME_ROM_DIRECTORY}/23-034e2-00.e40"
+                "${MAME_VT100_ROM_DIRECTORY}/23-034e2-00.e40"
         COMMAND
             "${CMAKE_COMMAND}" -E copy_if_different
                 "${CMAKE_SOURCE_DIR}/bin/23-018E2.bin"
-                "${MAME_ROM_DIRECTORY}/23-018e2-00.e4"
+                "${MAME_VT100_ROM_DIRECTORY}/23-018e2-00.e4"
         DEPENDS
             ${VT100_SPLIT_ROM_IMAGES}
             "${CMAKE_SOURCE_DIR}/bin/23-018E2.bin"
         COMMENT
-            "Copying VT100 ROM images to ${MAME_ROM_DIRECTORY}"
+            "Copying VT100 ROM images to ${MAME_VT100_ROM_DIRECTORY}"
         VERBATIM
     )
     target_folder(mame "Firmware")
 
     add_custom_target(mame-invaders
         COMMAND
-            "${CMAKE_COMMAND}" -E make_directory "${MAME_ROM_DIRECTORY}"
+            "${CMAKE_COMMAND}" -E make_directory "${MAME_INVADERS_ROM_DIRECTORY}"
         COMMAND
             "${CMAKE_COMMAND}" -E copy_if_different
-                "${CMAKE_CURRENT_BINARY_DIR}/invaders-1.bin"
-                "${MAME_ROM_DIRECTORY}/23-061e2-00.e56"
-        COMMAND
-            "${CMAKE_COMMAND}" -E copy_if_different
-                "${CMAKE_CURRENT_BINARY_DIR}/invaders-2.bin"
-                "${MAME_ROM_DIRECTORY}/23-032e2-00.e52"
-        COMMAND
-            "${CMAKE_COMMAND}" -E copy_if_different
-                "${CMAKE_CURRENT_BINARY_DIR}/invaders-3.bin"
-                "${MAME_ROM_DIRECTORY}/23-033e2-00.e45"
-        COMMAND
-            "${CMAKE_COMMAND}" -E copy_if_different
-                "${CMAKE_CURRENT_BINARY_DIR}/invaders-4.bin"
-                "${MAME_ROM_DIRECTORY}/23-034e2-00.e40"
+                "${CMAKE_CURRENT_BINARY_DIR}/invaders.bin"
+                "${MAME_INVADERS_ROM_DIRECTORY}/23-226e4-00.e71"
         COMMAND
             "${CMAKE_COMMAND}" -E copy_if_different
                 "${CMAKE_CURRENT_BINARY_DIR}/invaders-avo.bin"
-                "${MAME_ROM_DIRECTORY}/23-225e4-00.e69"
+                "${MAME_INVADERS_ROM_DIRECTORY}/23-225e4-00.e69"
         COMMAND
             "${CMAKE_COMMAND}" -E copy_if_different
                 "${CMAKE_SOURCE_DIR}/bin/23-018E2.bin"
-                "${MAME_ROM_DIRECTORY}/23-018e2-00.e4"
+                "${MAME_INVADERS_ROM_DIRECTORY}/23-018e2-00.e3"
         DEPENDS
-            ${INVADERS_SPLIT_ROM_IMAGES}
+            invaders.bin
             invaders.equ
             invaders-avo.bin
             invaders-avo.equ
             "${CMAKE_SOURCE_DIR}/bin/23-018E2.bin"
         COMMENT
-            "Copying Invaders ROM images to ${MAME_ROM_DIRECTORY}"
+            "Copying Invaders ROM images to ${MAME_INVADERS_ROM_DIRECTORY}"
         VERBATIM
     )
     target_folder(mame-invaders "Firmware")
+
+    if(WIN32)
+        file(TO_NATIVE_PATH "${MAME_ROOT}" MAME_ROOT_NATIVE)
+        file(TO_NATIVE_PATH "${MAME_COMMAND}" MAME_COMMAND_NATIVE)
+
+        add_custom_target(run-invaders
+            COMMAND
+                cmd /c start "MAME Invaders" /D "${MAME_ROOT_NATIVE}"
+                    "${MAME_COMMAND_NATIVE}" vt102
+                        -rompath roms
+                        -window
+                        -uimodekey F12
+                        -skip_gameinfo
+            DEPENDS
+                mame-invaders
+            COMMENT
+                "Running Invaders in MAME"
+            USES_TERMINAL
+            VERBATIM
+        )
+    else()
+        add_custom_target(run-invaders
+            COMMAND
+                "${CMAKE_COMMAND}" -E chdir "${MAME_ROOT}"
+                    "${MAME_COMMAND}" vt102
+                        -rompath roms
+                        -window
+                        -uimodekey F12
+                        -skip_gameinfo
+            DEPENDS
+                mame-invaders
+            COMMENT
+                "Running Invaders in MAME"
+            USES_TERMINAL
+            VERBATIM
+        )
+    endif()
+    target_folder(run-invaders "Firmware")
 endif()
 
 add_custom_target(invaders-rom

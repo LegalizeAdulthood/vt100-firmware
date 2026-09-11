@@ -12,7 +12,7 @@ prebuilt `mame.exe` release instead.
 From Command Prompt, or from a `.bat` file:
 
 ```bat
-cd /d C:\code\vt100\vt100-firmware
+cd /d <RepoDir>
 cmake --workflow --preset default
 ```
 
@@ -20,17 +20,17 @@ The CMake target assembles `src\vt100.asm` and writes the combined 8 KiB ROM
 image here:
 
 ```text
-C:\code\vt100\build-vt100-firmware-default\src\vt100.bin
+<BuildDir>\src\vt100.bin
 ```
 
 The build also splits that image into the four 2 KiB ROM images used by the
 VT100 CPU board:
 
 ```text
-C:\code\vt100\build-vt100-firmware-default\src\23-061E2.bin
-C:\code\vt100\build-vt100-firmware-default\src\23-032E2.bin
-C:\code\vt100\build-vt100-firmware-default\src\23-033E2.bin
-C:\code\vt100\build-vt100-firmware-default\src\23-034E2.bin
+<BuildDir>\src\23-061E2.bin
+<BuildDir>\src\23-032E2.bin
+<BuildDir>\src\23-033E2.bin
+<BuildDir>\src\23-034E2.bin
 ```
 
 The CTest suite compares those generated split images with the matching
@@ -44,16 +44,17 @@ Download the official Windows MAME binary package from the MAME release page:
 https://www.mamedev.org/release.html
 ```
 
-Extract the archive to a local directory. The examples below assume:
+Extract the archive to a local directory. The examples below refer to this
+directory as:
 
 ```text
-C:\code\mame
+<MAMEDir>
 ```
 
 The MAME executable should then be:
 
 ```text
-C:\code\mame\mame.exe
+<MAMEDir>\mame.exe
 ```
 
 ## Prepare the ROM Set
@@ -105,8 +106,17 @@ to update after each firmware rebuild.
 From Command Prompt:
 
 ```bat
-cd /d C:\code\mame
-mame.exe vt100 -rompath C:\code\mame\roms -window
+cd /d <MAMEDir>
+mame.exe vt100 -rompath roms -window
+```
+
+For the Invaders ROM, the `run-invaders` target stages the ROM images under
+`<MAMEDir>\roms\vt102` using MAME's expected `vt102` filenames, then launches
+MAME as `vt102` from `<MAMEDir>` with `-rompath roms`, `-window`, `-uimodekey
+F12`, and `-skip_gameinfo`:
+
+```bat
+cmake --build --preset invaders --target run-invaders
 ```
 
 The `vt100` system is still flagged by MAME as not working and having imperfect
@@ -353,15 +363,15 @@ to try when the remote side requires SSH.
 List the ROM files that the current MAME driver expects:
 
 ```bat
-cd /d C:\code\mame
+cd /d <MAMEDir>
 mame.exe -listroms vt100
 ```
 
 Ask MAME to check the local ROM set:
 
 ```bat
-cd /d C:\code\mame
-mame.exe -verifyroms vt100 -rompath C:\code\mame\roms
+cd /d <MAMEDir>
+mame.exe -verifyroms vt100 -rompath roms
 ```
 
 If `vt100.bin` has been modified from the stock firmware, MAME will report

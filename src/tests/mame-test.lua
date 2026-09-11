@@ -91,6 +91,38 @@ function M.program_space()
     return space
 end
 
+local INVADERS_JUNK_PATTERN = { 0xde, 0xad, 0xbe, 0xef }
+
+function M.invaders_junk_byte(address, base)
+    local offset = address - base
+    return INVADERS_JUNK_PATTERN[(offset % #INVADERS_JUNK_PATTERN) + 1]
+end
+
+function M.poison_invaders_memory(equates, mem)
+    mem = mem or M.program_space()
+    local low = M.required_equate(equates, "inv_data_low")
+    local top = M.required_equate(equates, "inv_data_top")
+    for address = low, top do
+        mem:write_u8(address, M.invaders_junk_byte(address, low))
+    end
+end
+
+function M.enable_invaders_test_mode(equates, mem)
+    mem = mem or M.program_space()
+    local signature = M.required_equate(equates, "inv_test_signature")
+    mem:write_u8(signature, M.required_equate(equates, "inv_test_signature0"))
+    mem:write_u8(signature + 1, M.required_equate(equates, "inv_test_signature1"))
+    mem:write_u8(signature + 2, M.required_equate(equates, "inv_test_signature2"))
+end
+
+function M.disable_invaders_test_mode(equates, mem)
+    mem = mem or M.program_space()
+    local signature = M.required_equate(equates, "inv_test_signature")
+    mem:write_u8(signature, 0)
+    mem:write_u8(signature + 1, 0)
+    mem:write_u8(signature + 2, 0)
+end
+
 function M.fail(message)
     print("VT100_INVADERS_TEST_FAIL: " .. tostring(message))
     manager.machine:exit()

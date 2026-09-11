@@ -1306,13 +1306,16 @@ and `-plugin <PluginName>`.
 
 ### Scriptable Test Hooks
 
-Test-only state bytes live in AVO RAM and are defined in `src/invaders-abi.asm`
-alongside the rest of the game ABI. Keep these in the same top-down allocation
-style as the game state, and load their addresses from `invaders.equ` in tests
-instead of duplicating numeric addresses.
+Test-only state bytes live in AVO RAM and are defined in
+`src/invaders-avo.asm` alongside the rest of the game state. Keep these in the
+same top-down allocation style as the game state, and load their addresses from
+generated `.equ` files in tests instead of duplicating numeric addresses.
 
 ```asm
 inv_test_signature  equ     inv_data_top-2        ; 3 bytes, through 3fffh
+inv_test_signature0 equ     05h
+inv_test_signature1 equ     0ah
+inv_test_signature2 equ     0fh
 inv_test_mode       equ     inv_test_signature-1
 inv_test_script     equ     inv_test_mode-1
 inv_test_stop_lo    equ     inv_test_script-1
@@ -1322,6 +1325,12 @@ inv_test_trace_head equ     inv_test_result-1
 inv_test_trace_top  equ     inv_test_trace_head-1
 inv_test_trace_base equ     inv_test_trace_top-inv_test_trace_size+1
 ```
+
+Before any MAME test enters Invaders through SET-UP, it fills the full
+`inv_data_low` through `inv_data_top` allocation by repeating the `de ad be ef`
+junk byte pattern. Tests that need firmware test mode then write the three
+signature bytes before setting `inv_test_mode`; normal gameplay tests leave the
+signature cleared so random AVO RAM cannot turn into an accidental test command.
 
 Current result codes:
 
