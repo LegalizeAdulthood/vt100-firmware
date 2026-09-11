@@ -206,10 +206,15 @@ local function make_aliens_step()
     local stage_frame = 0
     local setup_key_repeats = 0
     local shift_i_repeats = 0
+    local formation_frame = inv_alien_count
+    local movement_frame = formation_frame + inv_alien_count + 18
     local skip_frame = nil
     local edge_frame = nil
     local alien0_x_before_edge = nil
     local alien0_y_before_edge = nil
+    local moved_once_alien = 18
+    local skipped_alien = 21
+    local edge_alien = inv_alien_count - 1
 
     local function enter_stage(next_stage)
         stage = next_stage
@@ -275,7 +280,7 @@ local function make_aliens_step()
 
             if stage == "wait-start" then
                 if read_u8(inv_active) ~= 0 then
-                    enter_stage("wait-frame-55")
+                    enter_stage("wait-formation-frame")
                     return
                 end
                 if frame - stage_frame > 120 then
@@ -284,56 +289,60 @@ local function make_aliens_step()
                 return
             end
 
-            if stage == "wait-frame-55" then
-                if game_frame() == 55 then
+            if stage == "wait-formation-frame" then
+                if game_frame() == formation_frame then
                     assert_initial_formation()
-                    enter_stage("wait-frame-128")
+                    enter_stage("wait-movement-frame")
                     return
                 end
-                if game_frame() > 55 then
-                    test.fail("missed frame 55")
+                if game_frame() > formation_frame then
+                    test.fail("missed formation frame")
                     return
                 end
                 if frame - stage_frame > 240 then
-                    fail_timeout("frame 55")
+                    fail_timeout("formation frame")
                 end
                 return
             end
 
-            if stage == "wait-frame-128" then
-                if game_frame() == 128 then
-                    test.assert_eq(alien_last(), 17, "alien moved at frame 128")
+            if stage == "wait-movement-frame" then
+                if game_frame() == movement_frame then
+                    test.assert_eq(alien_last(), 17, "alien moved at checkpoint")
                     test.assert_eq(read_u8(inv_alien_anim_phase), 1, "animation toggled after one sweep")
                     test.assert_eq(read_u8(inv_alien_descents), 0, "no descent before edge")
                     test.assert_eq(read_u8(inv_alien_dir), inv_alien_dir_right, "direction before edge")
                     assert_alien_position(0, expected_initial_x(0) + 2, expected_initial_y(0), "twice-moved alien 0")
-                    assert_alien_position(18, expected_initial_x(18) + 1, expected_initial_y(18), "once-moved alien 18")
+                    assert_alien_position(
+                        moved_once_alien,
+                        expected_initial_x(moved_once_alien) + 1,
+                        expected_initial_y(moved_once_alien),
+                        "once-moved alien")
 
-                    write_u8(inv_alien_live_base + 21, 0)
+                    write_u8(inv_alien_live_base + skipped_alien, 0)
                     write_nibble_pair(inv_alien_live_lo, inv_alien_live_hi, inv_alien_count - 1)
-                    write_alien_last(20)
+                    write_alien_last(skipped_alien - 1)
                     skip_frame = game_frame()
                     enter_stage("wait-skip-dead")
                     return
                 end
-                if game_frame() > 128 then
-                    test.fail("missed frame 128")
+                if game_frame() > movement_frame then
+                    test.fail("missed movement checkpoint")
                     return
                 end
                 if frame - stage_frame > 240 then
-                    fail_timeout("frame 128")
+                    fail_timeout("movement checkpoint")
                 end
                 return
             end
 
             if stage == "wait-skip-dead" then
-                if alien_last() == 22 then
+                if alien_last() == skipped_alien + 1 then
                     test.assert_eq(alien_live_count(), inv_alien_count - 1, "live count after forced removal")
                     alien0_x_before_edge = alien_x(0)
                     alien0_y_before_edge = alien_y(0)
-                    write_u8(inv_alien_live_base + 54, 0x0f)
-                    set_alien_x(54, inv_alien_right_edge - inv_alien_w)
-                    write_alien_last(53)
+                    write_u8(inv_alien_live_base + edge_alien, 0x0f)
+                    set_alien_x(edge_alien, inv_alien_right_edge - inv_alien_w)
+                    write_alien_last(edge_alien - 1)
                     write_u8(inv_alien_dir, inv_alien_dir_right)
                     write_u8(inv_alien_reverse, 0)
                     write_u8(inv_alien_y_delta, 0)
@@ -350,8 +359,11 @@ local function make_aliens_step()
             end
 
             if stage == "wait-edge-hit" then
-                if alien_last() == 54 then
-                    test.assert_eq(alien_x(54), inv_alien_right_edge - inv_alien_w + 1, "right edge alien x")
+                if alien_last() == edge_alien then
+                    test.assert_eq(
+                        alien_x(edge_alien),
+                        inv_alien_right_edge - inv_alien_w + 1,
+                        "right edge alien x")
                     if read_u8(inv_alien_reverse) == 0 then
                         test.fail("right edge did not request reversal")
                         return
