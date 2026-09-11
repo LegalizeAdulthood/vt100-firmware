@@ -234,10 +234,9 @@ local function make_scoring_step()
                 if frame < 120 then
                     return
                 end
+                test.poison_invaders_memory(equates, mem)
+                test.disable_invaders_test_mode(equates, mem)
                 write_u8(inv_active, 0)
-                write_u8(inv_test_mode, 0)
-                write_u8(inv_test_script, 0)
-                write_u8(inv_test_result, 0)
                 enter_stage("setup-key")
                 return
             end

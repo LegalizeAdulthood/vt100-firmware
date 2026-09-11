@@ -178,6 +178,8 @@ local function make_input_step()
                 if frame < 120 then
                     return
                 end
+                test.poison_invaders_memory(equates, mem)
+                test.enable_invaders_test_mode(equates, mem)
                 write_u8(inv_active, 0)
                 write_u8(inv_test_mode, 1)
                 write_u8(inv_test_script, inv_test_script_input)

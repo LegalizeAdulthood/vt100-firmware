@@ -115,6 +115,9 @@ inv_data_floor          equ     3800h
 ; Fixed test and diagnostic bytes.
 ;
 inv_test_signature      equ     inv_data_top-2
+inv_test_signature0     equ     05h
+inv_test_signature1     equ     0ah
+inv_test_signature2     equ     0fh
 inv_test_mode           equ     inv_test_signature-1
 inv_test_script         equ     inv_test_mode-1
 inv_test_stop_lo        equ     inv_test_script-1
@@ -2646,6 +2649,9 @@ inv_test_render_probe:
         ret
 ;
 inv_test_tick:
+        call    inv_test_enabled
+        ora     a
+        rz
         lda     inv_test_mode
         ora     a
         rz
@@ -2708,6 +2714,22 @@ inv_test_bad_script:
         sta     inv_test_result
         xra     a
         sta     inv_active
+        ret
+;
+inv_test_enabled:
+        lda     inv_test_signature
+        cpi     inv_test_signature0
+        jnz     inv_test_disabled
+        lda     inv_test_signature+1
+        cpi     inv_test_signature1
+        jnz     inv_test_disabled
+        lda     inv_test_signature+2
+        cpi     inv_test_signature2
+        jnz     inv_test_disabled
+        mvi     a,0ffh
+        ret
+inv_test_disabled:
+        xra     a
         ret
 ;
 inv_row_addr:
