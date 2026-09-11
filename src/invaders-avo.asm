@@ -77,6 +77,7 @@ inv_sound_mode_silent   equ     0
 inv_sound_mode_heartbeat equ    1
 inv_sound_mode_death    equ     2
 inv_sound_death_words   equ     200
+inv_active_value        equ     05ah
 inv_level_pause_frames  equ     0fh
 inv_alien_rows          equ     5
 inv_alien_cols          equ     11
@@ -309,7 +310,7 @@ inv_enter_impl:
         call    inv_draw_static_screen
         lda     frame_count
         sta     inv_last_vframe
-        mvi     a,0ffh
+        mvi     a,inv_active_value
         sta     inv_active
         ret
 ;
@@ -317,8 +318,8 @@ inv_idle_impl:
         call    update_kbd
         call    inv_read_keys
         lda     inv_active
-        ora     a
-        rz
+        cpi     inv_active_value
+        rnz
         call    inv_wait_frame
         call    inv_frame
         ret
@@ -397,8 +398,8 @@ inv_inc_frame16:
 inv_frame:
         call    inv_test_tick
         lda     inv_active
-        ora     a
-        rz
+        cpi     inv_active_value
+        rnz
         call    inv_update_level_reset
         rnz
         call    inv_update_turret_death
@@ -1364,8 +1365,8 @@ inv_sound_status_hook_impl:
         sta     inv_last_stock_kbd_status
         mov     b,a
         lda     inv_active
-        ora     a
-        jz      inv_sound_status_stock
+        cpi     inv_active_value
+        jnz     inv_sound_status_stock
         lda     inv_game_over
         ora     a
         jnz     inv_sound_status_reset_stock
@@ -1901,6 +1902,9 @@ inv_update_turret_death:
         dcr     a
         sta     inv_turret_death_timer
         jnz     inv_turret_death_active
+        call    inv_get_turret_x
+        mov     c,a
+        call    inv_erase_turret_at
         mvi     a,inv_turret_start_x_lo
         sta     inv_turret_x_lo
         mvi     a,inv_turret_start_x_hi
@@ -2867,8 +2871,8 @@ inv_exit_impl:
 ;
 inv_idle_hook_impl:
         lda     inv_active
-        ora     a
-        jnz     inv_idle_active
+        cpi     inv_active_value
+        jz      inv_idle_active
         call    keyboard_tick
         ret
 ;

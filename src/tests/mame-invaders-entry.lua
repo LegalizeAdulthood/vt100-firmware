@@ -15,6 +15,7 @@ local function make_entry_step()
     local equates = test.load_equates(binary_directory .. "/invaders-avo.equ")
 
     local inv_active = test.required_equate(equates, "inv_active")
+    local inv_active_value = test.required_equate(equates, "inv_active_value")
     local inv_test_mode = test.required_equate(equates, "inv_test_mode")
     local inv_test_script = test.required_equate(equates, "inv_test_script")
     local inv_test_stop_lo = test.required_equate(equates, "inv_test_stop_lo")
@@ -29,6 +30,7 @@ local function make_entry_step()
     local key_history = test.required_equate(equates, "key_history")
     local latest_key_scan = test.required_equate(equates, "latest_key_scan")
     local pending_setup = test.required_equate(equates, "pending_setup")
+    local inv_level_timer = test.required_equate(equates, "inv_level_timer")
 
     local key_flag_shift = 0x20
     local key_flag_eos = 0x80
@@ -94,8 +96,21 @@ local function make_entry_step()
                 end
                 test.poison_invaders_memory(equates, mem)
                 test.disable_invaders_test_mode(equates, mem)
-                write_u8(inv_active, 0)
-                enter_stage("setup-key")
+                write_u8(inv_active, 0xff)
+                write_u8(inv_level_timer, 1)
+                enter_stage("prelaunch-junk")
+                return
+            end
+
+            if stage == "prelaunch-junk" then
+                if frame - stage_frame >= 8 then
+                    test.assert_eq(read_u8(inv_active), 0xff, "prelaunch junk active byte")
+                    test.assert_eq(read_u8(inv_level_timer), 1, "prelaunch level timer")
+                    write_u8(inv_level_timer, 0)
+                    write_u8(inv_active, 0)
+                    enter_stage("setup-key")
+                    return
+                end
                 return
             end
 
@@ -132,7 +147,7 @@ local function make_entry_step()
             end
 
             if stage == "wait-active" then
-                if read_u8(inv_active) ~= 0 then
+                if read_u8(inv_active) == inv_active_value then
                     test.assert_eq(read_u8(in_setup), 0, "in_setup after Invaders entry")
                     test.assert_eq(read_u16(char_action), saved_action_value, "char_action after Invaders entry")
                     enter_stage("exit-key")
