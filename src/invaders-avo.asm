@@ -79,7 +79,7 @@ inv_sound_mode_death    equ     2
 inv_sound_death_words   equ     200
 inv_active_value        equ     05ah
 inv_level_pause_frames  equ     0fh
-inv_alien_rows          equ     5
+inv_alien_rows          equ     4
 inv_alien_cols          equ     11
 inv_alien_count         equ     inv_alien_rows*inv_alien_cols
 inv_alien_w             equ     4
@@ -87,8 +87,8 @@ inv_alien_h             equ     2
 inv_alien_slot_w        equ     5
 inv_alien_slot_h        equ     3
 inv_alien_start_x       equ     inv_play_left
-inv_alien_bottom_row    equ     16
-inv_alien_top_row       equ     inv_alien_bottom_row-((inv_alien_rows-1)*inv_alien_slot_h)
+inv_alien_top_row       equ     4
+inv_alien_bottom_row    equ     inv_alien_top_row+((inv_alien_rows-1)*inv_alien_slot_h)
 inv_alien_right_edge    equ     inv_play_left+inv_play_width-1
 inv_alien_dir_left      equ     0
 inv_alien_dir_right     equ     1

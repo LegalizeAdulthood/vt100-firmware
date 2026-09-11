@@ -87,7 +87,7 @@ test.run(function()
         { "inv_alien_max_col", 1 },
         { "inv_alien_min_row", 1 },
         { "inv_alien_max_row", 1 },
-        { "inv_alien_data_base", 275 },
+        { "inv_alien_data_base", 220 },
         { "inv_missile_data_base", 12 },
         { "inv_shield_cells_base", 84 },
         { "inv_dirty_queue_base", 32 },

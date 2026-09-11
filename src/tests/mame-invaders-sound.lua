@@ -20,6 +20,7 @@ local function make_sound_step()
     local kbd_click_mask = test.required_equate(equates, "kbd_click_mask")
     local kbd_scan_mask = test.required_equate(equates, "kbd_scan_mask")
     local inv_active = test.required_equate(equates, "inv_active")
+    local inv_active_value = test.required_equate(equates, "inv_active_value")
     local inv_test_mode = test.required_equate(equates, "inv_test_mode")
     local inv_test_script = test.required_equate(equates, "inv_test_script")
     local inv_test_result = test.required_equate(equates, "inv_test_result")
@@ -160,7 +161,6 @@ local function make_sound_step()
         end)
 
     local heartbeat_cases = {
-        { count = 55, period = 32 },
         { count = 44, period = 24 },
         { count = 29, period = 16 },
         { count = 14, period = 10 },
@@ -209,7 +209,7 @@ local function make_sound_step()
                     test.hex(entry.data, 2),
                     test.hex(entry.output, 2)), 0)
             end
-            if entry.active ~= 0 and entry.game_over == 0 and entry.level_timer == 0 then
+            if entry.active == inv_active_value and entry.game_over == 0 and entry.level_timer == 0 then
                 if low7(entry.data) ~= low7(entry.stock) then
                     error(string.format(
                         "keyboard status write %d changed stock bits 0-6: stock=%s data=%s",
@@ -243,7 +243,7 @@ local function make_sound_step()
         local silences = 0
         for index = start_index, #output_log do
             local entry = output_log[index]
-            if entry.active ~= 0 and entry.game_over == 0 and entry.level_timer == 0 and entry.death > 0 then
+            if entry.active == inv_active_value and entry.game_over == 0 and entry.level_timer == 0 and entry.death > 0 then
                 total = total + 1
                 if bit7(entry.data) then
                     clicks = clicks + 1
@@ -265,7 +265,7 @@ local function make_sound_step()
         write_u8(inv_missile_fire_timer, 0xff)
         write_alien_live_count(current.count)
         log_start = #output_log + 1
-        enter_stage("heartbeat")
+        enter_stage("heartbeat-sync")
     end
 
     local function seed_turret_hit()
@@ -350,7 +350,8 @@ local function make_sound_step()
             end
 
             if stage == "wait-formation" then
-                if read_u8(inv_active) ~= 0 and read_nibble_pair(inv_alien_init_lo, inv_alien_init_hi) == inv_alien_count then
+                if read_u8(inv_active) == inv_active_value
+                    and read_nibble_pair(inv_alien_init_lo, inv_alien_init_hi) == inv_alien_count then
                     start_heartbeat_case()
                     return
                 end
@@ -360,9 +361,21 @@ local function make_sound_step()
                 return
             end
 
+            if stage == "heartbeat-sync" then
+                if #output_log >= log_start then
+                    log_start = #output_log + 1
+                    enter_stage("heartbeat")
+                    return
+                end
+                if frame - stage_frame > 60 then
+                    fail_timeout("heartbeat sync")
+                end
+                return
+            end
+
             if stage == "heartbeat" then
                 local entry = find_entry_since(log_start, function(candidate)
-                    return candidate.active ~= 0
+                    return candidate.active == inv_active_value
                         and candidate.game_over == 0
                         and candidate.level_timer == 0
                         and candidate.death == 0

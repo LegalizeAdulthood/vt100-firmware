@@ -304,7 +304,7 @@ slower play or scale long timers using `refresh_rate`.
 The C++ reference does this in `engine::run`:
 
 1. Reset screen, status, shields, aliens, missiles, turret, laser, and UFO.
-2. Initialize one alien per frame until all 55 are present.
+2. Initialize one alien per frame until all 44 are present.
 3. Each frame, move one live alien.
 4. Start full gameplay after `aliens::count + 73` frames.
 5. Every third frame, possibly fire and update alien missiles.
@@ -327,7 +327,7 @@ inv_frame:
         call    inv_update_ufo
         call    inv_update_shields
 
-        call    inv_after_start_gate    ; frame >= 55 + 73
+        call    inv_after_start_gate    ; frame >= 44 + 73
         rz
 
         call    inv_enemy_fire_tick     ; every 3 frames
@@ -468,7 +468,6 @@ cadence accelerates with the game:
 Suggested 50/60 Hz frame periods:
 
 ```text
-55-45 aliens remaining: 32 frames
 44-30 aliens remaining: 24 frames
 29-15 aliens remaining: 16 frames
 14-7 aliens remaining:  10 frames
@@ -509,7 +508,7 @@ The recommended geometry is:
 ```asm
 inv_play_w      equ 60
 inv_alien_cols  equ 11
-inv_alien_rows  equ 5
+inv_alien_rows  equ 4
 inv_alien_w     equ 4        ; visible sprite width
 inv_alien_slot  equ 5        ; width plus one blank column
 inv_alien_h     equ 2
@@ -574,7 +573,7 @@ id_shield       equ 0f0h
 id_turret       equ 0f1h
 id_missile      equ 0f2h
 id_ufo          equ 0f3h
-id_alien0       equ 00h         ; 00h-36h are the 55 alien IDs
+id_alien0       equ 00h         ; 00h-2bh are the 44 alien IDs
 
 inv_id_map      ds 60 * 24
 ```
@@ -874,10 +873,10 @@ alien_bottom_y      db 17       ; top row of bottom alien sprite
 alien_min_col       db 0
 alien_max_col       db 10
 alien_min_row       db 0        ; lowest live row index
-alien_max_row       db 4        ; highest live row index
-alien_x             ds 55
-alien_y             ds 55
-alien_live_bits     ds 7
+alien_max_row       db 3        ; highest live row index
+alien_x             ds 44
+alien_y             ds 44
+alien_live_bits     ds 6
 alien_shooters      ds 11       ; alien ID per firing column, 0ffh if none
 
 missile_x           ds 3
@@ -900,8 +899,8 @@ shield_cells        ds 84       ; 4-bit cell codes, not full glyph bytes
 shield_x            ds 4        ; left edge of each shelter
 ```
 
-`alien_live_bits` can store 55 live/dead bits. The simpler alternative is one
-byte per alien, but seven bytes is easy enough and keeps the state tidy.
+`alien_live_bits` can store 44 live/dead bits. The simpler alternative is one
+byte per alien, but six bytes is easy enough and keeps the state tidy.
 
 ## Alien Update
 
@@ -1127,14 +1126,13 @@ The larger Special Graphics sprites cannot reuse the `vtinvaders` one-row alien
 offsets literally. Keep the same ID layout, but compute positions with the
 2-row sprite and 3-row slot geometry.
 
-Alien IDs should still be arranged with the bottom row first:
+Alien IDs are arranged with the top row first:
 
 ```text
-id 0..10     bottom row, 10-point aliens
-id 11..21    next row, 10-point aliens
-id 22..32    middle row, 20-point aliens
-id 33..43    next row, 20-point aliens
-id 44..54    top row, 30-point aliens
+id 0..10     top row, 30-point aliens
+id 11..21    next row, 20-point aliens
+id 22..32    next row, 20-point aliens
+id 33..43    bottom row, 10-point aliens
 ```
 
 That preserves the useful `vtinvaders` shooter rule: the next shooter above a
@@ -1377,7 +1375,7 @@ Screenshot tests should use a small set of deterministic frames:
 | Frame | Expected screen state |
 |---:|---|
 | 0 | cleared playfield and static status |
-| 55 | alien formation has completed initialization |
+| 44 | alien formation has completed initialization |
 | 128 | turret visible, aliens moving, no random input |
 | 220 | scripted laser has hit a chosen alien |
 | 600 | missiles and shield damage visible |
