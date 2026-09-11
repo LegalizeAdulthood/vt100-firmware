@@ -300,7 +300,7 @@ local function make_sound_step()
         write_u8(inv_sound_mode, inv_sound_mode_death)
         write_u8(inv_death_sound_timer, 50)
         log_start = #output_log + 1
-        enter_stage("game-over-silence")
+        enter_stage("game-over-silence-sync")
     end
 
     return function()
@@ -412,6 +412,18 @@ local function make_sound_step()
                 end
                 if frame - stage_frame > 120 then
                     fail_timeout("death sound")
+                end
+                return
+            end
+
+            if stage == "game-over-silence-sync" then
+                if #output_log >= log_start then
+                    log_start = #output_log + 1
+                    enter_stage("game-over-silence")
+                    return
+                end
+                if frame - stage_frame > 60 then
+                    fail_timeout("game-over silence sync")
                 end
                 return
             end

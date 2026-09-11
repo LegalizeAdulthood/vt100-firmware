@@ -216,19 +216,48 @@ local function make_enemy_fire_step()
         end
     end
 
+    local function assert_turret_explosion_at(x)
+        local top = { "*", "a", "a", "a", "a", "a", "*" }
+        local bottom = { "a", "*", "a", "*", "a", "*", "a" }
+        for offset = 0, inv_turret_w - 1 do
+            test.assert_eq(
+                cell(inv_turret_top_row, x + offset),
+                string.byte(top[offset + 1]),
+                "turret explosion top " .. tostring(offset))
+            test.assert_eq(
+                cell(inv_turret_top_row + 1, x + offset),
+                string.byte(bottom[offset + 1]),
+                "turret explosion bottom " .. tostring(offset))
+        end
+    end
+
+    local function assert_no_turret_explosion_at(x)
+        for offset = 0, inv_turret_w - 1 do
+            local top_cell = cell(inv_turret_top_row, x + offset)
+            local bottom_cell = cell(inv_turret_top_row + 1, x + offset)
+            if top_cell == string.byte("a") or top_cell == string.byte("*") then
+                test.fail("stale turret explosion top " .. tostring(offset))
+            end
+            if bottom_cell == string.byte("a") or bottom_cell == string.byte("*") then
+                test.fail("stale turret explosion bottom " .. tostring(offset))
+            end
+        end
+    end
+
     local frame = 0
     local stage = "boot"
     local stage_frame = 0
     local setup_key_repeats = 0
     local shift_i_repeats = 0
     local shield_missile_col = nil
+    local turret_death_x = nil
     local frozen_alien_last = nil
 
     local shield_shooter_id = 1
     local shield_shooter_x = inv_alien_start_x + inv_alien_slot_w
     local shield_shooter_y = inv_alien_top_row
-    local turret_shooter_id = (inv_alien_rows - 1) * inv_alien_cols + 5
-    local turret_shooter_x = inv_alien_start_x + 5 * inv_alien_slot_w
+    local turret_shooter_id = (inv_alien_rows - 1) * inv_alien_cols + 1
+    local turret_shooter_x = inv_alien_start_x + inv_alien_slot_w
     local turret_shooter_y = inv_alien_top_row + (inv_alien_rows - 1) * inv_alien_slot_h
 
     local function enter_stage(next_stage)
@@ -335,7 +364,7 @@ local function make_enemy_fire_step()
                     test.assert_eq(read_u8(inv_missile_fire_timer), inv_missile_empty_delay, "empty missile delay")
 
                     clear_all_shields()
-                    set_turret_x(inv_turret_start_x)
+                    set_turret_x(turret_shooter_x)
                     prepare_single_shooter(turret_shooter_id, turret_shooter_x, turret_shooter_y)
                     force_next_enemy_fire()
                     enter_stage("wait-turret-hit")
@@ -354,6 +383,9 @@ local function make_enemy_fire_step()
                     test.assert_eq(led_bits(), 0x03, "LEDs after first turret hit")
                     test.assert_eq(read_u8(inv_laser_active), 0, "laser cleared by turret hit")
                     assert_all_missiles_inactive()
+                    turret_death_x = read_nibble_pair(inv_turret_x_lo, inv_turret_x_hi)
+                    test.assert_eq(turret_death_x, turret_shooter_x, "first turret death x")
+                    assert_turret_explosion_at(turret_death_x)
                     enter_stage("wait-respawn")
                     return
                 end
@@ -367,6 +399,7 @@ local function make_enemy_fire_step()
                 if read_u8(inv_turret_death_timer) == 0 then
                     test.assert_eq(read_u8(inv_game_over), 0, "not game over after respawn")
                     test.assert_eq(read_nibble_pair(inv_turret_x_lo, inv_turret_x_hi), inv_turret_start_x, "respawn turret x")
+                    assert_no_turret_explosion_at(turret_death_x)
                     test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x + 3), sg("a"), "respawn turret top")
 
                     write_u8(inv_gunners, 1)
