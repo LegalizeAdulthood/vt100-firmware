@@ -58,7 +58,7 @@ inv_missile_empty_delay equ     4
 inv_missile_glyph       equ     18h
 inv_missile_shoot_order_count equ 76
 inv_turret_death_frames equ     55
-inv_ufo_row             equ     2
+inv_ufo_row             equ     0
 inv_ufo_w               equ     7
 inv_ufo_h               equ     2
 inv_ufo_left_x          equ     4
@@ -67,8 +67,8 @@ inv_ufo_state_idle      equ     0
 inv_ufo_state_active    equ     1
 inv_ufo_state_explode   equ     2
 inv_ufo_state_score     equ     3
-inv_ufo_first_delay_lo  equ     34h
-inv_ufo_first_delay_hi  equ     08h
+inv_ufo_first_delay_lo  equ     58h
+inv_ufo_first_delay_hi  equ     02h
 inv_ufo_interval_lo     equ     0dch
 inv_ufo_interval_hi     equ     05h
 inv_ufo_move_period     equ     5
@@ -90,7 +90,7 @@ inv_alien_h             equ     2
 inv_alien_slot_w        equ     5
 inv_alien_slot_h        equ     3
 inv_alien_start_x       equ     inv_play_left
-inv_alien_top_row       equ     4
+inv_alien_top_row       equ     2
 inv_alien_bottom_row    equ     inv_alien_top_row+((inv_alien_rows-1)*inv_alien_slot_h)
 inv_alien_right_edge    equ     inv_play_left+inv_play_width-1
 inv_alien_dir_left      equ     0
