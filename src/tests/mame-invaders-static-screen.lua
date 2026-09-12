@@ -48,9 +48,8 @@ local function make_static_screen_step()
     local inv_initial_level = test.required_equate(equates, "inv_initial_level")
     local inv_cell_blank = test.required_equate(equates, "inv_cell_blank")
     local inv_cell_checker = test.required_equate(equates, "inv_cell_checker")
-    local inv_cell_upper_left = test.required_equate(equates, "inv_cell_upper_left")
-    local inv_cell_upper_right = test.required_equate(equates, "inv_cell_upper_right")
-    local inv_cell_hline = test.required_equate(equates, "inv_cell_hline")
+    local inv_cell_roof_left = test.required_equate(equates, "inv_cell_roof_left")
+    local inv_cell_roof_right = test.required_equate(equates, "inv_cell_roof_right")
     local led_state = test.required_equate(equates, "led_state")
     local in_setup = test.required_equate(equates, "in_setup")
     local key_flags = test.required_equate(equates, "key_flags")
@@ -113,18 +112,18 @@ local function make_static_screen_step()
     end
 
     local shield_cells = {
-        inv_cell_blank, inv_cell_upper_left, inv_cell_hline, inv_cell_hline,
-        inv_cell_hline, inv_cell_upper_right, inv_cell_blank,
-        inv_cell_upper_left, inv_cell_checker, inv_cell_checker,
+        inv_cell_roof_left, inv_cell_checker, inv_cell_checker, inv_cell_checker,
+        inv_cell_checker, inv_cell_checker, inv_cell_roof_right,
         inv_cell_checker, inv_cell_checker, inv_cell_checker,
-        inv_cell_upper_right,
+        inv_cell_checker, inv_cell_checker, inv_cell_checker,
+        inv_cell_checker,
         inv_cell_checker, inv_cell_checker, inv_cell_checker,
         inv_cell_blank, inv_cell_checker, inv_cell_checker, inv_cell_checker,
     }
 
     local shield_glyphs = {
-        sg("_"), sg("l"), sg("q"), sg("q"), sg("q"), sg("k"), sg("_"),
-        sg("l"), sg("a"), sg("a"), sg("a"), sg("a"), sg("a"), sg("k"),
+        string.byte("/"), sg("a"), sg("a"), sg("a"), sg("a"), sg("a"), string.byte("\\"),
+        sg("a"), sg("a"), sg("a"), sg("a"), sg("a"), sg("a"), sg("a"),
         sg("a"), sg("a"), sg("a"), sg("_"), sg("a"), sg("a"), sg("a"),
     }
 

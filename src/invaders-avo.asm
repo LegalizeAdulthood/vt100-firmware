@@ -105,6 +105,8 @@ inv_cell_upper_right    equ     3
 inv_cell_lower_left     equ     4
 inv_cell_lower_right    equ     5
 inv_cell_hline          equ     6
+inv_cell_roof_left      equ     7
+inv_cell_roof_right     equ     8
 ;
 ; Mutable Invaders state lives in AVO RAM and grows downward from the top.
 ;
@@ -2772,41 +2774,41 @@ inv_render_sg_blank:
         db      '_','a','~',0
 ;
 inv_alien30a_top:
-        db      'l','a','a','k',0
+        db      '_','a','a','_',0
 inv_alien30a_bottom:
         db      'm','a','a','j',0
 inv_alien30b_top:
-        db      'l','q','q','k',0
+        db      'a','_','_','a',0
 inv_alien30b_bottom:
-        db      'm','a','a','j',0
+        db      '_','a','a','_',0
 inv_alien20a_top:
-        db      'l','q','q','k',0
+        db      'a','q','q','a',0
 inv_alien20a_bottom:
-        db      'x','_','_','x',0
+        db      '_','x','x','_',0
 inv_alien20b_top:
-        db      'x','q','q','x',0
+        db      'x','a','a','x',0
 inv_alien20b_bottom:
         db      'm','q','q','j',0
 inv_alien10a_top:
-        db      '_','l','q','k',0
+        db      'l','a','a','k',0
 inv_alien10a_bottom:
-        db      'm','q','j','_',0
+        db      'x','_','_','x',0
 inv_alien10b_top:
-        db      'l','q','k','_',0
+        db      '_','a','a','_',0
 inv_alien10b_bottom:
-        db      '_','m','q','j',0
+        db      'm','q','q','j',0
 ;
 inv_cell_glyphs:
-        db      00h,02h,0dh,0ch,0eh,0bh,12h
-        db      00h,00h,00h,00h,00h,00h,00h,00h,00h
+        db      00h,02h,0dh,0ch,0eh,0bh,12h,'/',5ch
+        db      00h,00h,00h,00h,00h,00h,00h
 ;
 inv_initial_shield_cells:
-        db      inv_cell_blank,inv_cell_upper_left,inv_cell_hline
-        db      inv_cell_hline,inv_cell_hline,inv_cell_upper_right
-        db      inv_cell_blank
-        db      inv_cell_upper_left,inv_cell_checker,inv_cell_checker
+        db      inv_cell_roof_left,inv_cell_checker,inv_cell_checker
         db      inv_cell_checker,inv_cell_checker,inv_cell_checker
-        db      inv_cell_upper_right
+        db      inv_cell_roof_right
+        db      inv_cell_checker,inv_cell_checker,inv_cell_checker
+        db      inv_cell_checker,inv_cell_checker,inv_cell_checker
+        db      inv_cell_checker
         db      inv_cell_checker,inv_cell_checker,inv_cell_checker
         db      inv_cell_blank,inv_cell_checker,inv_cell_checker
         db      inv_cell_checker
