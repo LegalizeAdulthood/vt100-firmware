@@ -489,8 +489,8 @@ The hybrid playfield keeps the VT100-friendly fixed dimensions from
 - logical playfield width: 60 columns, centered or left-biased inside the
   physical display
 - height: 24 rows
-- UFO rows: 2 and 3
-- alien rows: 2 visible rows in a 3-row slot
+- UFO rows: 1 and 2, with no top gutter
+- alien rows: 2 visible rows in a 3-row slot starting at row 3
 - shield rows: 19, 20, and 21
 - turret rows: 22 and 23
 - score/status row: 24
@@ -1020,7 +1020,7 @@ the timer expires, matching the reference.
 
 Use the reference timing:
 
-- first UFO: around frame `35 * 60`;
+- first UFO: around frame `10 * 60` so it appears early enough for demos;
 - later UFOs: every `25 * 60`;
 - move every 5 frames;
 - disable UFOs when fewer than 8 aliens remain;
