@@ -188,17 +188,17 @@ local function make_aliens_step()
             expected_initial_y(bottom_right),
             "bottom right alien")
 
-        test.assert_eq(cell(inv_alien_top_row, inv_alien_start_x), sg("l"), "30-point alien top left")
-        test.assert_eq(cell(inv_alien_top_row, inv_alien_start_x + 1), sg("a"), "30-point alien fill")
+        test.assert_eq(cell(inv_alien_top_row, inv_alien_start_x + 1), sg("a"), "30-point alien body")
         test.assert_eq(cell(inv_alien_top_row + 1, inv_alien_start_x), sg("m"), "30-point alien bottom left")
+        test.assert_eq(cell(inv_alien_top_row + 1, inv_alien_start_x + 3), sg("j"), "30-point alien bottom right")
         test.assert_eq(
-            cell(expected_initial_y(bottom_right), expected_initial_x(bottom_right) + 1),
+            cell(expected_initial_y(bottom_right), expected_initial_x(bottom_right)),
             sg("l"),
-            "10-point alien top shape")
+            "10-point alien top left")
         test.assert_eq(
             cell(expected_initial_y(bottom_right) + 1, expected_initial_x(bottom_right)),
-            sg("m"),
-            "10-point alien bottom shape")
+            sg("x"),
+            "10-point alien bottom left")
     end
 
     local frame = 0
