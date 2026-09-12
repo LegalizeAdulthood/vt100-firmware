@@ -262,42 +262,26 @@ if(MAME_COMMAND)
     )
     target_folder(mame-invaders "Firmware")
 
+    set(RUN_INVADERS_COMMAND "${MAME_COMMAND}")
     if(WIN32)
-        file(TO_NATIVE_PATH "${MAME_ROOT}" MAME_ROOT_NATIVE)
-        file(TO_NATIVE_PATH "${MAME_COMMAND}" MAME_COMMAND_NATIVE)
-
-        add_custom_target(run-invaders
-            COMMAND
-                cmd /c start "MAME Invaders" /D "${MAME_ROOT_NATIVE}"
-                    "${MAME_COMMAND_NATIVE}" vt102
-                        -rompath roms
-                        -window
-                        -uimodekey F12
-                        -skip_gameinfo
-            DEPENDS
-                mame-invaders
-            COMMENT
-                "Running Invaders in MAME"
-            USES_TERMINAL
-            VERBATIM
-        )
-    else()
-        add_custom_target(run-invaders
-            COMMAND
-                "${CMAKE_COMMAND}" -E chdir "${MAME_ROOT}"
-                    "${MAME_COMMAND}" vt102
-                        -rompath roms
-                        -window
-                        -uimodekey F12
-                        -skip_gameinfo
-            DEPENDS
-                mame-invaders
-            COMMENT
-                "Running Invaders in MAME"
-            USES_TERMINAL
-            VERBATIM
-        )
+        set(RUN_INVADERS_COMMAND cmd /c start "MAME Invaders" "$<SHELL_PATH:${MAME_COMMAND}>")
     endif()
+
+    add_custom_target(run-invaders
+        COMMAND
+            ${RUN_INVADERS_COMMAND} vt102
+                -rompath roms
+                -uimodekey F12
+                -skip_gameinfo
+        WORKING_DIRECTORY
+            "${MAME_ROOT}"
+        DEPENDS
+            mame-invaders
+        COMMENT
+            "Running Invaders in MAME"
+        USES_TERMINAL
+        VERBATIM
+    )
     target_folder(run-invaders "Firmware")
 endif()
 
