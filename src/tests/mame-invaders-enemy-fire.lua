@@ -53,11 +53,14 @@ local function make_enemy_fire_step()
     local inv_shield_top_row = test.required_equate(equates, "inv_shield_top_row")
     local inv_shield_w = test.required_equate(equates, "inv_shield_w")
     local inv_shield_h = test.required_equate(equates, "inv_shield_h")
+    local inv_shield_damage_count = test.required_equate(equates, "inv_shield_damage_count")
+    local inv_shield_damage_base = test.required_equate(equates, "inv_shield_damage_base")
     local inv_shield_cells_each = test.required_equate(equates, "inv_shield_cells_each")
     local inv_shield_count = test.required_equate(equates, "inv_shield_count")
     local inv_shield_cell_count = test.required_equate(equates, "inv_shield_cell_count")
     local inv_shield0_x = test.required_equate(equates, "inv_shield0_x")
     local inv_shield_cells_base = test.required_equate(equates, "inv_shield_cells_base")
+    local inv_cell_damaged = test.required_equate(equates, "inv_cell_damaged")
     local inv_missile_count = test.required_equate(equates, "inv_missile_count")
     local inv_missile_empty_delay = test.required_equate(equates, "inv_missile_empty_delay")
     local inv_missile_glyph = test.required_equate(equates, "inv_missile_glyph")
@@ -180,6 +183,9 @@ local function make_enemy_fire_step()
     end
 
     local function clear_all_shields()
+        for index = 0, inv_shield_damage_count - 1 do
+            write_u8(inv_shield_damage_base + index, 0)
+        end
         for index = 0, inv_shield_cell_count - 1 do
             write_u8(inv_shield_cells_base + index, 0)
         end
@@ -196,6 +202,10 @@ local function make_enemy_fire_step()
     local function shield0_cell(row, column)
         local index = (row - inv_shield_top_row) * inv_shield_w + (column - inv_shield0_x)
         return read_u8(inv_shield_cells_base + index)
+    end
+
+    local function shield0_damage(column)
+        return read_u8(inv_shield_damage_base + column - inv_shield0_x)
     end
 
     local function prepare_single_shooter(id, x, y)
@@ -358,8 +368,15 @@ local function make_enemy_fire_step()
             if stage == "wait-shield-hit" then
                 if read_u8(inv_missile_active_count) == 0 then
                     assert_all_missiles_inactive()
-                    test.assert_eq(shield0_cell(inv_shield_top_row, shield_missile_col), 0, "shield cell removed")
-                    test.assert_eq(cell(inv_shield_top_row, shield_missile_col), 0, "shield screen cell erased")
+                    test.assert_eq(shield0_damage(shield_missile_col), 1, "shield column damaged")
+                    test.assert_eq(
+                        shield0_cell(inv_shield_top_row, shield_missile_col),
+                        inv_cell_damaged,
+                        "shield cell damaged")
+                    test.assert_eq(
+                        cell(inv_shield_top_row, shield_missile_col),
+                        string.byte("*"),
+                        "shield screen cell damaged")
                     test.assert_eq(read_u8(inv_gunners), 3, "shield hit preserves gunners")
                     test.assert_eq(read_u8(inv_missile_fire_timer), inv_missile_empty_delay, "empty missile delay")
 

@@ -31,9 +31,13 @@ local function make_laser_step()
     local inv_laser_glyph = test.required_equate(equates, "inv_laser_glyph")
     local inv_shield_top_row = test.required_equate(equates, "inv_shield_top_row")
     local inv_shield_w = test.required_equate(equates, "inv_shield_w")
+    local inv_shield_damage_each = test.required_equate(equates, "inv_shield_damage_each")
+    local inv_shield_damage_base = test.required_equate(equates, "inv_shield_damage_base")
     local inv_shield_cells_each = test.required_equate(equates, "inv_shield_cells_each")
     local inv_shield_cells_base = test.required_equate(equates, "inv_shield_cells_base")
     local inv_shield1_x = test.required_equate(equates, "inv_shield1_x")
+    local inv_cell_damaged = test.required_equate(equates, "inv_cell_damaged")
+    local inv_cell_weak = test.required_equate(equates, "inv_cell_weak")
     local inv_turret_start_x = test.required_equate(equates, "inv_turret_start_x")
     local inv_turret_top_row = test.required_equate(equates, "inv_turret_top_row")
     local inv_turret_x_lo = test.required_equate(equates, "inv_turret_x_lo")
@@ -123,6 +127,14 @@ local function make_laser_step()
             + shield_column
     end
 
+    local function shield_damage_address(column)
+        local shield_index = 1
+        local shield_column = column - inv_shield1_x
+        return inv_shield_damage_base
+            + shield_index * inv_shield_damage_each
+            + shield_column
+    end
+
     local frame = 0
     local stage = "boot"
     local stage_frame = 0
@@ -132,6 +144,7 @@ local function make_laser_step()
     local shield_row = inv_laser_start_row
     local shield_column = inv_shield1_x
     local shield_cell = shield_cell_address(shield_row, shield_column)
+    local shield_damage = shield_damage_address(shield_column)
     local shield_turret_x = shield_column - 3
     local shield_original = nil
     local last_empty_row = nil
@@ -293,13 +306,60 @@ local function make_laser_step()
                     test.assert_eq(read_u8(inv_laser_active), 0, "shield hit deactivates laser")
                     test.assert_eq(laser_row(), shield_row, "shield hit row")
                     test.assert_eq(laser_col(), shield_column, "shield hit column")
+                    test.assert_eq(read_u8(shield_damage), 1, "shield column damaged")
+                    test.assert_eq(read_u8(shield_cell), inv_cell_damaged, "shield cell damaged")
+                    test.assert_eq(cell(shield_row, shield_column), string.byte("*"), "shield screen cell damaged")
+                    enter_stage("fire-shield-weak")
+                    return
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("shield laser hit")
+                end
+                return
+            end
+
+            if stage == "fire-shield-weak" then
+                inject_key(inv_scan_space, 0)
+                enter_stage("wait-shield-weak")
+                return
+            end
+
+            if stage == "wait-shield-weak" then
+                if laser_shots() == 3 then
+                    test.assert_eq(read_u8(inv_laser_active), 0, "weak hit deactivates laser")
+                    test.assert_eq(laser_row(), shield_row, "weak hit row")
+                    test.assert_eq(laser_col(), shield_column, "weak hit column")
+                    test.assert_eq(read_u8(shield_damage), 2, "shield column weakened")
+                    test.assert_eq(read_u8(shield_cell), inv_cell_weak, "shield cell weakened")
+                    test.assert_eq(cell(shield_row, shield_column), string.byte("."), "shield screen cell weakened")
+                    enter_stage("fire-shield-clear")
+                    return
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("shield weak hit")
+                end
+                return
+            end
+
+            if stage == "fire-shield-clear" then
+                inject_key(inv_scan_space, 0)
+                enter_stage("wait-shield-clear")
+                return
+            end
+
+            if stage == "wait-shield-clear" then
+                if laser_shots() == 4 then
+                    test.assert_eq(read_u8(inv_laser_active), 0, "clear hit deactivates laser")
+                    test.assert_eq(laser_row(), shield_row, "clear hit row")
+                    test.assert_eq(laser_col(), shield_column, "clear hit column")
+                    test.assert_eq(read_u8(shield_damage), 3, "shield column opened")
                     test.assert_eq(read_u8(shield_cell), 0, "shield cell cleared")
                     test.assert_eq(cell(shield_row, shield_column), 0, "shield screen cell cleared")
                     test.pass()
                     return
                 end
                 if frame - stage_frame > 120 then
-                    fail_timeout("shield laser hit")
+                    fail_timeout("shield clear hit")
                 end
             end
         end)

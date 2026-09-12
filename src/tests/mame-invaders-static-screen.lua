@@ -30,6 +30,8 @@ local function make_static_screen_step()
     local inv_game_over = test.required_equate(equates, "inv_game_over")
     local inv_turret_x_lo = test.required_equate(equates, "inv_turret_x_lo")
     local inv_turret_x_hi = test.required_equate(equates, "inv_turret_x_hi")
+    local inv_shield_damage_base = test.required_equate(equates, "inv_shield_damage_base")
+    local inv_shield_damage_count = test.required_equate(equates, "inv_shield_damage_count")
     local inv_shield_cells_base = test.required_equate(equates, "inv_shield_cells_base")
     local inv_score_row = test.required_equate(equates, "inv_score_row")
     local inv_ground_row = test.required_equate(equates, "inv_ground_row")
@@ -135,6 +137,13 @@ local function make_static_screen_step()
     }
 
     local function assert_shields()
+        for damage_index = 0, inv_shield_damage_count - 1 do
+            test.assert_eq(
+                read_u8(inv_shield_damage_base + damage_index),
+                0,
+                "shield damage " .. tostring(damage_index))
+        end
+
         local index = 0
         for shield = 1, #shield_x do
             for cell_index = 1, #shield_cells do

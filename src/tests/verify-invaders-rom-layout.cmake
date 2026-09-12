@@ -256,6 +256,7 @@ function(assert_mutable_state_layout EQUATE_FILE RAM_START RAM_TOP DATA_FLOOR)
         inv_alien_max_row 1
         inv_alien_data_base 220
         inv_missile_data_base 12
+        inv_shield_damage_base 28
         inv_shield_cells_base 84
         inv_dirty_queue_base 32
         inv_object_map_base 1440

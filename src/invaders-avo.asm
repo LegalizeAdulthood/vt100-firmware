@@ -31,6 +31,9 @@ inv_shield_h            equ     3
 inv_shield_cells_each   equ     inv_shield_w*inv_shield_h
 inv_shield_count        equ     4
 inv_shield_cell_count   equ     inv_shield_cells_each*inv_shield_count
+inv_shield_damage_each  equ     inv_shield_w
+inv_shield_damage_count equ     inv_shield_damage_each*inv_shield_count
+inv_shield_damage_gone  equ     3
 inv_shield0_x           equ     15
 inv_shield1_x           equ     30
 inv_shield2_x           equ     45
@@ -107,6 +110,8 @@ inv_cell_lower_right    equ     5
 inv_cell_hline          equ     6
 inv_cell_roof_left      equ     7
 inv_cell_roof_right     equ     8
+inv_cell_damaged        equ     9
+inv_cell_weak           equ     10
 ;
 ; Mutable Invaders state lives in AVO RAM and grows downward from the top.
 ;
@@ -250,7 +255,9 @@ inv_state_low           equ     inv_missile_data_base
 ;
 ; Larger buffers live below the fixed scalar state.
 ;
-inv_shield_cells_top    equ     inv_state_low-1
+inv_shield_damage_top   equ     inv_state_low-1
+inv_shield_damage_base  equ     inv_shield_damage_top-inv_shield_damage_count+1
+inv_shield_cells_top    equ     inv_shield_damage_base-1
 inv_shield_cells_base   equ     inv_shield_cells_top-inv_shield_cell_count+1
 inv_dirty_queue_top     equ     inv_shield_cells_base-1
 inv_dirty_queue_size    equ     32
@@ -599,6 +606,14 @@ inv_reset_shield_cell:
         jnz     inv_reset_shield_cell
         dcr     b
         jnz     inv_reset_shield
+        lxi     h,inv_shield_damage_base
+        mvi     b,inv_shield_damage_count
+        xra     a
+inv_reset_shield_damage:
+        mov     m,a
+        inx     h
+        dcr     b
+        jnz     inv_reset_shield_damage
         ret
 ;
 inv_draw_shields:
@@ -873,11 +888,102 @@ inv_no_shield_cell:
 inv_try_shield_collision:
         call    inv_shield_cell_addr
         rz
-        mvi     m,inv_cell_blank
-        xra     a
-        call    inv_putc
+        call    inv_damage_shield_column
         mvi     a,0ffh
         ret
+;
+inv_damage_shield_column:
+        call    inv_shield_damage_addr
+        mov     a,m
+        inr     a
+        cpi     inv_shield_damage_gone+1
+        jc      inv_store_shield_damage
+        mvi     a,inv_shield_damage_gone
+inv_store_shield_damage:
+        mov     m,a
+        push    psw
+        mvi     b,inv_shield_top_row
+        call    inv_redraw_shield_cell
+        pop     psw
+        push    psw
+        mvi     b,inv_shield_top_row+1
+        call    inv_redraw_shield_cell
+        pop     psw
+        push    psw
+        mvi     b,inv_shield_top_row+2
+        call    inv_redraw_shield_cell
+        pop     psw
+        ret
+;
+inv_shield_damage_addr:
+        mov     a,c
+        cpi     inv_shield0_x
+        jc      inv_no_shield_damage
+        cpi     inv_shield0_x+inv_shield_w
+        jc      inv_shield0_damage_addr
+        cpi     inv_shield1_x
+        jc      inv_no_shield_damage
+        cpi     inv_shield1_x+inv_shield_w
+        jc      inv_shield1_damage_addr
+        cpi     inv_shield2_x
+        jc      inv_no_shield_damage
+        cpi     inv_shield2_x+inv_shield_w
+        jc      inv_shield2_damage_addr
+        cpi     inv_shield3_x
+        jc      inv_no_shield_damage
+        cpi     inv_shield3_x+inv_shield_w
+        jnc     inv_no_shield_damage
+        lxi     h,inv_shield_damage_base+(inv_shield_damage_each*3)
+        mvi     a,inv_shield3_x
+        jmp     inv_shield_damage_at
+inv_shield2_damage_addr:
+        lxi     h,inv_shield_damage_base+(inv_shield_damage_each*2)
+        mvi     a,inv_shield2_x
+        jmp     inv_shield_damage_at
+inv_shield1_damage_addr:
+        lxi     h,inv_shield_damage_base+inv_shield_damage_each
+        mvi     a,inv_shield1_x
+        jmp     inv_shield_damage_at
+inv_shield0_damage_addr:
+        lxi     h,inv_shield_damage_base
+        mvi     a,inv_shield0_x
+inv_shield_damage_at:
+        mov     d,a
+        mov     a,c
+        sub     d
+        call    add_a_to_hl
+        mov     a,m
+        ret
+inv_no_shield_damage:
+        xra     a
+        ret
+;
+inv_redraw_shield_cell:
+        push    psw
+        call    inv_shield_cell_addr
+        pop     psw
+        mov     d,a
+        mov     a,m
+        ora     a
+        rz
+        mov     a,d
+        cpi     1
+        jz      inv_redraw_shield_damaged
+        cpi     2
+        jz      inv_redraw_shield_weak
+        mvi     m,inv_cell_blank
+        xra     a
+        jmp     inv_putc
+inv_redraw_shield_damaged:
+        mvi     a,inv_cell_damaged
+        mov     m,a
+        call    inv_cell_code_to_glyph
+        jmp     inv_putc
+inv_redraw_shield_weak:
+        mvi     a,inv_cell_weak
+        mov     m,a
+        call    inv_cell_code_to_glyph
+        jmp     inv_putc
 ;
 inv_try_alien_collision:
         push    b
@@ -2799,8 +2905,8 @@ inv_alien10b_bottom:
         db      'm','q','q','j',0
 ;
 inv_cell_glyphs:
-        db      00h,02h,0dh,0ch,0eh,0bh,12h,'/',5ch
-        db      00h,00h,00h,00h,00h,00h,00h
+        db      00h,02h,0dh,0ch,0eh,0bh,12h,'/',5ch,'*','.'
+        db      00h,00h,00h,00h,00h
 ;
 inv_initial_shield_cells:
         db      inv_cell_roof_left,inv_cell_checker,inv_cell_checker
