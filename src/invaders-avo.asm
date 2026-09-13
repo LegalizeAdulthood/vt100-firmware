@@ -89,6 +89,16 @@ inv_high_initial_nvr_base equ    inv_high_score_nvr_base+inv_high_score_count
 inv_high_score_max_hi   equ     03h
 inv_high_score_max_lo   equ     0e7h
 inv_high_score_cache_count equ   inv_high_score_digits+inv_high_initial_count+inv_high_initial_count
+inv_attract_title_row   equ     4
+inv_attract_title_col   equ     33
+inv_attract_title_len   equ     14
+inv_attract_scores_row  equ     8
+inv_attract_scores_col  equ     34
+inv_attract_scores_len  equ     11
+inv_attract_prompt_row  equ     20
+inv_attract_prompt_col  equ     34
+inv_attract_prompt_len  equ     11
+inv_high_score_entry_width equ   8
 inv_high_score_first_row equ     9
 inv_high_score_col      equ     36
 inv_high_prompt_title_row equ    8
@@ -3523,17 +3533,35 @@ inv_draw_static_screen:
 inv_draw_attract_screen:
         call    inv_clear_playfield
         call    inv_clear_gunner_leds
-        mvi     b,4
-        mvi     c,33
+        jmp     inv_draw_attract_overlay
+;
+inv_draw_attract_overlay:
+        mvi     b,inv_attract_title_row-1
+        mvi     c,inv_attract_title_col-1
+        mvi     d,3
+        mvi     e,inv_attract_title_len+2
+        call    inv_clear_space_rect
+        mvi     b,inv_attract_scores_row-1
+        mvi     c,inv_attract_scores_col-1
+        mvi     d,inv_high_score_count+3
+        mvi     e,inv_attract_scores_len+2
+        call    inv_clear_space_rect
+        mvi     b,inv_attract_prompt_row-1
+        mvi     c,inv_attract_prompt_col-1
+        mvi     d,3
+        mvi     e,inv_attract_prompt_len+2
+        call    inv_clear_space_rect
+        mvi     b,inv_attract_title_row
+        mvi     c,inv_attract_title_col
         lxi     h,inv_attract_title
         call    inv_puts_glyphs
-        mvi     b,8
-        mvi     c,34
+        mvi     b,inv_attract_scores_row
+        mvi     c,inv_attract_scores_col
         lxi     h,inv_attract_scores
         call    inv_puts_glyphs
         call    inv_draw_high_score_table
-        mvi     b,20
-        mvi     c,34
+        mvi     b,inv_attract_prompt_row
+        mvi     c,inv_attract_prompt_col
         lxi     h,inv_attract_prompt
         jmp     inv_puts_glyphs
 ;
@@ -3578,6 +3606,13 @@ inv_draw_high_score_table:
         xra     a
         sta     inv_high_score_slot
 inv_draw_high_score_table_loop:
+        lda     inv_high_score_slot
+        adi     inv_high_score_first_row
+        mov     b,a
+        mvi     c,inv_high_score_col
+        mvi     d,inv_high_score_entry_width
+        mvi     a,' '
+        call    inv_fill_cells
         lda     inv_high_score_slot
         call    inv_high_score_empty
         ora     a
@@ -3662,6 +3697,23 @@ inv_clear_gunner_leds:
         lda     led_state
         ani     0f0h
         sta     led_state
+        ret
+;
+inv_clear_space_rect:
+        mov     a,d
+        ora     a
+        rz
+inv_clear_space_rect_row:
+        push    d
+        push    b
+        mov     d,e
+        mvi     a,' '
+        call    inv_fill_cells
+        pop     b
+        pop     d
+        inr     b
+        dcr     d
+        jnz     inv_clear_space_rect_row
         ret
 ;
 inv_clear_playfield:

@@ -1588,27 +1588,6 @@ Attract-mode demo work should add orchestration only where possible. Reuse
 `inv_draw_high_score_table`, and the existing sprite/object-map routines rather
 than creating parallel demo renderers.
 
-### 1. Attract Overlay Routine
-
-Implement a reusable attract overlay draw path. Split the current static
-`inv_draw_attract_screen` responsibilities so one routine can draw or refresh
-only the overlay text: title, `HIGH SCORES`, the persistent high-score table,
-and `PRESS ENTER`. The overlay routine should call the existing text helpers
-and `inv_draw_high_score_table`; it must not clear the playfield or initialize
-game state.
-
-Define the overlay-owned rectangles explicitly enough that each visible text
-block gets a one-character blank gutter. The high-score rectangle should always
-be fully written, including blank rows for empty entries, so the overlay remains
-stable regardless of the demo frame underneath it.
-
-Test this with a MAME Lua plugin under `src/tests` that enters Invaders from
-SET-UP with seeded NVR high-score data, lets several frames elapse, and asserts
-that the title, high-score heading, rendered score entries, and prompt remain
-visible in the expected cells. The test should also verify representative
-gutter cells and empty high-score rows are spaces. Register the test with CTest
-and run it through the invaders workflow preset.
-
 ### 2. Demo State Initialization
 
 Implement an `inv_start_demo` path used by `inv_enter_impl` after high scores

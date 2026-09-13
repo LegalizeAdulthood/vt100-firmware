@@ -31,6 +31,14 @@ local function make_high_score_load_step()
     local inv_high_score_digit_base = test.required_equate(equates, "inv_high_score_digit_base")
     local inv_high_initial_lo_base = test.required_equate(equates, "inv_high_initial_lo_base")
     local inv_high_initial_hi_base = test.required_equate(equates, "inv_high_initial_hi_base")
+    local inv_attract_title_row = test.required_equate(equates, "inv_attract_title_row")
+    local inv_attract_title_col = test.required_equate(equates, "inv_attract_title_col")
+    local inv_attract_scores_row = test.required_equate(equates, "inv_attract_scores_row")
+    local inv_attract_scores_col = test.required_equate(equates, "inv_attract_scores_col")
+    local inv_attract_scores_len = test.required_equate(equates, "inv_attract_scores_len")
+    local inv_attract_prompt_row = test.required_equate(equates, "inv_attract_prompt_row")
+    local inv_attract_prompt_col = test.required_equate(equates, "inv_attract_prompt_col")
+    local inv_high_score_entry_width = test.required_equate(equates, "inv_high_score_entry_width")
     local inv_high_score_first_row = test.required_equate(equates, "inv_high_score_first_row")
     local inv_high_score_col = test.required_equate(equates, "inv_high_score_col")
     local nvr_addr = test.required_equate(equates, "nvr_addr")
@@ -126,6 +134,39 @@ local function make_high_score_load_step()
         end
     end
 
+    local function assert_spaces(row, column, count, description)
+        for offset = 0, count - 1 do
+            test.assert_eq(
+                cell(row, column + offset) % 128,
+                string.byte(" "),
+                description .. " byte " .. tostring(offset + 1))
+        end
+    end
+
+    local function assert_text_gutter(row, column, text, description)
+        assert_spaces(row - 1, column - 1, #text + 2, description .. " top gutter")
+        assert_spaces(row + 1, column - 1, #text + 2, description .. " bottom gutter")
+        test.assert_eq(cell(row, column - 1) % 128, string.byte(" "), description .. " left gutter")
+        test.assert_eq(cell(row, column + #text) % 128, string.byte(" "), description .. " right gutter")
+        assert_text(row, column, text)
+    end
+
+    local function assert_high_score_overlay_gutter()
+        local left = inv_attract_scores_col - 1
+        local width = inv_attract_scores_len + 2
+        local top = inv_attract_scores_row - 1
+        local bottom = inv_high_score_first_row + inv_high_score_count
+        assert_spaces(top, left, width, "high score top gutter")
+        assert_spaces(bottom, left, width, "high score bottom gutter")
+        for row = inv_attract_scores_row, bottom - 1 do
+            test.assert_eq(cell(row, left) % 128, string.byte(" "), "high score left gutter row " .. tostring(row))
+            test.assert_eq(
+                cell(row, left + width - 1) % 128,
+                string.byte(" "),
+                "high score right gutter row " .. tostring(row))
+        end
+    end
+
     local frame = 0
     local stage = "boot"
     local stage_frame = 0
@@ -198,6 +239,24 @@ local function make_high_score_load_step()
 
             if stage == "wait-attract" then
                 if read_u8(inv_active) == inv_active_value and read_u8(inv_attract_mode) ~= 0 then
+                    enter_stage("wait-overlay-stable")
+                    return
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("attract screen")
+                end
+                return
+            end
+
+            if stage == "wait-overlay-stable" then
+                if frame - stage_frame < 6 then
+                    return
+                end
+                if read_u8(inv_active) == inv_active_value and read_u8(inv_attract_mode) ~= 0 then
+                    assert_text_gutter(inv_attract_title_row, inv_attract_title_col, "VT100 INVADERS", "title")
+                    assert_text_gutter(inv_attract_prompt_row, inv_attract_prompt_col, "PRESS ENTER", "prompt")
+                    assert_text(inv_attract_scores_row, inv_attract_scores_col, "HIGH SCORES")
+                    assert_high_score_overlay_gutter()
                     assert_loaded_eq(high_score_units(0), 123, "loaded high score slot 0")
                     assert_loaded_eq(high_score_units(1), 45, "loaded high score slot 1")
                     assert_loaded_eq(high_score_units(2), 0, "loaded high score slot 2")
@@ -211,6 +270,11 @@ local function make_high_score_load_step()
                     assert_text(inv_high_score_first_row + 1, inv_high_score_col, "C   0450")
                     for slot = 2, inv_high_score_count - 1 do
                         test.assert_eq(high_score_units(slot), 0, "empty loaded high score slot " .. tostring(slot))
+                        assert_spaces(
+                            inv_high_score_first_row + slot,
+                            inv_high_score_col,
+                            inv_high_score_entry_width,
+                            "empty high score row " .. tostring(slot))
                     end
                     test.pass()
                     return
