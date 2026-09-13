@@ -212,9 +212,13 @@ local function make_aliens_step()
     local edge_frame = nil
     local alien0_x_before_edge = nil
     local alien0_y_before_edge = nil
+    local single_frame = nil
+    local single_x_before = nil
+    local single_y_before = nil
     local moved_once_alien = 18
     local skipped_alien = 21
     local edge_alien = inv_alien_count - 1
+    local single_alien = 0
 
     local function enter_stage(next_stage)
         stage = next_stage
@@ -386,11 +390,43 @@ local function make_aliens_step()
                     test.assert_eq(read_u8(inv_alien_anim_phase), 1, "animation toggled on edge wrap")
                     test.assert_eq(alien_x(0), alien0_x_before_edge - 1, "alien 0 descended x")
                     test.assert_eq(alien_y(0), alien0_y_before_edge + 1, "alien 0 descended y")
-                    test.pass()
+                    for id = 0, inv_alien_count - 1 do
+                        write_u8(inv_alien_live_base + id, 0)
+                    end
+                    write_u8(inv_alien_live_base + single_alien, 0x0f)
+                    write_nibble_pair(inv_alien_live_lo, inv_alien_live_hi, 1)
+                    write_alien_last(single_alien)
+                    write_u8(inv_alien_reverse, 0)
+                    test.assert_eq(read_u8(inv_alien_y_delta), 1, "single alien starts after descent sweep")
+                    single_x_before = inv_alien_start_x + 10
+                    single_y_before = alien_y(single_alien)
+                    set_alien_x(single_alien, single_x_before)
+                    single_frame = game_frame()
+                    enter_stage("wait-single-horizontal")
                     return
                 end
                 if game_frame() > edge_frame + 8 then
                     fail_timeout("edge wrap")
+                end
+                return
+            end
+
+            if stage == "wait-single-horizontal" then
+                if game_frame() > single_frame then
+                    test.assert_eq(alien_live_count(), 1, "single alien live count")
+                    test.assert_eq(read_u8(inv_alien_y_delta), 0, "single alien clears stale descent")
+                    test.assert_eq(read_u8(inv_alien_reverse), 0, "single alien reverse clear")
+                    test.assert_eq(read_u8(inv_alien_dir), inv_alien_dir_left, "single alien direction")
+                    assert_alien_position(
+                        single_alien,
+                        single_x_before - 1,
+                        single_y_before,
+                        "single alien horizontal move")
+                    test.pass()
+                    return
+                end
+                if game_frame() > single_frame + 4 then
+                    fail_timeout("single alien horizontal move")
                 end
             end
         end)

@@ -2650,7 +2650,9 @@ inv_move_next_alien:
         jz      inv_move_next_alien_now
         mov     a,b
         cmp     e
+        jz      inv_move_next_alien_cycle
         jnc     inv_move_next_alien_now
+inv_move_next_alien_cycle:
         call    inv_cycle_aliens
 inv_move_next_alien_now:
         jmp     inv_move_alien
