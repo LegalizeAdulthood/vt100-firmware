@@ -1,0 +1,10 @@
+{
+  "plugin": {
+    "name": "vt100invadershighscoreload",
+    "description": "VT100 Invaders high-score load test",
+    "version": "0.0.1",
+    "author": "VT100 Firmware",
+    "type": "plugin",
+    "start": "false"
+  }
+}

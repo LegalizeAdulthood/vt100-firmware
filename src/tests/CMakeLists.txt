@@ -57,6 +57,9 @@ if(MAME_COMMAND)
         if(TEST_NAME STREQUAL "mame-invaders-high-score")
             list(APPEND MAME_TEST_DRIVER_ARGUMENTS "-DMAME_EXPECT_NVR_WORDS=51=7B00,61=6100,62=0000")
         endif()
+        if(TEST_NAME STREQUAL "mame-invaders-high-score-load")
+            list(APPEND MAME_TEST_DRIVER_ARGUMENTS "-DMAME_SEED_NVR_WORDS=51=007B,52=002D,61=08A1,62=08C0")
+        endif()
 
         add_test(NAME ${TEST_NAME}
             COMMAND
@@ -83,6 +86,7 @@ if(MAME_COMMAND)
     add_mame_invaders_test(mame-invaders-aliens vt100invadersaliens/init.lua vt100invadersaliens 10)
     add_mame_invaders_test(mame-invaders-scoring vt100invadersscoring/init.lua vt100invadersscoring 10)
     add_mame_invaders_test(mame-invaders-high-score vt100invadershighscore/init.lua vt100invadershighscore 10)
+    add_mame_invaders_test(mame-invaders-high-score-load vt100invadershighscoreload/init.lua vt100invadershighscoreload 10)
     add_mame_invaders_test(mame-invaders-enemy-fire vt100invadersenemyfire/init.lua vt100invadersenemyfire 10)
     add_mame_invaders_test(mame-invaders-sound vt100invaderssound/init.lua vt100invaderssound 10)
     add_mame_invaders_test(mame-invaders-full-smoke vt100invadersfullsmoke/init.lua vt100invadersfullsmoke 45)
