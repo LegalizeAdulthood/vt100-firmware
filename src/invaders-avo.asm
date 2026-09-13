@@ -2632,10 +2632,14 @@ inv_load_high_score_words:
         push    h
         call    read_nvr_byte
         lhld    nvr_data
+        mov     a,h
+        ani     1fh
+        mov     h,a
         xchg
         pop     h
         call    inv_store_score_word_digits
         call    inv_inc_nvr_addr
+        inx     h
         pop     b
         dcr     b
         jnz     inv_load_high_score_words
