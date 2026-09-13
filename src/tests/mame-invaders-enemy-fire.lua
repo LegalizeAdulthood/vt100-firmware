@@ -22,6 +22,7 @@ local function make_enemy_fire_step()
     local inv_frame_lo = test.required_equate(equates, "inv_frame_lo")
     local inv_frame_hi = test.required_equate(equates, "inv_frame_hi")
     local inv_gunners = test.required_equate(equates, "inv_gunners")
+    local inv_initial_gunners = test.required_equate(equates, "inv_initial_gunners")
     local inv_game_over = test.required_equate(equates, "inv_game_over")
     local inv_turret_death_timer = test.required_equate(equates, "inv_turret_death_timer")
     local inv_turret_death_frames = test.required_equate(equates, "inv_turret_death_frames")
@@ -337,8 +338,8 @@ local function make_enemy_fire_step()
 
             if stage == "wait-formation" then
                 if read_u8(inv_active) ~= 0 and alien_init_count() == inv_alien_count then
-                    test.assert_eq(read_u8(inv_gunners), 3, "initial gunners")
-                    test.assert_eq(led_bits(), 0x07, "initial gunner LEDs")
+                    test.assert_eq(read_u8(inv_gunners), inv_initial_gunners, "initial gunners")
+                    test.assert_eq(led_bits(), 0x0f, "initial gunner LEDs")
                     prepare_single_shooter(shield_shooter_id, shield_shooter_x, shield_shooter_y)
                     set_turret_x(shield_shooter_x)
                     force_next_enemy_fire()
@@ -377,7 +378,7 @@ local function make_enemy_fire_step()
                         cell(inv_shield_top_row, shield_missile_col),
                         string.byte("*"),
                         "shield screen cell damaged")
-                    test.assert_eq(read_u8(inv_gunners), 3, "shield hit preserves gunners")
+                    test.assert_eq(read_u8(inv_gunners), inv_initial_gunners, "shield hit preserves gunners")
                     test.assert_eq(read_u8(inv_missile_fire_timer), inv_missile_empty_delay, "empty missile delay")
 
                     clear_all_shields()
@@ -396,8 +397,8 @@ local function make_enemy_fire_step()
             if stage == "wait-turret-hit" then
                 if read_u8(inv_turret_death_timer) ~= 0 then
                     test.assert_eq(read_u8(inv_turret_death_timer), inv_turret_death_frames, "turret death timer")
-                    test.assert_eq(read_u8(inv_gunners), 2, "gunners after first turret hit")
-                    test.assert_eq(led_bits(), 0x03, "LEDs after first turret hit")
+                    test.assert_eq(read_u8(inv_gunners), inv_initial_gunners - 1, "gunners after first turret hit")
+                    test.assert_eq(led_bits(), 0x07, "LEDs after first turret hit")
                     test.assert_eq(read_u8(inv_laser_active), 0, "laser cleared by turret hit")
                     assert_all_missiles_inactive()
                     turret_death_x = read_nibble_pair(inv_turret_x_lo, inv_turret_x_hi)

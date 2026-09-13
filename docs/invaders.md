@@ -836,7 +836,7 @@ inv_frame_hi        db 0
 inv_level           db 0
 inv_score_lo        db 0
 inv_score_hi        db 0
-inv_gunners         db 3
+inv_gunners         db 4
 inv_game_over       db 0
 inv_play_x          db 10       ; physical column for logical playfield col 0
 inv_saved_leds      db 0        ; previous low nibble of terminal led_state
