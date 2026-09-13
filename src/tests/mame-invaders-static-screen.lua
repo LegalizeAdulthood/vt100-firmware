@@ -66,7 +66,6 @@ local function make_static_screen_step()
     local scan_setup = 0x7b
     local scan_i = 0x16
     local original_led_state = 0x0a
-    local attract_led_state = 0x00
     local game_led_state = 0x0f
 
     local mem = test.program_space()
@@ -208,18 +207,35 @@ local function make_static_screen_step()
         test.assert_eq(read_u8(inv_active), inv_active_value, "attract active")
         test.assert_eq(read_u8(inv_attract_mode), 0xff, "attract mode")
         test.assert_eq(read_u8(inv_saved_led_state), original_led_state % 16, "saved LEDs")
-        test.assert_eq(read_u8(led_state), attract_led_state, "attract LEDs")
+        test.assert_eq(read_u8(led_state), game_led_state, "attract LEDs")
+        test.assert_eq(read_u8(inv_score0), 0, "attract score0")
+        test.assert_eq(read_u8(inv_score1), 0, "attract score1")
+        test.assert_eq(read_u8(inv_score2), 0, "attract score2")
+        test.assert_eq(read_u8(inv_gunners), inv_initial_gunners, "attract gunners")
+        test.assert_eq(read_u8(inv_level), inv_initial_level, "attract level")
+        test.assert_eq(read_u8(inv_game_over), 0, "attract game over")
+        test.assert_eq(
+            read_u8(inv_turret_x_lo) + read_u8(inv_turret_x_hi) * 16,
+            inv_turret_start_x,
+            "attract turret x")
         assert_text(4, 33, "VT100 INVADERS")
         assert_text(8, 34, "HIGH SCORES")
         assert_text(20, 34, "PRESS ENTER")
-        assert_cell(inv_score_row, 0, 0, "score row blank in attract")
+        assert_text(inv_score_row, 0, "SCORE 0000  LEVEL 1")
+        assert_cell(inv_ground_row, inv_play_left, sg("q"), "attract ground left edge")
+        assert_cell(
+            inv_ground_row,
+            inv_play_left + inv_play_width - 1,
+            sg("q"),
+            "attract ground right edge")
     end
 
     local function attract_screen_ready()
         return read_u8(inv_attract_mode) ~= 0
             and cell(4, 33) == string.byte("V")
             and cell(20, 34) == string.byte("P")
-            and read_u8(led_state) == attract_led_state
+            and cell(inv_score_row, 0) == string.byte("S")
+            and read_u8(led_state) == game_led_state
     end
 
     local function static_screen_ready()

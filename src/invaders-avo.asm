@@ -343,8 +343,12 @@ inv_enter_impl:
         call    inv_disable_game_cursor
         call    inv_save_leds
         call    inv_load_high_scores
+        jmp     inv_start_demo
+;
+inv_start_demo:
         call    inv_reset_for_attract
-        call    inv_draw_attract_screen
+        call    inv_init_play_state
+        call    inv_draw_attract_overlay
         lda     frame_count
         sta     inv_last_vframe
         mvi     a,0ffh
@@ -384,6 +388,12 @@ inv_reset_for_attract:
 ;
 inv_start_game:
         call    inv_reset_for_attract
+        call    inv_init_play_state
+        lda     frame_count
+        sta     inv_last_vframe
+        ret
+;
+inv_init_play_state:
         mvi     a,inv_initial_gunners
         sta     inv_gunners
         mvi     a,inv_initial_level
@@ -394,10 +404,7 @@ inv_start_game:
         sta     inv_turret_x_hi
         call    inv_reset_aliens
         call    inv_reset_shields
-        call    inv_draw_static_screen
-        lda     frame_count
-        sta     inv_last_vframe
-        ret
+        jmp     inv_draw_static_screen
 ;
 inv_idle_impl:
         call    update_kbd
