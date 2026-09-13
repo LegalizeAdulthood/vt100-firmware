@@ -59,6 +59,7 @@ local function make_sound_step()
     local inv_last_stock_kbd_status = test.required_equate(equates, "inv_last_stock_kbd_status")
     local inv_last_output_kbd_status = test.required_equate(equates, "inv_last_output_kbd_status")
     local inv_sound_mode_silent = test.required_equate(equates, "inv_sound_mode_silent")
+    local inv_sound_mode_heartbeat = test.required_equate(equates, "inv_sound_mode_heartbeat")
     local inv_sound_mode_death = test.required_equate(equates, "inv_sound_mode_death")
     local inv_sound_death_words = test.required_equate(equates, "inv_sound_death_words")
     local inv_scan_setup = test.required_equate(equates, "inv_scan_setup")
@@ -210,7 +211,9 @@ local function make_sound_step()
                     test.hex(entry.data, 2),
                     test.hex(entry.output, 2)), 0)
             end
-            if entry.active == inv_active_value and entry.game_over == 0 and entry.level_timer == 0 then
+            if entry.active == inv_active_value
+                and entry.level_timer == 0
+                and (entry.game_over == 0 or entry.death > 0) then
                 if low7(entry.data) ~= low7(entry.stock) then
                     error(string.format(
                         "keyboard status write %d changed stock bits 0-6: stock=%s data=%s",
@@ -238,13 +241,20 @@ local function make_sound_step()
         return nil, nil
     end
 
-    local function count_death_entries(start_index)
+    local function count_death_entries(start_index, final_death)
         local total = 0
         local clicks = 0
         local silences = 0
         for index = start_index, #output_log do
             local entry = output_log[index]
-            if entry.active == inv_active_value and entry.game_over == 0 and entry.level_timer == 0 and entry.death > 0 then
+            local game_over_matches = entry.game_over == 0
+            if final_death then
+                game_over_matches = entry.game_over ~= 0
+            end
+            if entry.active == inv_active_value
+                and game_over_matches
+                and entry.level_timer == 0
+                and entry.death > 0 then
                 total = total + 1
                 if bit7(entry.data) then
                     clicks = clicks + 1
@@ -269,12 +279,12 @@ local function make_sound_step()
         enter_stage("heartbeat-sync")
     end
 
-    local function seed_turret_hit()
+    local function seed_turret_hit(gunners, next_stage)
         reset_sound_state()
         write_u8(inv_game_over, 0)
         write_u8(inv_level_timer, 0)
         write_u8(inv_turret_death_timer, 0)
-        write_u8(inv_gunners, inv_initial_gunners)
+        write_u8(inv_gunners, gunners)
         set_turret_x(inv_turret_start_x)
         write_u8(inv_missile_tick_timer, 0)
         write_u8(inv_missile_fire_timer, 0xff)
@@ -291,15 +301,15 @@ local function make_sound_step()
         write_u8(inv_missile_col_base, inv_turret_start_x + math.floor(inv_turret_w / 2))
         write_u8(inv_missile_phase_base, 0)
         log_start = #output_log + 1
-        enter_stage("wait-death-sound")
+        enter_stage(next_stage)
     end
 
     local function start_game_over_silence()
         reset_sound_state()
         write_u8(inv_game_over, 0xff)
         write_u8(inv_level_timer, 0)
-        write_u8(inv_sound_mode, inv_sound_mode_death)
-        write_u8(inv_death_sound_timer, 50)
+        write_u8(inv_sound_mode, inv_sound_mode_heartbeat)
+        write_u8(inv_sound_timer, 1)
         log_start = #output_log + 1
         enter_stage("game-over-silence-sync")
     end
@@ -395,7 +405,7 @@ local function make_sound_step()
                     end
                     heartbeat_case = heartbeat_case + 1
                     if heartbeat_case > #heartbeat_cases then
-                        seed_turret_hit()
+                        seed_turret_hit(inv_initial_gunners, "wait-death-sound")
                     else
                         start_heartbeat_case()
                     end
@@ -409,7 +419,7 @@ local function make_sound_step()
 
             if stage == "wait-death-sound" then
                 if read_u8(inv_turret_death_timer) ~= 0 then
-                    local total, clicks, silences = count_death_entries(log_start)
+                    local total, clicks, silences = count_death_entries(log_start, false)
                     if total >= 8 and clicks >= 2 and silences >= 2 then
                         validate_status_entries(log_start)
                         test.assert_eq(read_u8(inv_gunners), inv_initial_gunners - 1, "gunners after sound-tested turret hit")
@@ -420,12 +430,32 @@ local function make_sound_step()
                         if read_u8(inv_turret_death_timer) > inv_turret_death_frames then
                             error("turret death timer exceeded its starting value", 0)
                         end
-                        start_game_over_silence()
+                        seed_turret_hit(1, "wait-final-death-sound")
                         return
                     end
                 end
                 if frame - stage_frame > 120 then
                     fail_timeout("death sound")
+                end
+                return
+            end
+
+            if stage == "wait-final-death-sound" then
+                if read_u8(inv_game_over) ~= 0 then
+                    local total, clicks, silences = count_death_entries(log_start, true)
+                    if total >= 8 and clicks >= 2 and silences >= 2 then
+                        validate_status_entries(log_start)
+                        test.assert_eq(read_u8(inv_gunners), 0, "gunners after final sound-tested hit")
+                        test.assert_eq(read_u8(inv_turret_death_timer), 0, "final hit has no respawn timer")
+                        if read_u8(inv_death_sound_timer) >= inv_sound_death_words then
+                            error("final death sound timer did not advance from its starting value", 0)
+                        end
+                        start_game_over_silence()
+                        return
+                    end
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("final death sound")
                 end
                 return
             end

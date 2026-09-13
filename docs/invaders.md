@@ -461,8 +461,9 @@ inv_sound_status_hook:
 ```
 
 Call `inv_update_heartbeat` once per game frame after `inv_update_alien` to
-schedule heartbeat pulses. The sound should stop during level pauses and after
-game over, and the period should shrink as aliens are killed so the click
+schedule heartbeat pulses. The heartbeat should stop during level pauses and
+after game over, while the final turret death sound should continue long enough
+to be audible. The period should shrink as aliens are killed so the click
 cadence accelerates with the game:
 
 Suggested 50/60 Hz frame periods:

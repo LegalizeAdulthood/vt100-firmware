@@ -1477,16 +1477,22 @@ inv_sound_status_hook_impl:
         jnz     inv_sound_status_stock
         lda     inv_game_over
         ora     a
-        jnz     inv_sound_status_reset_stock
+        jnz     inv_sound_status_game_over
         lda     inv_level_timer
         ora     a
         jnz     inv_sound_status_reset_stock
+inv_sound_status_game_owned:
         mov     a,b
         ani     7fh
         mov     b,a
         call    inv_next_sound_mask
         ora     b
         jmp     inv_sound_status_store
+inv_sound_status_game_over:
+        lda     inv_death_sound_timer
+        ora     a
+        jnz     inv_sound_status_game_owned
+        jmp     inv_sound_status_reset_stock
 inv_sound_status_reset_stock:
         push    b
         call    inv_reset_sound
@@ -1940,7 +1946,6 @@ inv_set_game_over:
         sta     inv_game_over
         xra     a
         sta     inv_turret_death_timer
-        call    inv_reset_sound
         call    inv_clear_ufo
         ret
 ;
