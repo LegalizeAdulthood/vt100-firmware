@@ -215,12 +215,24 @@ hardware-facing launcher and escape hatch should be SET-UP based.
 ## Attract Mode
 
 Launching Invaders from SET-UP enters attract mode first. Attract mode owns the
-screen and keyboard, displays the game title and the high-score table area, and
-does not advance gameplay. Pressing RETURN leaves attract mode and starts the
-real game by running the normal gameplay initialization path. Pressing SET-UP
-from attract mode exits back to the terminal.
+screen and keyboard, runs a deterministic demo game, and displays the title,
+high-score table, and start prompt over the demo as a draw-order overlay. This
+is not a separate compositing layer in hardware; the game draws the demo frame
+with the normal renderer, then redraws the attract text last so it remains
+visible.
 
-The first attract screen should be static:
+The demo should reuse the same game state, frame clock, object map, update
+routines, and rendering paths as real gameplay. Attract mode may add a small
+demo driver that writes the existing input state bytes before the normal frame
+update, but it should not duplicate alien, shield, UFO, turret, laser, missile,
+score, or high-score rendering.
+
+Pressing RETURN leaves attract mode and starts a fresh real game by running the
+normal gameplay initialization path. Pressing SET-UP from attract mode exits
+back to the terminal. Demo play must never prompt for initials, write high
+scores, or persist anything to NVR.
+
+The attract overlay text is:
 
 ```text
 VT100 INVADERS
@@ -230,9 +242,11 @@ HIGH SCORES
 PRESS ENTER
 ```
 
-Once high-score table rendering is implemented, the `HIGH SCORES` area should
-show the ten persistent entries. Until then, the screen should not invent score
-data.
+Each overlay element should reserve a one-character gutter on all sides by
+clearing the cells immediately around its text or table area. The high-score
+table should be a fixed rectangle: empty high-score entries still draw spaces
+across their row so moving gameplay behind the overlay cannot smash directly
+against or show through holes in the text area.
 
 ## Invaders ROM And AVO Memory Plan
 
@@ -1566,3 +1580,113 @@ same-size trampoline replacements of existing bytes with calls into the AVO ROM.
 The AVO ROM must repeat the displaced base-ROM bytes on normal terminal paths.
 Static tests should fail if `invaders.bin` differs from `vt100.bin` outside the
 explicit trampoline spans and checksum bytes.
+
+Attract-mode demo work should add orchestration only where possible. Reuse
+`inv_reset_for_attract`, `inv_start_game`, `inv_frame`, `inv_update_aliens`,
+`inv_update_heartbeat`, `inv_update_ufo`, `inv_update_enemy_fire`,
+`inv_update_turret`, `inv_update_laser`, `inv_draw_static_screen`,
+`inv_draw_high_score_table`, and the existing sprite/object-map routines rather
+than creating parallel demo renderers.
+
+### 1. Attract Overlay Routine
+
+Implement a reusable attract overlay draw path. Split the current static
+`inv_draw_attract_screen` responsibilities so one routine can draw or refresh
+only the overlay text: title, `HIGH SCORES`, the persistent high-score table,
+and `PRESS ENTER`. The overlay routine should call the existing text helpers
+and `inv_draw_high_score_table`; it must not clear the playfield or initialize
+game state.
+
+Define the overlay-owned rectangles explicitly enough that each visible text
+block gets a one-character blank gutter. The high-score rectangle should always
+be fully written, including blank rows for empty entries, so the overlay remains
+stable regardless of the demo frame underneath it.
+
+Test this with a MAME Lua plugin under `src/tests` that enters Invaders from
+SET-UP with seeded NVR high-score data, lets several frames elapse, and asserts
+that the title, high-score heading, rendered score entries, and prompt remain
+visible in the expected cells. The test should also verify representative
+gutter cells and empty high-score rows are spaces. Register the test with CTest
+and run it through the invaders workflow preset.
+
+### 2. Demo State Initialization
+
+Implement an `inv_start_demo` path used by `inv_enter_impl` after high scores
+are loaded. It should call the shared reset and screen setup routines used by
+real gameplay: reset transient state with `inv_reset_for_attract`, initialize
+aliens, shields, turret, UFO, missiles, and status with the existing gameplay
+initializers, draw the normal game screen with `inv_draw_static_screen`, then
+draw the attract overlay. Use `inv_attract_mode` to distinguish demo play from
+real play unless a second flag becomes clearly necessary.
+
+Keep `inv_start_game` as the real-game entry point. RETURN from attract mode
+should discard the demo state and call `inv_start_game`, so a real game always
+starts with fresh score, gunners, level, shields, aliens, turret, missiles, and
+timers.
+
+Test this with a MAME Lua plugin that enters attract mode and verifies that
+demo state is initialized through the normal gameplay state: live alien count,
+shield cells, turret position, score row, and high-score cache should all have
+the same shape as a freshly initialized game. The same test should press RETURN
+and verify that `inv_attract_mode` clears and real gameplay starts from a fresh
+state, not from whatever the demo had reached.
+
+### 3. Attract Frame Dispatch
+
+Change the top of `inv_frame` so attract mode branches into a demo frame path
+instead of returning immediately. The demo frame path should run the existing
+frame clock and shared gameplay update/render routines in the same order used
+for real play wherever that makes sense: level reset, turret death, aliens,
+heartbeat, UFO, enemy fire, turret, laser, and collision/shield handling.
+Attract mode should skip only the pieces that are semantically real-game-only:
+high-score insertion, initials entry, NVR writes, and terminal exit.
+
+When the demo reaches a terminal condition, such as all gunners dead, aliens
+landing, or a completed wave, restart demo state after a short pause by calling
+the demo initialization path. This keeps the attract loop alive without adding a
+separate mini-game.
+
+Test this by running attract mode for a deterministic number of frames in MAME
+and asserting that the logical frame counter advances, aliens move through the
+existing position/state arrays, the object map changes, and the overlay text is
+still present. Add direct test hooks only if necessary, and keep them under the
+existing test signature guard.
+
+### 4. Demo Autopilot
+
+Add a small deterministic autopilot used only while `inv_attract_mode` is set.
+The autopilot should write the existing input state bytes (`inv_left_pressed`,
+`inv_right_pressed`, and `inv_fire_pressed`) before the normal turret and laser
+updates run. It should not call the turret, laser, missile, alien, or collision
+renderers directly.
+
+Start with a simple policy: drift the turret toward a live alien column, fire
+when no player laser is active and a target column is plausible, and otherwise
+let the normal enemy fire and UFO timing run. Determinism matters more than
+skill; the point is to keep the screen alive and exercise the same gameplay
+paths users will see after pressing RETURN.
+
+Test this with a MAME Lua plugin that enters attract mode without injecting
+gameplay keys, waits long enough for the autopilot to act, and verifies turret
+movement plus at least one player laser launch. The test should also confirm
+that real keyboard input still controls only the real game path after RETURN.
+
+### 5. Overlay Refresh And Persistence Guard
+
+Refresh the attract overlay after each demo frame, or at a small fixed cadence
+if full-frame redraw becomes visibly noisy. The refresh must use the same
+overlay routine from slice 1 and should redraw only overlay-owned cells: the
+text, the high-score fixed rectangle, and their one-character gutters. Avoid
+clearing the playfield outside those rectangles during refresh so the demo
+continues to show through.
+
+Guard persistence paths so demo play cannot add a high score, enter initials,
+set `inv_high_score_dirty`, or call `inv_store_high_scores`. A demo score may
+exist on the status row while the demo runs, but it is disposable and must be
+lost when RETURN starts the real game or when the demo loops.
+
+Extend the high-score load/save MAME tests so seeded scores remain visible
+after the demo has advanced for several frames, while a forced demo game-over
+does not modify the staged NVR file. Existing real-game high-score tests should
+continue to prove that qualifying real scores still prompt for initials and
+write NVR.
