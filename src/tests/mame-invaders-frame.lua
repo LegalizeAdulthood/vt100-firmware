@@ -15,6 +15,7 @@ local function make_frame_step()
     local equates = test.load_equates(binary_directory .. "/invaders-avo.equ")
 
     local inv_active = test.required_equate(equates, "inv_active")
+    local inv_attract_mode = test.required_equate(equates, "inv_attract_mode")
     local inv_test_mode = test.required_equate(equates, "inv_test_mode")
     local inv_test_script = test.required_equate(equates, "inv_test_script")
     local inv_test_stop_lo = test.required_equate(equates, "inv_test_stop_lo")
@@ -30,6 +31,7 @@ local function make_frame_step()
     local key_flag_eos = 0x80
     local scan_setup = 0x7b
     local scan_i = 0x16
+    local scan_return = test.required_equate(equates, "inv_scan_return_b")
     local stop_frame = 8
 
     local mem = test.program_space()
@@ -59,6 +61,7 @@ local function make_frame_step()
     local stage_frame = 0
     local setup_key_repeats = 0
     local shift_i_repeats = 0
+    local enter_key_repeats = 0
     local last_game_frame = nil
     local saw_frame_advance = false
 
@@ -125,12 +128,34 @@ local function make_frame_step()
                     shift_i_repeats = shift_i_repeats + 1
                     return
                 end
+                enter_stage("wait-attract")
+                return
+            end
+
+            if stage == "wait-attract" then
+                if read_u8(inv_active) ~= 0 then
+                    test.assert_eq(read_u8(inv_attract_mode), 0xff, "attract mode")
+                    enter_stage("enter-key")
+                    return
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("entering Invaders attract mode")
+                end
+                return
+            end
+
+            if stage == "enter-key" then
+                if enter_key_repeats < 2 then
+                    inject_key(scan_return, 0)
+                    enter_key_repeats = enter_key_repeats + 1
+                    return
+                end
                 enter_stage("wait-active")
                 return
             end
 
             if stage == "wait-active" then
-                if read_u8(inv_active) ~= 0 then
+                if read_u8(inv_active) ~= 0 and read_u8(inv_attract_mode) == 0 then
                     local game_frame = read_u16(inv_frame_lo, inv_frame_hi)
                     if game_frame >= stop_frame then
                         test.fail(string.format(
@@ -145,7 +170,7 @@ local function make_frame_step()
                     return
                 end
                 if frame - stage_frame > 120 then
-                    fail_timeout("entering Invaders")
+                    fail_timeout("starting Invaders")
                 end
                 return
             end

@@ -16,6 +16,7 @@ local function make_render_step()
     local symbols = test.load_symbols(binary_directory .. "/invaders-avo.sym")
 
     local inv_active = test.required_equate(equates, "inv_active")
+    local inv_attract_mode = test.required_equate(equates, "inv_attract_mode")
     local inv_test_mode = test.required_equate(equates, "inv_test_mode")
     local inv_test_script = test.required_equate(equates, "inv_test_script")
     local inv_test_script_render = test.required_equate(equates, "inv_test_script_render")
@@ -26,6 +27,7 @@ local function make_render_step()
     local in_setup = test.required_equate(equates, "in_setup")
     local key_flags = test.required_equate(equates, "key_flags")
     local key_silo = test.required_equate(equates, "key_silo")
+    local inv_scan_return_b = test.required_equate(equates, "inv_scan_return_b")
     local inv_row_addr = test.required_symbol(symbols, "inv_row_addr")
 
     local key_flag_shift = 0x20
@@ -119,6 +121,7 @@ local function make_render_step()
     local stage_frame = 0
     local setup_key_repeats = 0
     local shift_i_repeats = 0
+    local enter_key_repeats = 0
 
     local function enter_stage(next_stage)
         stage = next_stage
@@ -180,6 +183,27 @@ local function make_render_step()
                 if shift_i_repeats < 2 then
                     inject_key(scan_i, key_flag_shift)
                     shift_i_repeats = shift_i_repeats + 1
+                    return
+                end
+                enter_stage("wait-attract")
+                return
+            end
+
+            if stage == "wait-attract" then
+                if read_u8(inv_attract_mode) ~= 0 then
+                    enter_stage("enter-key")
+                    return
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("attract screen")
+                end
+                return
+            end
+
+            if stage == "enter-key" then
+                if enter_key_repeats < 2 then
+                    inject_key(inv_scan_return_b, 0)
+                    enter_key_repeats = enter_key_repeats + 1
                     return
                 end
                 enter_stage("wait-render")

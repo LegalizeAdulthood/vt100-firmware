@@ -21,6 +21,8 @@ local function make_entry_step()
     local inv_test_stop_lo = test.required_equate(equates, "inv_test_stop_lo")
     local inv_test_stop_hi = test.required_equate(equates, "inv_test_stop_hi")
     local inv_test_result = test.required_equate(equates, "inv_test_result")
+    local inv_attract_mode = test.required_equate(equates, "inv_attract_mode")
+    local inv_scan_return_b = test.required_equate(equates, "inv_scan_return_b")
     local in_setup = test.required_equate(equates, "in_setup")
     local char_action = test.required_equate(equates, "char_action")
     local saved_action = test.required_equate(equates, "saved_action")
@@ -64,6 +66,7 @@ local function make_entry_step()
     local stage_frame = 0
     local setup_key_repeats = 0
     local lower_i_repeats = 0
+    local enter_key_repeats = 0
     local exit_key_repeats = 0
     local saved_action_value = 0
 
@@ -142,19 +145,41 @@ local function make_entry_step()
                     lower_i_repeats = lower_i_repeats + 1
                     return
                 end
+                enter_stage("wait-attract")
+                return
+            end
+
+            if stage == "wait-attract" then
+                if read_u8(inv_active) == inv_active_value then
+                    test.assert_eq(read_u8(inv_attract_mode), 0xff, "attract mode after Invaders entry")
+                    test.assert_eq(read_u8(in_setup), 0, "in_setup after Invaders entry")
+                    test.assert_eq(read_u16(char_action), saved_action_value, "char_action after Invaders entry")
+                    enter_stage("enter-key")
+                    return
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("entering Invaders attract mode")
+                end
+                return
+            end
+
+            if stage == "enter-key" then
+                if enter_key_repeats < 2 then
+                    inject_key(inv_scan_return_b, 0)
+                    enter_key_repeats = enter_key_repeats + 1
+                    return
+                end
                 enter_stage("wait-active")
                 return
             end
 
             if stage == "wait-active" then
-                if read_u8(inv_active) == inv_active_value then
-                    test.assert_eq(read_u8(in_setup), 0, "in_setup after Invaders entry")
-                    test.assert_eq(read_u16(char_action), saved_action_value, "char_action after Invaders entry")
+                if read_u8(inv_active) == inv_active_value and read_u8(inv_attract_mode) == 0 then
                     enter_stage("exit-key")
                     return
                 end
                 if frame - stage_frame > 120 then
-                    fail_timeout("entering Invaders")
+                    fail_timeout("starting Invaders")
                 end
                 return
             end
@@ -171,6 +196,7 @@ local function make_entry_step()
 
             if stage == "wait-exit" then
                 if read_u8(inv_active) == 0 then
+                    test.assert_eq(read_u8(inv_attract_mode), 0, "attract mode after exit")
                     test.pass()
                     return
                 end

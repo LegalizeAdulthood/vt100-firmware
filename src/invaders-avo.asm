@@ -80,6 +80,25 @@ inv_sound_mode_silent   equ     0
 inv_sound_mode_heartbeat equ    1
 inv_sound_mode_death    equ     2
 inv_sound_death_words   equ     200
+inv_high_score_count    equ     10
+inv_high_score_digits   equ     inv_high_score_count*3
+inv_high_initial_count  equ     inv_high_score_count*3
+inv_high_initial_words  equ     inv_high_initial_count/2
+inv_high_score_nvr_base equ     51
+inv_high_initial_nvr_base equ    inv_high_score_nvr_base+inv_high_score_count
+inv_high_score_max_hi   equ     03h
+inv_high_score_max_lo   equ     0e7h
+inv_high_score_cache_count equ   inv_high_score_digits+inv_high_initial_count+inv_high_initial_count
+inv_high_score_first_row equ     9
+inv_high_score_col      equ     36
+inv_high_prompt_title_row equ    8
+inv_high_prompt_title_col equ    33
+inv_high_prompt_initials_row equ 10
+inv_high_prompt_initials_col equ 31
+inv_high_prompt_entry_col equ    inv_high_prompt_initials_col+15
+inv_high_prompt_score_row equ    12
+inv_high_prompt_score_col equ    35
+inv_high_prompt_score_value_col equ inv_high_prompt_score_col+6
 inv_active_value        equ     05ah
 inv_level_pause_frames  equ     0fh
 inv_alien_rows          equ     4
@@ -101,6 +120,8 @@ inv_scan_arrow_right    equ     10h
 inv_scan_arrow_left     equ     20h
 inv_scan_space          equ     77h
 inv_scan_setup          equ     7bh
+inv_scan_return_a       equ     04h
+inv_scan_return_b       equ     64h
 inv_cell_blank          equ     0
 inv_cell_checker        equ     1
 inv_cell_upper_left     equ     2
@@ -118,7 +139,7 @@ inv_cell_weak           equ     10
 inv_avo_ram_start       equ     3000h
 inv_avo_ram_top         equ     3fffh
 inv_data_top            equ     inv_avo_ram_top
-inv_data_floor          equ     3800h
+inv_data_floor          equ     3100h
 ;
 ; Fixed test and diagnostic bytes.
 ;
@@ -143,9 +164,12 @@ inv_fail_no_avo         equ     01h
 inv_fail_bad_state      equ     02h
 inv_fail_bad_sprite     equ     03h
 inv_fail_timeout        equ     04h
+inv_test_pending        equ     0eh
+inv_test_high_score_waiting equ 0dh
 inv_test_script_none    equ     00h
 inv_test_script_render  equ     01h
 inv_test_script_input   equ     02h
+inv_test_script_high_score equ  03h
 inv_test_input_left     equ     01h
 inv_test_input_right    equ     02h
 inv_test_input_fire     equ     04h
@@ -166,7 +190,8 @@ inv_gunners             equ     inv_score2-1
 inv_level               equ     inv_gunners-1
 inv_saved_led_state     equ     inv_level-1
 inv_game_over           equ     inv_saved_led_state-1
-inv_level_timer         equ     inv_game_over-1
+inv_attract_mode        equ     inv_game_over-1
+inv_level_timer         equ     inv_attract_mode-1
 inv_turret_death_timer  equ     inv_level_timer-1
 inv_missile_tick_timer  equ     inv_turret_death_timer-1
 inv_missile_fire_timer  equ     inv_missile_tick_timer-1
@@ -189,7 +214,26 @@ inv_ufo_move_timer      equ     inv_ufo_timer_hi-1
 inv_ufo_state_timer     equ     inv_ufo_move_timer-1
 inv_ufo_points          equ     inv_ufo_state_timer-1
 inv_ufo_disabled        equ     inv_ufo_points-1
-inv_turret_x            equ     inv_ufo_disabled-1
+inv_high_score_dirty    equ     inv_ufo_disabled-1
+inv_high_score_slot     equ     inv_high_score_dirty-1
+inv_high_shift_index    equ     inv_high_score_slot-1
+inv_high_nvr_index      equ     inv_high_shift_index-1
+inv_high_initial_index  equ     inv_high_nvr_index-1
+inv_saved_curs_char_rend equ    inv_high_initial_index-1
+inv_saved_curs_attr_rend equ    inv_saved_curs_char_rend-1
+;
+; Reset-loaded high score cache. Keep this with the top-down game state, but
+; do not poison it as volatile scratch in tests.
+;
+inv_high_score_cache_top equ    inv_saved_curs_attr_rend-1
+inv_high_score_digit_top equ    inv_high_score_cache_top
+inv_high_score_digit_base equ   inv_high_score_digit_top-inv_high_score_digits+1
+inv_high_initial_lo_top equ     inv_high_score_digit_base-1
+inv_high_initial_lo_base equ    inv_high_initial_lo_top-inv_high_initial_count+1
+inv_high_initial_hi_top equ     inv_high_initial_lo_base-1
+inv_high_initial_hi_base equ    inv_high_initial_hi_top-inv_high_initial_count+1
+inv_high_score_cache_base equ   inv_high_initial_hi_base
+inv_turret_x            equ     inv_high_score_cache_base-1
 inv_turret_x_lo         equ     inv_turret_x
 inv_turret_x_hi         equ     inv_turret_x_lo-1
 inv_laser_active        equ     inv_turret_x_hi-1
@@ -265,6 +309,7 @@ inv_dirty_queue_base    equ     inv_dirty_queue_top-inv_dirty_queue_size+1
 inv_object_map_top      equ     inv_dirty_queue_base-1
 inv_object_map_size     equ     1440
 inv_object_map_base     equ     inv_object_map_top-inv_object_map_size+1
+inv_volatile_data_low   equ     inv_object_map_base
 inv_data_low            equ     inv_object_map_base
 
         org     inv_enter
@@ -279,10 +324,26 @@ inv_data_low            equ     inv_object_map_base
         jmp     inv_setup_keys_hook_impl
         org     inv_sound_status_hook
         jmp     inv_sound_status_hook_impl
+        org     inv_reset_hook
+        jmp     inv_reset_hook_impl
 
 inv_enter_impl:
         call    inv_prepare_screen
+        call    inv_save_game_cursor
+        call    inv_disable_game_cursor
         call    inv_save_leds
+        call    inv_load_high_scores
+        call    inv_reset_for_attract
+        call    inv_draw_attract_screen
+        lda     frame_count
+        sta     inv_last_vframe
+        mvi     a,0ffh
+        sta     inv_attract_mode
+        mvi     a,inv_active_value
+        sta     inv_active
+        ret
+;
+inv_reset_for_attract:
         xra     a
         sta     inv_frame_lo
         sta     inv_frame_hi
@@ -293,7 +354,10 @@ inv_enter_impl:
         sta     inv_score1
         sta     inv_score2
         sta     inv_game_over
+        sta     inv_attract_mode
         sta     inv_level_timer
+        sta     inv_high_score_dirty
+        sta     inv_high_initial_index
         sta     inv_test_result
         sta     inv_laser_active
         sta     inv_laser_row_lo
@@ -306,6 +370,10 @@ inv_enter_impl:
         call    inv_reset_enemy_fire
         call    inv_reset_sound
         call    inv_reset_ufo
+        ret
+;
+inv_start_game:
+        call    inv_reset_for_attract
         mvi     a,inv_initial_gunners
         sta     inv_gunners
         mvi     a,inv_initial_level
@@ -319,8 +387,6 @@ inv_enter_impl:
         call    inv_draw_static_screen
         lda     frame_count
         sta     inv_last_vframe
-        mvi     a,inv_active_value
-        sta     inv_active
         ret
 ;
 inv_idle_impl:
@@ -347,6 +413,14 @@ inv_check_keys:
         mov     a,m
         cpi     inv_scan_setup  ; SET-UP exits the game
         jz      inv_setup_pressed
+        lda     inv_high_score_dirty
+        ora     a
+        jnz     inv_high_initial_key
+        mov     a,m
+        cpi     inv_scan_return_a
+        jz      inv_return_pressed
+        cpi     inv_scan_return_b
+        jz      inv_return_pressed
         cpi     inv_scan_arrow_left
         jz      inv_left_arrow_pressed
         cpi     inv_scan_arrow_right
@@ -358,6 +432,25 @@ inv_next_key:
         dcr     b
         jnz     inv_check_keys
         jmp     clear_keyboard
+;
+inv_high_initial_key:
+        lda     key_flags
+        ani     key_flag_eos
+        rz
+        lxi     h,inv_high_initial_action
+        shld    char_action
+        mvi     a,0ffh
+        sta     in_setup
+        call    process_keys
+        call    try_report
+        lhld    saved_action
+        shld    char_action
+        lxi     h,0
+        shld    curkey_qcount
+        shld    pending_report
+        xra     a
+        sta     in_setup
+        ret
 ;
 inv_left_arrow_pressed:
         mvi     a,0ffh
@@ -373,6 +466,13 @@ inv_space_pressed:
         mvi     a,0ffh
         sta     inv_fire_pressed
         jmp     inv_next_key
+;
+inv_return_pressed:
+        lda     inv_attract_mode
+        ora     a
+        jz      inv_next_key
+        call    inv_start_game
+        jmp     clear_keyboard
 ;
 inv_setup_pressed:
         call    inv_exit
@@ -405,6 +505,12 @@ inv_inc_frame16:
         ret
 ;
 inv_frame:
+        lda     inv_active
+        cpi     inv_active_value
+        rnz
+        lda     inv_attract_mode
+        ora     a
+        rnz
         call    inv_test_tick
         lda     inv_active
         cpi     inv_active_value
@@ -444,6 +550,29 @@ inv_save_leds:
         lda     led_state
         ani     0fh
         sta     inv_saved_led_state
+        ret
+;
+inv_save_game_cursor:
+        lda     curs_char_rend
+        sta     inv_saved_curs_char_rend
+        lda     curs_attr_rend
+        sta     inv_saved_curs_attr_rend
+        ret
+;
+inv_disable_game_cursor:
+        xra     a
+        sta     curs_char_rend
+        sta     curs_attr_rend
+        sta     cursor_visible
+        ret
+;
+inv_restore_game_cursor:
+        xra     a
+        sta     cursor_visible
+        lda     inv_saved_curs_char_rend
+        sta     curs_char_rend
+        lda     inv_saved_curs_attr_rend
+        sta     curs_attr_rend
         ret
 ;
 inv_restore_leds:
@@ -1953,6 +2082,7 @@ inv_set_game_over:
         sta     inv_game_over
         xra     a
         sta     inv_turret_death_timer
+        call    inv_maybe_add_high_score
         call    inv_clear_ufo
         ret
 ;
@@ -2154,6 +2284,676 @@ inv_add_alien_score30:
 inv_add_alien_score20:
         mvi     a,2
         jmp     inv_add_score_units
+;
+inv_maybe_add_high_score:
+        lda     inv_score0
+        mov     c,a
+        lda     inv_score1
+        ora     c
+        mov     c,a
+        lda     inv_score2
+        ora     c
+        rz
+        lxi     h,inv_high_score_digit_base
+        mvi     b,0
+inv_find_high_score_slot:
+        push    b
+        push    h
+        call    inv_current_beats_score
+        pop     h
+        pop     b
+        ora     a
+        jnz     inv_insert_high_score
+        inx     h
+        inx     h
+        inx     h
+        inr     b
+        mov     a,b
+        cpi     inv_high_score_count
+        jc      inv_find_high_score_slot
+        ret
+;
+inv_current_beats_score:
+        inx     h
+        inx     h
+        lda     inv_score2
+        cmp     m
+        jc      inv_current_not_high_score
+        jnz     inv_current_is_high_score
+        dcx     h
+        lda     inv_score1
+        cmp     m
+        jc      inv_current_not_high_score
+        jnz     inv_current_is_high_score
+        dcx     h
+        lda     inv_score0
+        cmp     m
+        jc      inv_current_not_high_score
+        jnz     inv_current_is_high_score
+inv_current_not_high_score:
+        xra     a
+        ret
+inv_current_is_high_score:
+        mvi     a,0ffh
+        ret
+;
+inv_insert_high_score:
+        mov     a,b
+        sta     inv_high_score_slot
+        mvi     a,inv_high_score_count-1
+        sta     inv_high_shift_index
+inv_shift_high_score_loop:
+        lda     inv_high_score_slot
+        mov     b,a
+        lda     inv_high_shift_index
+        cmp     b
+        jz      inv_place_new_high_score
+        mov     c,a
+        dcr     a
+        mov     b,a
+        call    inv_copy_high_score_entry
+        lda     inv_high_shift_index
+        dcr     a
+        sta     inv_high_shift_index
+        jmp     inv_shift_high_score_loop
+;
+inv_place_new_high_score:
+        lda     inv_high_score_slot
+        call    inv_high_score_digit_addr
+        lda     inv_score0
+        mov     m,a
+        inx     h
+        lda     inv_score1
+        mov     m,a
+        inx     h
+        lda     inv_score2
+        mov     m,a
+        lda     inv_high_score_slot
+        call    inv_clear_high_score_initials
+        mvi     a,0ffh
+        sta     inv_high_score_dirty
+        xra     a
+        sta     inv_high_initial_index
+        call    inv_draw_high_score_prompt
+        call    inv_start_high_initials
+        ret
+;
+inv_high_initial_action:
+        cpi     C0_BS
+        jz      inv_backspace_high_initial
+        cpi     C0_CR
+        jz      inv_return_high_initial
+        call    inv_accept_high_initial_char
+        ret
+;
+inv_accept_high_initial_char:
+        lda     inv_high_initial_index
+        cpi     3
+        rnc
+        mov     a,b
+        call    inv_ascii_to_initial_code
+        rnc
+        push    psw
+        call    inv_current_initial_char_index
+        mov     c,a
+        pop     psw
+        push    psw
+        call    inv_store_initial_char_at
+        pop     psw
+        adi     20h
+        sta     char_und_curs
+        lhld    cursor_address
+        mov     m,a
+        lda     inv_high_initial_index
+        inr     a
+        sta     inv_high_initial_index
+        jmp     inv_show_high_initial_cursor
+;
+inv_backspace_high_initial:
+        lda     inv_high_initial_index
+        ora     a
+        rz
+        dcr     a
+        sta     inv_high_initial_index
+        call    inv_show_high_initial_cursor
+        call    inv_current_initial_char_index
+        mov     c,a
+        xra     a
+        call    inv_store_initial_char_at
+        mvi     a,'_'
+        sta     char_und_curs
+        lhld    cursor_address
+        mov     m,a
+        ret
+;
+inv_return_high_initial:
+        lda     inv_high_initial_index
+        ora     a
+        rz
+        jmp     inv_finish_high_initials
+;
+inv_start_high_initials:
+        xra     a
+        sta     cursor_visible
+        mvi     a,80h
+        sta     curs_char_rend
+        xra     a
+        sta     curs_attr_rend
+        jmp     inv_show_high_initial_cursor
+;
+inv_show_high_initial_cursor:
+        call    inv_hide_high_initial_cursor
+        mvi     a,inv_high_prompt_initials_row
+        sta     curs_row
+        lda     inv_high_initial_index
+        cpi     3
+        jc      inv_high_cursor_index_ok
+        mvi     a,2
+inv_high_cursor_index_ok:
+        adi     inv_high_prompt_entry_col
+        sta     curs_col
+        mov     c,a
+        mvi     b,inv_high_prompt_initials_row
+        call    inv_cell_addr
+        shld    cursor_address
+        mov     a,m
+        sta     char_und_curs
+        mov     a,h
+        adi     10h
+        mov     h,a
+        mov     a,m
+        sta     rend_und_curs
+        xra     a
+        sta     cursor_visible
+        lxi     h,0dh
+        shld    cursor_timer
+        ret
+;
+inv_hide_high_initial_cursor:
+        lda     cursor_visible
+        ora     a
+        rz
+        lhld    cursor_address
+        lda     char_und_curs
+        mov     m,a
+        xra     a
+        sta     cursor_visible
+        ret
+;
+inv_finish_high_initial_cursor:
+        call    inv_hide_high_initial_cursor
+        jmp     inv_disable_game_cursor
+;
+inv_current_initial_char_index:
+        lda     inv_high_score_slot
+        mov     c,a
+        add     c
+        add     c
+        mov     c,a
+        lda     inv_high_initial_index
+        add     c
+        ret
+;
+inv_ascii_to_initial_code:
+        mov     c,a
+        ani     40h
+        jz      inv_ascii_initial_range
+        mov     a,c
+        ani     0dfh
+        mov     c,a
+inv_ascii_initial_range:
+        mov     a,c
+        cpi     20h
+        jc      inv_ascii_initial_reject
+        sui     20h
+        stc
+        ret
+inv_ascii_initial_reject:
+        xra     a
+        ret
+;
+inv_store_initial_char_at:
+        push    psw
+        lxi     h,inv_high_initial_hi_base
+        mov     a,c
+        call    add_a_to_hl
+        xchg
+        lxi     h,inv_high_initial_lo_base
+        mov     a,c
+        call    add_a_to_hl
+        pop     psw
+        jmp     inv_store_initial_char
+;
+inv_finish_high_initials:
+        call    inv_finish_high_initial_cursor
+        call    inv_store_high_scores
+        xra     a
+        sta     inv_high_score_dirty
+        sta     inv_high_initial_index
+        call    inv_draw_attract_screen
+        mvi     a,0ffh
+        sta     inv_attract_mode
+        ret
+;
+inv_clear_high_score_initials:
+        call    inv_high_initial_lo_addr
+        xra     a
+        mov     m,a
+        inx     h
+        mov     m,a
+        inx     h
+        mov     m,a
+        lda     inv_high_score_slot
+        call    inv_high_initial_hi_addr
+        xra     a
+        mov     m,a
+        inx     h
+        mov     m,a
+        inx     h
+        mov     m,a
+        ret
+;
+inv_copy_high_score_entry:
+        push    b
+        call    inv_copy_high_score_digits
+        pop     b
+        jmp     inv_copy_high_initials
+;
+inv_copy_high_score_digits:
+        push    b
+        mov     a,b
+        call    inv_high_score_digit_addr
+        xchg
+        pop     b
+        push    b
+        push    d
+        mov     a,c
+        call    inv_high_score_digit_addr
+        pop     d
+        mvi     b,3
+        call    inv_copy_bytes
+        pop     b
+        ret
+;
+inv_copy_high_initials:
+        push    b
+        mov     a,b
+        call    inv_high_initial_lo_addr
+        xchg
+        pop     b
+        push    b
+        push    d
+        mov     a,c
+        call    inv_high_initial_lo_addr
+        pop     d
+        mvi     b,3
+        call    inv_copy_bytes
+        pop     b
+        push    b
+        mov     a,b
+        call    inv_high_initial_hi_addr
+        xchg
+        pop     b
+        push    b
+        push    d
+        mov     a,c
+        call    inv_high_initial_hi_addr
+        pop     d
+        mvi     b,3
+        call    inv_copy_bytes
+        pop     b
+        ret
+;
+inv_copy_bytes:
+        ldax    d
+        mov     m,a
+        inx     d
+        inx     h
+        dcr     b
+        jnz     inv_copy_bytes
+        ret
+;
+inv_load_high_scores:
+        di
+        call    inv_load_high_scores_raw
+        ei
+        ret
+;
+inv_load_high_scores_raw:
+        xra     a
+        sta     inv_high_score_dirty
+        call    inv_clear_high_score_cache
+        mvi     a,inv_high_score_nvr_base
+        sta     nvr_addr
+        lxi     h,inv_high_score_digit_base
+        mvi     b,inv_high_score_count
+inv_load_high_score_words:
+        push    b
+        push    h
+        call    read_nvr_byte
+        lhld    nvr_data
+        xchg
+        pop     h
+        call    inv_store_score_word_digits
+        call    inv_inc_nvr_addr
+        pop     b
+        dcr     b
+        jnz     inv_load_high_score_words
+        lxi     h,inv_high_initial_lo_base
+        lxi     d,inv_high_initial_hi_base
+        mvi     b,inv_high_initial_words
+inv_load_high_initial_words:
+        push    b
+        push    d
+        push    h
+        call    read_nvr_byte
+        pop     h
+        pop     d
+        call    inv_load_initial_word_chars
+        call    inv_inc_nvr_addr
+        pop     b
+        dcr     b
+        jnz     inv_load_high_initial_words
+        call    inv_clear_unused_high_initials
+        jmp     inv_finish_high_score_nvr
+;
+inv_clear_high_score_cache:
+        lxi     h,inv_high_initial_hi_base
+        mvi     b,inv_high_score_cache_count
+        xra     a
+inv_clear_high_score_cache_loop:
+        mov     m,a
+        inx     h
+        dcr     b
+        jnz     inv_clear_high_score_cache_loop
+        ret
+;
+inv_clear_unused_high_initials:
+        mvi     c,0
+inv_clear_unused_high_initial_loop:
+        mov     a,c
+        call    inv_high_score_digit_addr
+        mov     a,m
+        inx     h
+        ora     m
+        inx     h
+        ora     m
+        jnz     inv_unused_high_score_next
+        mov     a,c
+        sta     inv_high_score_slot
+        call    inv_clear_high_score_initials
+inv_unused_high_score_next:
+        inr     c
+        mov     a,c
+        cpi     inv_high_score_count
+        jc      inv_clear_unused_high_initial_loop
+        ret
+;
+inv_store_high_scores:
+        di
+        call    inv_store_high_scores_raw
+        call    inv_finish_high_score_nvr
+        ei
+        ret
+;
+inv_store_high_scores_raw:
+        mvi     a,inv_high_score_nvr_base
+        sta     nvr_addr
+        lxi     h,inv_high_score_digit_base
+        mvi     b,inv_high_score_count
+inv_store_high_score_words:
+        push    b
+        push    h
+        call    inv_score_digits_to_word
+        call    write_nvr_byte
+        call    inv_inc_nvr_addr
+        pop     h
+        inx     h
+        inx     h
+        inx     h
+        pop     b
+        dcr     b
+        jnz     inv_store_high_score_words
+        xra     a
+        sta     inv_high_nvr_index
+inv_store_high_initial_words:
+        lda     inv_high_nvr_index
+        call    inv_initial_word_to_nvr_data
+        call    write_nvr_byte
+        call    inv_inc_nvr_addr
+        lda     inv_high_nvr_index
+        inr     a
+        sta     inv_high_nvr_index
+        cpi     inv_high_initial_words
+        jc      inv_store_high_initial_words
+        ret
+;
+inv_store_score_word_digits:
+        mov     a,d
+        cpi     inv_high_score_max_hi+1
+        jnc     inv_store_zero_score_digits
+        cpi     inv_high_score_max_hi
+        jnz     inv_store_score_digits
+        mov     a,e
+        cpi     inv_high_score_max_lo+1
+        jnc     inv_store_zero_score_digits
+inv_store_score_digits:
+        mvi     c,0
+inv_score_hundreds_loop:
+        mov     a,d
+        ora     a
+        jnz     inv_subtract_hundred
+        mov     a,e
+        cpi     100
+        jc      inv_score_tens
+inv_subtract_hundred:
+        mov     a,e
+        sui     100
+        mov     e,a
+        mov     a,d
+        sbi     0
+        mov     d,a
+        inr     c
+        jmp     inv_score_hundreds_loop
+inv_score_tens:
+        mvi     b,0
+inv_score_tens_loop:
+        mov     a,e
+        cpi     10
+        jc      inv_score_digits_store
+        sui     10
+        mov     e,a
+        inr     b
+        jmp     inv_score_tens_loop
+inv_score_digits_store:
+        mov     a,e
+        mov     m,a
+        inx     h
+        mov     a,b
+        mov     m,a
+        inx     h
+        mov     a,c
+        mov     m,a
+        ret
+inv_store_zero_score_digits:
+        mvi     m,0
+        inx     h
+        mvi     m,0
+        inx     h
+        mvi     m,0
+        ret
+;
+inv_score_digits_to_word:
+        xra     a
+        sta     nvr_data
+        sta     nvr_data+1
+        mov     a,m
+        call    inv_add_ones_to_nvr_word
+        inx     h
+        mov     a,m
+        call    inv_add_tens_to_nvr_word
+        inx     h
+        mov     a,m
+        jmp     inv_add_hundreds_to_nvr_word
+;
+inv_add_ones_to_nvr_word:
+        ani     0fh
+        rz
+        mov     b,a
+inv_add_ones_loop:
+        lda     nvr_data
+        adi     1
+        sta     nvr_data
+        lda     nvr_data+1
+        aci     0
+        sta     nvr_data+1
+        dcr     b
+        jnz     inv_add_ones_loop
+        ret
+;
+inv_add_tens_to_nvr_word:
+        ani     0fh
+        rz
+        mov     b,a
+inv_add_tens_loop:
+        lda     nvr_data
+        adi     10
+        sta     nvr_data
+        lda     nvr_data+1
+        aci     0
+        sta     nvr_data+1
+        dcr     b
+        jnz     inv_add_tens_loop
+        ret
+;
+inv_add_hundreds_to_nvr_word:
+        ani     0fh
+        rz
+        mov     b,a
+inv_add_hundreds_loop:
+        lda     nvr_data
+        adi     100
+        sta     nvr_data
+        lda     nvr_data+1
+        aci     0
+        sta     nvr_data+1
+        dcr     b
+        jnz     inv_add_hundreds_loop
+        ret
+;
+inv_load_initial_word_chars:
+        lda     nvr_data
+        ani     3fh
+        call    inv_store_initial_char
+        lda     nvr_data
+        rlc
+        rlc
+        ani     03h
+        mov     c,a
+        lda     nvr_data+1
+        ani     0fh
+        rlc
+        rlc
+        ora     c
+        ani     3fh
+        jmp     inv_store_initial_char
+;
+inv_store_initial_char:
+        push    psw
+        ani     0fh
+        mov     m,a
+        inx     h
+        pop     psw
+        rrc
+        rrc
+        rrc
+        rrc
+        ani     03h
+        xchg
+        mov     m,a
+        inx     h
+        xchg
+        ret
+;
+inv_initial_word_to_nvr_data:
+        mov     c,a
+        add     c
+        call    inv_initial_char_value
+        push    psw
+        lda     inv_high_nvr_index
+        mov     c,a
+        add     c
+        inr     a
+        call    inv_initial_char_value
+        mov     d,a
+        ani     03h
+        rrc
+        rrc
+        mov     e,a
+        pop     psw
+        ora     e
+        sta     nvr_data
+        mov     a,d
+        rrc
+        rrc
+        ani     0fh
+        sta     nvr_data+1
+        ret
+;
+inv_initial_char_value:
+        mov     c,a
+        lxi     h,inv_high_initial_lo_base
+        call    add_a_to_hl
+        mov     e,m
+        mov     a,c
+        lxi     h,inv_high_initial_hi_base
+        call    add_a_to_hl
+        mov     a,m
+        ani     03h
+        rlc
+        rlc
+        rlc
+        rlc
+        mov     d,a
+        mov     a,e
+        ani     0fh
+        ora     d
+        ret
+;
+inv_high_score_digit_addr:
+        lxi     h,inv_high_score_digit_base
+        jmp     inv_add_index_times_3
+;
+inv_high_initial_lo_addr:
+        lxi     h,inv_high_initial_lo_base
+        jmp     inv_add_index_times_3
+;
+inv_high_initial_hi_addr:
+        lxi     h,inv_high_initial_hi_base
+        jmp     inv_add_index_times_3
+;
+inv_add_index_times_3:
+        ora     a
+        rz
+        mov     d,a
+inv_add_index_times_3_loop:
+        inx     h
+        inx     h
+        inx     h
+        dcr     d
+        jnz     inv_add_index_times_3_loop
+        ret
+;
+inv_inc_nvr_addr:
+        lda     nvr_addr
+        inr     a
+        sta     nvr_addr
+        ret
+;
+inv_finish_high_score_nvr:
+        mvi     c,iob_flags_lba7
+        mvi     a,99
+        jmp     set_nvr_addr_a
 ;
 inv_update_level_reset:
         lda     inv_level_timer
@@ -2716,6 +3516,150 @@ inv_draw_static_screen:
         call    inv_update_gunner_leds
         ret
 ;
+inv_draw_attract_screen:
+        call    inv_clear_playfield
+        call    inv_clear_gunner_leds
+        mvi     b,4
+        mvi     c,33
+        lxi     h,inv_attract_title
+        call    inv_puts_glyphs
+        mvi     b,8
+        mvi     c,34
+        lxi     h,inv_attract_scores
+        call    inv_puts_glyphs
+        call    inv_draw_high_score_table
+        mvi     b,20
+        mvi     c,34
+        lxi     h,inv_attract_prompt
+        jmp     inv_puts_glyphs
+;
+inv_draw_high_score_prompt:
+        call    inv_clear_playfield
+        mvi     b,inv_high_prompt_title_row
+        mvi     c,inv_high_prompt_title_col
+        lxi     h,inv_high_prompt_title
+        call    inv_puts_glyphs
+        mvi     b,inv_high_prompt_initials_row
+        mvi     c,inv_high_prompt_initials_col
+        lxi     h,inv_high_prompt_initials
+        call    inv_puts_glyphs
+        mvi     b,inv_high_prompt_score_row
+        mvi     c,inv_high_prompt_score_col
+        lxi     h,inv_high_prompt_score
+        call    inv_puts_glyphs
+        mvi     b,inv_high_prompt_score_row
+        mvi     c,inv_high_prompt_score_value_col
+        jmp     inv_draw_current_score_digits
+;
+inv_draw_current_score_digits:
+        push    b
+        lda     inv_score2
+        call    inv_draw_digit
+        pop     b
+        inr     c
+        push    b
+        lda     inv_score1
+        call    inv_draw_digit
+        pop     b
+        inr     c
+        push    b
+        lda     inv_score0
+        call    inv_draw_digit
+        pop     b
+        inr     c
+        mvi     a,'0'
+        jmp     inv_putc
+;
+inv_draw_high_score_table:
+        xra     a
+        sta     inv_high_score_slot
+inv_draw_high_score_table_loop:
+        lda     inv_high_score_slot
+        call    inv_high_score_empty
+        ora     a
+        jz      inv_draw_high_score_table_next
+        lda     inv_high_score_slot
+        adi     inv_high_score_first_row
+        mov     b,a
+        mvi     c,inv_high_score_col
+        call    inv_draw_high_score_entry
+inv_draw_high_score_table_next:
+        lda     inv_high_score_slot
+        inr     a
+        sta     inv_high_score_slot
+        cpi     inv_high_score_count
+        jc      inv_draw_high_score_table_loop
+        ret
+;
+inv_high_score_empty:
+        call    inv_high_score_digit_addr
+        mov     a,m
+        inx     h
+        ora     m
+        inx     h
+        ora     m
+        ret
+;
+inv_draw_high_score_entry:
+        lda     inv_high_score_slot
+        mov     e,a
+        add     e
+        add     e
+        sta     inv_high_nvr_index
+        call    inv_draw_high_score_initial_char
+        call    inv_draw_high_score_initial_char
+        call    inv_draw_high_score_initial_char
+        push    b
+        mvi     a,' '
+        call    inv_putc
+        pop     b
+        inr     c
+        lda     inv_high_score_slot
+        call    inv_high_score_digit_addr
+        inx     h
+        inx     h
+        call    inv_draw_high_score_digit
+        dcx     h
+        call    inv_draw_high_score_digit
+        dcx     h
+        call    inv_draw_high_score_digit
+        push    b
+        mvi     a,'0'
+        call    inv_putc
+        pop     b
+        ret
+;
+inv_draw_high_score_initial_char:
+        push    b
+        lda     inv_high_nvr_index
+        call    inv_initial_char_value
+        adi     20h
+        pop     b
+        push    b
+        call    inv_putc
+        pop     b
+        inr     c
+        lda     inv_high_nvr_index
+        inr     a
+        sta     inv_high_nvr_index
+        ret
+;
+inv_draw_high_score_digit:
+        push    h
+        push    b
+        mov     a,m
+        call    inv_draw_digit
+        pop     b
+        pop     h
+        inr     c
+        ret
+;
+inv_clear_gunner_leds:
+        lda     led_state
+        ani     0f0h
+        sta     led_state
+        ret
+;
 inv_clear_playfield:
         lxi     h,inv_row_addr
         mvi     b,inv_screen_rows
@@ -2788,6 +3732,8 @@ inv_test_tick:
         jz      inv_test_render_probe
         cpi     inv_test_script_input
         jz      inv_test_input_probe
+        cpi     inv_test_script_high_score
+        jz      inv_test_high_score_probe
         jmp     inv_test_bad_script
 ;
 inv_test_input_probe:
@@ -2815,6 +3761,21 @@ inv_test_no_right:
         mov     b,a
 inv_test_no_fire:
         mov     a,b
+        sta     inv_test_result
+        ret
+;
+inv_test_high_score_probe:
+        lda     inv_test_result
+        cpi     inv_test_pending
+        rnz
+        mvi     a,3
+        sta     inv_score0
+        mvi     a,2
+        sta     inv_score1
+        mvi     a,1
+        sta     inv_score2
+        call    inv_maybe_add_high_score
+        mvi     a,inv_test_high_score_waiting
         sta     inv_test_result
         ret
 inv_test_frame_stop:
@@ -2892,6 +3853,19 @@ inv_render_sg_line:
         db      'l','q','k',0
 inv_render_sg_blank:
         db      '_','a','~',0
+inv_attract_title:
+        db      'V','T','1','0','0',' ','I','N','V','A','D','E','R','S',0
+inv_attract_scores:
+        db      'H','I','G','H',' ','S','C','O','R','E','S',0
+inv_attract_prompt:
+        db      'P','R','E','S','S',' ','E','N','T','E','R',0
+inv_high_prompt_title:
+        db      'N','E','W',' ','H','I','G','H',' ','S','C','O','R','E',0
+inv_high_prompt_initials:
+        db      'E','N','T','E','R',' ','I','N','I','T','I','A','L','S',' '
+        db      '_','_','_',0
+inv_high_prompt_score:
+        db      'S','C','O','R','E',' ',0
 ;
 inv_alien30a_top:
         db      '_','a','a','_',0
@@ -2971,25 +3945,35 @@ inv_missile_shoot_order:
         db      1,0,1,1,0,1,11,9,2,0,4,0,11,0,9,0,1,0,5
 ;
 inv_exit_impl:
+        lda     inv_high_score_dirty
+        ora     a
+        cnz     inv_finish_high_initial_cursor
         xra     a
         sta     inv_active
         sta     inv_left_pressed
         sta     inv_right_pressed
         sta     inv_fire_pressed
         sta     inv_game_over
+        sta     inv_attract_mode
         sta     inv_level_timer
         sta     inv_turret_death_timer
+        sta     inv_high_score_dirty
+        sta     inv_high_initial_index
         call    inv_deactivate_laser
         call    inv_reset_enemy_fire
         call    inv_reset_sound
         call    inv_clear_ufo
         call    inv_clear_playfield
         call    inv_restore_leds
-        ret
+        jmp     inv_restore_game_cursor
 ;
 ; Replaces the idle-loop call to keyboard_tick in the Invaders base ROM.
 ; When the game is inactive, repeat the displaced call and return to the
 ; following base-ROM instruction.
+;
+inv_reset_hook_impl:
+        call    init_devices
+        jmp     inv_load_high_scores
 ;
 inv_idle_hook_impl:
         lda     inv_active

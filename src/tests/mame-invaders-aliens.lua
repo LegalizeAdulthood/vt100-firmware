@@ -16,6 +16,7 @@ local function make_aliens_step()
     local symbols = test.load_symbols(binary_directory .. "/invaders-avo.sym")
 
     local inv_active = test.required_equate(equates, "inv_active")
+    local inv_attract_mode = test.required_equate(equates, "inv_attract_mode")
     local inv_test_mode = test.required_equate(equates, "inv_test_mode")
     local inv_test_script = test.required_equate(equates, "inv_test_script")
     local inv_test_result = test.required_equate(equates, "inv_test_result")
@@ -53,6 +54,7 @@ local function make_aliens_step()
     local inv_alien_y_lo_base = test.required_equate(equates, "inv_alien_y_lo_base")
     local inv_alien_y_hi_base = test.required_equate(equates, "inv_alien_y_hi_base")
     local inv_scan_setup = test.required_equate(equates, "inv_scan_setup")
+    local inv_scan_return_b = test.required_equate(equates, "inv_scan_return_b")
     local in_setup = test.required_equate(equates, "in_setup")
     local key_flags = test.required_equate(equates, "key_flags")
     local key_silo = test.required_equate(equates, "key_silo")
@@ -206,6 +208,7 @@ local function make_aliens_step()
     local stage_frame = 0
     local setup_key_repeats = 0
     local shift_i_repeats = 0
+    local enter_key_repeats = 0
     local formation_frame = inv_alien_count
     local movement_frame = formation_frame + inv_alien_count + 18
     local skip_frame = nil
@@ -278,17 +281,39 @@ local function make_aliens_step()
                     shift_i_repeats = shift_i_repeats + 1
                     return
                 end
+                enter_stage("wait-attract")
+                return
+            end
+
+            if stage == "wait-attract" then
+                if read_u8(inv_active) ~= 0 then
+                    test.assert_eq(read_u8(inv_attract_mode), 0xff, "attract mode")
+                    enter_stage("enter-key")
+                    return
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("entering Invaders attract mode")
+                end
+                return
+            end
+
+            if stage == "enter-key" then
+                if enter_key_repeats < 2 then
+                    inject_key(inv_scan_return_b, 0)
+                    enter_key_repeats = enter_key_repeats + 1
+                    return
+                end
                 enter_stage("wait-start")
                 return
             end
 
             if stage == "wait-start" then
-                if read_u8(inv_active) ~= 0 then
+                if read_u8(inv_active) ~= 0 and read_u8(inv_attract_mode) == 0 then
                     enter_stage("wait-formation-frame")
                     return
                 end
                 if frame - stage_frame > 120 then
-                    fail_timeout("entering Invaders")
+                    fail_timeout("starting Invaders")
                 end
                 return
             end
