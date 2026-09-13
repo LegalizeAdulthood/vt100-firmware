@@ -146,7 +146,7 @@ The existing flow is:
   SET-UP actions through `setup_keys`;
 - `setup_keys` currently handles shifted `S`, `R`, and `A`.
 
-Use `i` or `I` on the SET-UP screen as the game launcher. Since the stock
+Use `i` or `I` on the SET-UP screen as the Invaders launcher. Since the stock
 `setup_keys` path normally rejects non-digit SET-UP actions unless SHIFT is
 pressed, the base ROM patch replaces the existing `lda last_key_flags` bytes
 with a same-size call into the AVO ROM before the SHIFT gate:
@@ -169,7 +169,7 @@ the stock SHIFT gate and shifted `S`, `R`, and `A` handling:
 inv_setup_keys_hook:
                 mov     a,b
                 ani     0dfh            ; convert lower-case i to upper-case I
-                cpi     'I'             ; i or I starts Invaders
+                cpi     'I'             ; i or I launches Invaders attract
                 jz      inv_setup_start
                 lda     last_key_flags  ; existing SET-UP actions continue
                 ret
@@ -179,7 +179,7 @@ inv_setup_keys_hook:
 `inv_setup_start` must not return through that path, because `setup_ready`
 would re-register `setup_action` after the game has taken over. Discard that
 synthetic return, leave SET-UP mode, restore the normal terminal dispatch state,
-and then enter the game:
+and then enter Invaders attract mode:
 
 ```asm
 inv_setup_start:
@@ -212,6 +212,28 @@ inv_key_setup:
 `q`/`Q` can remain as a development or MAME convenience exit, but the
 hardware-facing launcher and escape hatch should be SET-UP based.
 
+## Attract Mode
+
+Launching Invaders from SET-UP enters attract mode first. Attract mode owns the
+screen and keyboard, displays the game title and the high-score table area, and
+does not advance gameplay. Pressing RETURN leaves attract mode and starts the
+real game by running the normal gameplay initialization path. Pressing SET-UP
+from attract mode exits back to the terminal.
+
+The first attract screen should be static:
+
+```text
+VT100 INVADERS
+
+HIGH SCORES
+
+PRESS ENTER
+```
+
+Once high-score table rendering is implemented, the `HIGH SCORES` area should
+show the ten persistent entries. Until then, the screen should not invent score
+data.
+
 ## Invaders ROM And AVO Memory Plan
 
 The Invaders entry points are shared between the base ROM and the AVO expansion
@@ -230,7 +252,7 @@ avo_ram_start   equ 3000h
 avo_ram_top     equ 3fffh
 
 inv_data_top    equ avo_ram_top ; allocate mutable state downward from here
-inv_data_floor  equ 3800h       ; soft low-water mark; move only if needed
+inv_data_floor  equ 3100h       ; soft low-water mark; move only if needed
 ```
 
 If code size grows, keep it in the expansion ROM and adjust only the mutable
@@ -350,6 +372,7 @@ keeps the keyboard scan and LED/status write side alive.
 
 `inv_read_keys` can interpret the scan codes directly:
 
+- RETURN: if attract mode is active, start the real game
 - left arrow: set `inv_left_pressed`
 - right arrow: set `inv_right_pressed`
 - space: set `inv_fire_pressed`
@@ -365,6 +388,7 @@ inv_key_table:
         db      <left_scan>,  inv_key_left
         db      <right_scan>, inv_key_right
         db      <space_scan>, inv_key_fire
+        db      64h,          inv_key_start
         db      7bh,          inv_key_setup
         db      <q_scan>,     inv_key_quit
         db      0ffh
@@ -839,6 +863,7 @@ inv_score_lo        db 0
 inv_score_hi        db 0
 inv_gunners         db 4
 inv_game_over       db 0
+inv_attract_mode    db 0
 inv_play_x          db 10       ; physical column for logical playfield col 0
 inv_saved_leds      db 0        ; previous low nibble of terminal led_state
 inv_heartbeat_timer db 0
@@ -902,6 +927,64 @@ shield_x            ds 4        ; left edge of each shelter
 
 `alien_live_bits` can store 44 live/dead bits. The simpler alternative is one
 byte per alien, but six bytes is easy enough and keeps the state tidy.
+
+## Persistent High Scores
+
+The stock VT100 firmware uses ER1400 NVR addresses 0 through 50 for terminal
+settings and their checksum. Invaders must leave those words alone and use the
+unused address range from 51 through 99 for persistent game data.
+
+The high-score table stores ten entries and uses 25 NVR words:
+
+| Address range | Count | Contents |
+|---:|---:|---|
+| 51-60 | 10 | Score values, one word per entry |
+| 61-75 | 15 | Initials, two 6-bit characters per word |
+
+Scores are stored divided by 10, matching the displayed arcade score units.
+For example, a displayed score of `2940` is stored as `294`. The value fits in
+one 14-bit ER1400 word, including the maximum displayed score value `999`
+for `9990`. A zero score word marks an unused table entry because no real
+high score can be zero.
+
+Initials are stored as one compact 30-character stream, not as padded per-entry
+records. Entry `n` consumes characters `n*3` through `n*3+2` in that stream.
+Initials word `61 + floor(character_index / 2)` stores the even character in
+bits 0 through 5 and the odd character in bits 6 through 11. Bits 12 and 13 are
+reserved and should be written as zero.
+
+Use a 6-bit printable character set that excludes lower-case letters. Encode
+ASCII characters from space through underscore as `character - 20h`, and decode
+them by adding `20h`. This gives the table spaces, digits, punctuation, and
+upper-case letters without wasting NVR words on byte-sized character storage.
+Remaining NVR words 76 through 99 stay available for future metadata such as a
+version or checksum.
+
+On reset, the stock `recall_nvr` path still loads terminal settings first. The
+Invaders base ROM then replaces the later stock `call init_devices` with a
+same-size trampoline call through the AVO ROM. The AVO hook repeats the
+displaced `init_devices` call, then reads NVR addresses 51 through 75 into the
+high-score cache in the top-down AVO game-state allocation after reset-time
+display initialization has cleared AVO attribute RAM. Score words are decoded
+into three score-unit digits, and the packed initials stream is decoded into
+low-nibble and high-bit arrays because the AVO RAM is 4 bits wide. The RAM
+cache is cleared before loading; any zero-score slot remains unused and has
+its initials cleared even if stale initials are present in NVR.
+
+Launching Invaders from SET-UP refreshes the cache from NVR again before the
+attract screen is drawn. Normal terminal and SET-UP display activity may have
+used AVO RAM as attribute memory before the game owns it, so the game treats
+NVR as the authority and reloads the in-RAM table on entry.
+
+When a game ends, the current score is compared against the cached table. A
+qualifying non-zero score is inserted, lower entries are shifted down, initials
+for the new entry are cleared to spaces, and the high-score prompt is shown.
+The prompt temporarily routes key input through the stock firmware keycode to
+ASCII path, then accepts printable ASCII characters from space through
+underscore, using the same 6-bit encoding as the table. Backspace moves the
+cursor back and clears the corrected character. RETURN confirms the entry only
+after at least one initial has been entered, then addresses 51 through 75 are
+written back to NVR.
 
 ## Alien Update
 
@@ -1325,11 +1408,15 @@ inv_test_trace_top  equ     inv_test_trace_head-1
 inv_test_trace_base equ     inv_test_trace_top-inv_test_trace_size+1
 ```
 
-Before any MAME test enters Invaders through SET-UP, it fills the full
-`inv_data_low` through `inv_data_top` allocation by repeating the `de ad be ef`
-junk byte pattern. Tests that need firmware test mode then write the three
-signature bytes before setting `inv_test_mode`; normal gameplay tests leave the
-signature cleared so random AVO RAM cannot turn into an accidental test command.
+Before any MAME test enters Invaders through SET-UP, it fills the mutable AVO
+game-state allocation from `inv_volatile_data_low` through `inv_data_top` by
+repeating the `de ad be ef` junk byte pattern. The poison helper skips the
+persistent high-score cache range, `inv_high_score_cache_base` through
+`inv_high_score_cache_top`, so reset-loaded table data survives while the rest
+of the game proves that it initializes its own state. Tests that need firmware
+test mode then write the three signature bytes before setting `inv_test_mode`;
+normal gameplay tests leave the signature cleared so random AVO RAM cannot
+turn into an accidental test command.
 
 Current result codes:
 

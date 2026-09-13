@@ -100,10 +100,17 @@ end
 
 function M.poison_invaders_memory(equates, mem)
     mem = mem or M.program_space()
-    local low = M.required_equate(equates, "inv_data_low")
+    local low = equates["inv_volatile_data_low"]
+    if low == nil then
+        low = M.required_equate(equates, "inv_data_low")
+    end
     local top = M.required_equate(equates, "inv_data_top")
+    local skip_low = equates["inv_high_score_cache_base"]
+    local skip_top = equates["inv_high_score_cache_top"]
     for address = low, top do
-        mem:write_u8(address, M.invaders_junk_byte(address, low))
+        if skip_low == nil or address < skip_low or address > skip_top then
+            mem:write_u8(address, M.invaders_junk_byte(address, low))
+        end
     end
 end
 

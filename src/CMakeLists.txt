@@ -253,6 +253,7 @@ if(MAME_COMMAND)
         DEPENDS
             invaders.bin
             invaders.equ
+            ${INVADERS_SPLIT_ROM_IMAGES}
             invaders-avo.bin
             invaders-avo.equ
             "${CMAKE_SOURCE_DIR}/bin/23-018E2.bin"

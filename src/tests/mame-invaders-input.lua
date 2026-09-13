@@ -16,6 +16,7 @@ local function make_input_step()
     local symbols = test.load_symbols(binary_directory .. "/invaders-avo.sym")
 
     local inv_active = test.required_equate(equates, "inv_active")
+    local inv_attract_mode = test.required_equate(equates, "inv_attract_mode")
     local inv_test_mode = test.required_equate(equates, "inv_test_mode")
     local inv_test_script = test.required_equate(equates, "inv_test_script")
     local inv_test_result = test.required_equate(equates, "inv_test_result")
@@ -36,6 +37,7 @@ local function make_input_step()
     local inv_scan_arrow_right = test.required_equate(equates, "inv_scan_arrow_right")
     local inv_scan_space = test.required_equate(equates, "inv_scan_space")
     local inv_scan_setup = test.required_equate(equates, "inv_scan_setup")
+    local inv_scan_return_b = test.required_equate(equates, "inv_scan_return_b")
     local in_setup = test.required_equate(equates, "in_setup")
     local key_flags = test.required_equate(equates, "key_flags")
     local key_silo = test.required_equate(equates, "key_silo")
@@ -144,6 +146,7 @@ local function make_input_step()
 
     local function static_screen_ready()
         return read_u8(inv_active) ~= 0
+            and read_u8(inv_attract_mode) == 0
             and turret_x() == inv_turret_start_x
             and cell(inv_turret_top_row, inv_turret_start_x + 3) == sg("a")
     end
@@ -153,6 +156,7 @@ local function make_input_step()
     local stage_frame = 0
     local setup_key_repeats = 0
     local shift_i_repeats = 0
+    local enter_key_repeats = 0
 
     local function enter_stage(next_stage)
         stage = next_stage
@@ -214,6 +218,27 @@ local function make_input_step()
                 if shift_i_repeats < 2 then
                     inject_key(scan_i, key_flag_shift)
                     shift_i_repeats = shift_i_repeats + 1
+                    return
+                end
+                enter_stage("wait-attract")
+                return
+            end
+
+            if stage == "wait-attract" then
+                if read_u8(inv_attract_mode) ~= 0 then
+                    enter_stage("enter-key")
+                    return
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("attract screen")
+                end
+                return
+            end
+
+            if stage == "enter-key" then
+                if enter_key_repeats < 2 then
+                    inject_key(inv_scan_return_b, 0)
+                    enter_key_repeats = enter_key_repeats + 1
                     return
                 end
                 enter_stage("wait-static")

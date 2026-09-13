@@ -195,7 +195,12 @@ skip_click:     out     iow_keyboard
                 ori     4               ; add "keyboard failed" to test results
                 mov     d,a
 seen_eos:       push    d
+reset_init_devices:
+        if vt100
                 call    init_devices
+        else
+                call    inv_reset_hook
+        endif
                 pop     d
                 jmp     continue_tests
 ;

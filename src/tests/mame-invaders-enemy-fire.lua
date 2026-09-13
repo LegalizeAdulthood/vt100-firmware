@@ -16,6 +16,7 @@ local function make_enemy_fire_step()
     local symbols = test.load_symbols(binary_directory .. "/invaders-avo.sym")
 
     local inv_active = test.required_equate(equates, "inv_active")
+    local inv_attract_mode = test.required_equate(equates, "inv_attract_mode")
     local inv_test_mode = test.required_equate(equates, "inv_test_mode")
     local inv_test_script = test.required_equate(equates, "inv_test_script")
     local inv_test_result = test.required_equate(equates, "inv_test_result")
@@ -79,6 +80,7 @@ local function make_enemy_fire_step()
     local inv_missile_col_base = test.required_equate(equates, "inv_missile_col_base")
     local inv_missile_phase_base = test.required_equate(equates, "inv_missile_phase_base")
     local inv_scan_setup = test.required_equate(equates, "inv_scan_setup")
+    local inv_scan_return_b = test.required_equate(equates, "inv_scan_return_b")
     local in_setup = test.required_equate(equates, "in_setup")
     local key_flags = test.required_equate(equates, "key_flags")
     local key_silo = test.required_equate(equates, "key_silo")
@@ -275,6 +277,7 @@ local function make_enemy_fire_step()
     local stage_frame = 0
     local setup_key_repeats = 0
     local shift_i_repeats = 0
+    local enter_key_repeats = 0
     local shield_missile_col = nil
     local active_laser_row = nil
     local active_laser_col = nil
@@ -349,12 +352,33 @@ local function make_enemy_fire_step()
                     shift_i_repeats = shift_i_repeats + 1
                     return
                 end
+                enter_stage("wait-attract")
+                return
+            end
+
+            if stage == "wait-attract" then
+                if read_u8(inv_attract_mode) ~= 0 then
+                    enter_stage("enter-key")
+                    return
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("attract screen")
+                end
+                return
+            end
+
+            if stage == "enter-key" then
+                if enter_key_repeats < 2 then
+                    inject_key(inv_scan_return_b, 0)
+                    enter_key_repeats = enter_key_repeats + 1
+                    return
+                end
                 enter_stage("wait-formation")
                 return
             end
 
             if stage == "wait-formation" then
-                if read_u8(inv_active) ~= 0 and alien_init_count() == inv_alien_count then
+                if read_u8(inv_active) ~= 0 and read_u8(inv_attract_mode) == 0 and alien_init_count() == inv_alien_count then
                     test.assert_eq(read_u8(inv_gunners), inv_initial_gunners, "initial gunners")
                     test.assert_eq(led_bits(), 0x0f, "initial gunner LEDs")
                     prepare_single_shooter(shield_shooter_id, shield_shooter_x, shield_shooter_y)

@@ -45,6 +45,7 @@ if(MAME_COMMAND)
             "-DMAME_COMMAND=${MAME_COMMAND}"
             "-DMAME_WORKING_DIRECTORY=${MAME_WORKING_DIRECTORY}"
             "-DMAME_MACHINE=vt102"
+            "-DMAME_TEST_NAME=${TEST_NAME}"
             "-DMAME_SECONDS_TO_RUN=${MAME_SECONDS_TO_RUN}"
             "-DVT100_BINARY_DIRECTORY=${VT100_BINARY_DIRECTORY}"
             "-DVT100_PROJECT_SOURCE_DIRECTORY=${CMAKE_SOURCE_DIR}"
@@ -52,6 +53,9 @@ if(MAME_COMMAND)
         )
         if(ARGC GREATER 2)
             list(APPEND MAME_TEST_DRIVER_ARGUMENTS "-DMAME_TEST_PLUGIN=${ARGV2}")
+        endif()
+        if(TEST_NAME STREQUAL "mame-invaders-high-score")
+            list(APPEND MAME_TEST_DRIVER_ARGUMENTS "-DMAME_EXPECT_NVR_WORDS=51=7B00,61=6100,62=0000")
         endif()
 
         add_test(NAME ${TEST_NAME}
@@ -78,6 +82,7 @@ if(MAME_COMMAND)
     add_mame_invaders_test(mame-invaders-laser vt100invaderslaser/init.lua vt100invaderslaser)
     add_mame_invaders_test(mame-invaders-aliens vt100invadersaliens/init.lua vt100invadersaliens 10)
     add_mame_invaders_test(mame-invaders-scoring vt100invadersscoring/init.lua vt100invadersscoring 10)
+    add_mame_invaders_test(mame-invaders-high-score vt100invadershighscore/init.lua vt100invadershighscore 10)
     add_mame_invaders_test(mame-invaders-enemy-fire vt100invadersenemyfire/init.lua vt100invadersenemyfire 10)
     add_mame_invaders_test(mame-invaders-sound vt100invaderssound/init.lua vt100invaderssound 10)
     add_mame_invaders_test(mame-invaders-full-smoke vt100invadersfullsmoke/init.lua vt100invadersfullsmoke 45)

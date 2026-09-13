@@ -21,6 +21,9 @@ local function make_static_screen_step()
     local inv_test_stop_lo = test.required_equate(equates, "inv_test_stop_lo")
     local inv_test_stop_hi = test.required_equate(equates, "inv_test_stop_hi")
     local inv_test_result = test.required_equate(equates, "inv_test_result")
+    local inv_active_value = test.required_equate(equates, "inv_active_value")
+    local inv_attract_mode = test.required_equate(equates, "inv_attract_mode")
+    local inv_scan_return_b = test.required_equate(equates, "inv_scan_return_b")
     local inv_score0 = test.required_equate(equates, "inv_score0")
     local inv_score1 = test.required_equate(equates, "inv_score1")
     local inv_score2 = test.required_equate(equates, "inv_score2")
@@ -63,6 +66,7 @@ local function make_static_screen_step()
     local scan_setup = 0x7b
     local scan_i = 0x16
     local original_led_state = 0x0a
+    local attract_led_state = 0x00
     local game_led_state = 0x0f
 
     local mem = test.program_space()
@@ -200,8 +204,27 @@ local function make_static_screen_step()
         assert_shields()
     end
 
+    local function assert_attract_screen()
+        test.assert_eq(read_u8(inv_active), inv_active_value, "attract active")
+        test.assert_eq(read_u8(inv_attract_mode), 0xff, "attract mode")
+        test.assert_eq(read_u8(inv_saved_led_state), original_led_state % 16, "saved LEDs")
+        test.assert_eq(read_u8(led_state), attract_led_state, "attract LEDs")
+        assert_text(4, 33, "VT100 INVADERS")
+        assert_text(8, 34, "HIGH SCORES")
+        assert_text(20, 34, "PRESS ENTER")
+        assert_cell(inv_score_row, 0, 0, "score row blank in attract")
+    end
+
+    local function attract_screen_ready()
+        return read_u8(inv_attract_mode) ~= 0
+            and cell(4, 33) == string.byte("V")
+            and cell(20, 34) == string.byte("P")
+            and read_u8(led_state) == attract_led_state
+    end
+
     local function static_screen_ready()
-        return read_u8(inv_active) ~= 0
+        return read_u8(inv_active) == inv_active_value
+            and read_u8(inv_attract_mode) == 0
             and cell(inv_score_row, 0) == string.byte("S")
             and cell(inv_ground_row, inv_play_left) == sg("q")
             and cell(inv_turret_top_row + 1, inv_turret_start_x + 3) == sg("a")
@@ -213,6 +236,7 @@ local function make_static_screen_step()
     local stage_frame = 0
     local setup_key_repeats = 0
     local shift_i_repeats = 0
+    local enter_key_repeats = 0
     local exit_key_repeats = 0
 
     local function enter_stage(next_stage)
@@ -271,6 +295,28 @@ local function make_static_screen_step()
                 if shift_i_repeats < 2 then
                     inject_key(scan_i, key_flag_shift)
                     shift_i_repeats = shift_i_repeats + 1
+                    return
+                end
+                enter_stage("wait-attract")
+                return
+            end
+
+            if stage == "wait-attract" then
+                if attract_screen_ready() then
+                    assert_attract_screen()
+                    enter_stage("enter-key")
+                    return
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("attract screen")
+                end
+                return
+            end
+
+            if stage == "enter-key" then
+                if enter_key_repeats < 2 then
+                    inject_key(inv_scan_return_b, 0)
+                    enter_key_repeats = enter_key_repeats + 1
                     return
                 end
                 enter_stage("wait-static")

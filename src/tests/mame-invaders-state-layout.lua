@@ -35,6 +35,7 @@ test.run(function()
         { "inv_level", 1 },
         { "inv_saved_led_state", 1 },
         { "inv_game_over", 1 },
+        { "inv_attract_mode", 1 },
         { "inv_level_timer", 1 },
         { "inv_turret_death_timer", 1 },
         { "inv_missile_tick_timer", 1 },
@@ -58,6 +59,10 @@ test.run(function()
         { "inv_ufo_state_timer", 1 },
         { "inv_ufo_points", 1 },
         { "inv_ufo_disabled", 1 },
+        { "inv_high_score_dirty", 1 },
+        { "inv_high_score_slot", 1 },
+        { "inv_high_shift_index", 1 },
+        { "inv_high_nvr_index", 1 },
         { "inv_turret_x_lo", 1 },
         { "inv_turret_x_hi", 1 },
         { "inv_laser_active", 1 },
@@ -93,6 +98,11 @@ test.run(function()
         { "inv_shield_cells_base", 84 },
         { "inv_dirty_queue_base", 32 },
         { "inv_object_map_base", 1440 },
+        { "inv_high_initial_index", 1 },
+        { "inv_saved_curs_attr_rend", 2 },
+        { "inv_high_score_digit_base", 30 },
+        { "inv_high_initial_lo_base", 30 },
+        { "inv_high_initial_hi_base", 30 },
     }
 
     local screen_snapshot = {}
