@@ -95,7 +95,7 @@ inv_alien_bottom_row    equ     inv_alien_top_row+((inv_alien_rows-1)*inv_alien_
 inv_alien_right_edge    equ     inv_play_left+inv_play_width-1
 inv_alien_dir_left      equ     0
 inv_alien_dir_right     equ     1
-inv_initial_gunners     equ     3
+inv_initial_gunners     equ     4
 inv_initial_level       equ     1
 inv_scan_arrow_right    equ     10h
 inv_scan_arrow_left     equ     20h

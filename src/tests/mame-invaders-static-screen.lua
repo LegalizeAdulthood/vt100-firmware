@@ -63,7 +63,7 @@ local function make_static_screen_step()
     local scan_setup = 0x7b
     local scan_i = 0x16
     local original_led_state = 0x0a
-    local game_led_state = 0x07
+    local game_led_state = 0x0f
 
     local mem = test.program_space()
 
