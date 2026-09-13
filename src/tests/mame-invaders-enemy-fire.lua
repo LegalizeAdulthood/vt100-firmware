@@ -32,6 +32,11 @@ local function make_enemy_fire_step()
     local inv_turret_top_row = test.required_equate(equates, "inv_turret_top_row")
     local inv_turret_w = test.required_equate(equates, "inv_turret_w")
     local inv_laser_active = test.required_equate(equates, "inv_laser_active")
+    local inv_laser_row_lo = test.required_equate(equates, "inv_laser_row_lo")
+    local inv_laser_row_hi = test.required_equate(equates, "inv_laser_row_hi")
+    local inv_laser_col_lo = test.required_equate(equates, "inv_laser_col_lo")
+    local inv_laser_col_hi = test.required_equate(equates, "inv_laser_col_hi")
+    local inv_laser_glyph = test.required_equate(equates, "inv_laser_glyph")
     local inv_alien_rows = test.required_equate(equates, "inv_alien_rows")
     local inv_alien_cols = test.required_equate(equates, "inv_alien_cols")
     local inv_alien_count = test.required_equate(equates, "inv_alien_count")
@@ -227,6 +232,16 @@ local function make_enemy_fire_step()
         end
     end
 
+    local function seed_active_laser()
+        local row = inv_turret_top_row - 4
+        local column = inv_turret_start_x + math.floor(inv_turret_w / 2)
+        write_u8(inv_laser_active, 0xff)
+        write_nibble_pair(inv_laser_row_lo, inv_laser_row_hi, row)
+        write_nibble_pair(inv_laser_col_lo, inv_laser_col_hi, column)
+        write_cell(row, column, inv_laser_glyph)
+        return row, column
+    end
+
     local function assert_turret_explosion_at(x)
         local top = { "*", "a", "a", "a", "a", "a", "*" }
         local bottom = { "a", "*", "a", "*", "a", "*", "a" }
@@ -261,6 +276,8 @@ local function make_enemy_fire_step()
     local setup_key_repeats = 0
     local shift_i_repeats = 0
     local shield_missile_col = nil
+    local active_laser_row = nil
+    local active_laser_col = nil
     local turret_death_x = nil
     local frozen_alien_last = nil
 
@@ -382,6 +399,7 @@ local function make_enemy_fire_step()
                     test.assert_eq(read_u8(inv_missile_fire_timer), inv_missile_empty_delay, "empty missile delay")
 
                     clear_all_shields()
+                    active_laser_row, active_laser_col = seed_active_laser()
                     set_turret_x(turret_shooter_x)
                     prepare_single_shooter(turret_shooter_id, turret_shooter_x, turret_shooter_y)
                     force_next_enemy_fire()
@@ -400,6 +418,7 @@ local function make_enemy_fire_step()
                     test.assert_eq(read_u8(inv_gunners), inv_initial_gunners - 1, "gunners after first turret hit")
                     test.assert_eq(led_bits(), 0x07, "LEDs after first turret hit")
                     test.assert_eq(read_u8(inv_laser_active), 0, "laser cleared by turret hit")
+                    test.assert_eq(cell(active_laser_row, active_laser_col), 0, "laser cell erased by turret hit")
                     assert_all_missiles_inactive()
                     turret_death_x = read_nibble_pair(inv_turret_x_lo, inv_turret_x_hi)
                     test.assert_eq(turret_death_x, turret_shooter_x, "first turret death x")

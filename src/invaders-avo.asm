@@ -818,6 +818,13 @@ inv_deactivate_laser:
         sta     inv_laser_timer
         ret
 ;
+inv_clear_laser:
+        lda     inv_laser_active
+        ora     a
+        jz      inv_deactivate_laser
+        call    inv_erase_laser
+        jmp     inv_deactivate_laser
+;
 inv_erase_laser:
         call    inv_get_laser_col
         mov     c,a
@@ -1913,9 +1920,9 @@ inv_start_turret_death:
         call    inv_get_turret_x
         mov     c,a
         call    inv_erase_turret_at
-        call    inv_draw_turret_explosion
-        call    inv_deactivate_laser
+        call    inv_clear_laser
         call    inv_clear_active_missiles
+        call    inv_draw_turret_explosion
         call    inv_start_death_sound
         lda     inv_gunners
         ora     a
