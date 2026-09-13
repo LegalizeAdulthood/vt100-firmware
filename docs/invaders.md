@@ -1588,28 +1588,6 @@ Attract-mode demo work should add orchestration only where possible. Reuse
 `inv_draw_high_score_table`, and the existing sprite/object-map routines rather
 than creating parallel demo renderers.
 
-### 2. Demo State Initialization
-
-Implement an `inv_start_demo` path used by `inv_enter_impl` after high scores
-are loaded. It should call the shared reset and screen setup routines used by
-real gameplay: reset transient state with `inv_reset_for_attract`, initialize
-aliens, shields, turret, UFO, missiles, and status with the existing gameplay
-initializers, draw the normal game screen with `inv_draw_static_screen`, then
-draw the attract overlay. Use `inv_attract_mode` to distinguish demo play from
-real play unless a second flag becomes clearly necessary.
-
-Keep `inv_start_game` as the real-game entry point. RETURN from attract mode
-should discard the demo state and call `inv_start_game`, so a real game always
-starts with fresh score, gunners, level, shields, aliens, turret, missiles, and
-timers.
-
-Test this with a MAME Lua plugin that enters attract mode and verifies that
-demo state is initialized through the normal gameplay state: live alien count,
-shield cells, turret position, score row, and high-score cache should all have
-the same shape as a freshly initialized game. The same test should press RETURN
-and verify that `inv_attract_mode` clears and real gameplay starts from a fresh
-state, not from whatever the demo had reached.
-
 ### 3. Attract Frame Dispatch
 
 Change the top of `inv_frame` so attract mode branches into a demo frame path
