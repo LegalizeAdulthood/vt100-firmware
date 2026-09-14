@@ -216,10 +216,12 @@ hardware-facing launcher and escape hatch should be SET-UP based.
 
 Launching Invaders from SET-UP enters attract mode first. Attract mode owns the
 screen and keyboard, runs a deterministic demo game, and displays the title,
-high-score table, and start prompt over the demo as a draw-order overlay. This
-is not a separate compositing layer in hardware; the game draws the demo frame
-with the normal renderer, then redraws the attract text last so it remains
-visible.
+high-score table, and start prompt over the demo. Draw the overlay once, then
+clip gameplay drawing and erasing to exclude the three overlay rectangles,
+including their one-character box borders. Demo restarts also preserve these cells.
+The shared renderer must leave them untouched so the overlay does not flicker
+as objects move behind it. RETURN removes the overlay and disables clipping
+when initializing the real game.
 
 The demo should reuse the same game state, frame clock, object map, update
 routines, and rendering paths as real gameplay. Attract mode may add a small
@@ -242,11 +244,11 @@ HIGH SCORES
 PRESS ENTER
 ```
 
-Each overlay element should reserve a one-character gutter on all sides by
-clearing the cells immediately around its text or table area. The high-score
-table should be a fixed rectangle: empty high-score entries still draw spaces
-across their row so moving gameplay behind the overlay cannot smash directly
-against or show through holes in the text area.
+Each overlay element uses its one-character gutter for a box border drawn with
+DEC Special Graphics line-drawing characters. The high-score table and start
+prompt share a horizontal border with T-junctions at its ends. The high-score
+table remains a fixed rectangle: empty entries draw spaces across their row so
+moving gameplay cannot show through holes in the text area.
 
 ## Invaders ROM And AVO Memory Plan
 
@@ -1588,27 +1590,6 @@ Attract-mode demo work should add orchestration only where possible. Reuse
 `inv_draw_high_score_table`, and the existing sprite/object-map routines rather
 than creating parallel demo renderers.
 
-### 3. Attract Frame Dispatch
-
-Change the top of `inv_frame` so attract mode branches into a demo frame path
-instead of returning immediately. The demo frame path should run the existing
-frame clock and shared gameplay update/render routines in the same order used
-for real play wherever that makes sense: level reset, turret death, aliens,
-heartbeat, UFO, enemy fire, turret, laser, and collision/shield handling.
-Attract mode should skip only the pieces that are semantically real-game-only:
-high-score insertion, initials entry, NVR writes, and terminal exit.
-
-When the demo reaches a terminal condition, such as all gunners dead, aliens
-landing, or a completed wave, restart demo state after a short pause by calling
-the demo initialization path. This keeps the attract loop alive without adding a
-separate mini-game.
-
-Test this by running attract mode for a deterministic number of frames in MAME
-and asserting that the logical frame counter advances, aliens move through the
-existing position/state arrays, the object map changes, and the overlay text is
-still present. Add direct test hooks only if necessary, and keep them under the
-existing test signature guard.
-
 ### 4. Demo Autopilot
 
 Add a small deterministic autopilot used only while `inv_attract_mode` is set.
@@ -1628,14 +1609,14 @@ gameplay keys, waits long enough for the autopilot to act, and verifies turret
 movement plus at least one player laser launch. The test should also confirm
 that real keyboard input still controls only the real game path after RETURN.
 
-### 5. Overlay Refresh And Persistence Guard
+### 5. Overlay Clipping And Persistence Guard
 
-Refresh the attract overlay after each demo frame, or at a small fixed cadence
-if full-frame redraw becomes visibly noisy. The refresh must use the same
-overlay routine from slice 1 and should redraw only overlay-owned cells: the
-text, the high-score fixed rectangle, and their one-character gutters. Avoid
-clearing the playfield outside those rectangles during refresh so the demo
-continues to show through.
+Preserve the title, high-score fixed rectangle, instructions, and their
+one-character box borders by clipping gameplay writes around them. Do not refresh
+the overlay each frame. Keep this clipping active for demo restarts and disable
+it for real gameplay. Extend the clipping tests to cover autopilot movement and
+firing behind the overlay; monitor screen-RAM writes so transient overwrites
+cannot pass merely because the final text looks correct.
 
 Guard persistence paths so demo play cannot add a high score, enter initials,
 set `inv_high_score_dirty`, or call `inv_store_high_scores`. A demo score may

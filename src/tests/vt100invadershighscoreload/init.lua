@@ -16,6 +16,7 @@ script_directory = script_directory:match("^(.*)/[^/]+$") or "."
 
 local test = dofile(script_directory .. "/../mame-test.lua")
 local frame_subscription
+local frame_tap
 
 local function make_high_score_load_step()
     local binary_directory = test.required_env("VT100_INVADERS_BINARY_DIRECTORY")
@@ -25,6 +26,7 @@ local function make_high_score_load_step()
     local inv_active = test.required_equate(equates, "inv_active")
     local inv_active_value = test.required_equate(equates, "inv_active_value")
     local inv_attract_mode = test.required_equate(equates, "inv_attract_mode")
+    local inv_last_vframe = test.required_equate(equates, "inv_last_vframe")
     local inv_high_score_count = test.required_equate(equates, "inv_high_score_count")
     local inv_high_score_cache_base = test.required_equate(equates, "inv_high_score_cache_base")
     local inv_high_score_cache_top = test.required_equate(equates, "inv_high_score_cache_top")
@@ -143,27 +145,23 @@ local function make_high_score_load_step()
         end
     end
 
-    local function assert_text_gutter(row, column, text, description)
-        assert_spaces(row - 1, column - 1, #text + 2, description .. " top gutter")
-        assert_spaces(row + 1, column - 1, #text + 2, description .. " bottom gutter")
-        test.assert_eq(cell(row, column - 1) % 128, string.byte(" "), description .. " left gutter")
-        test.assert_eq(cell(row, column + #text) % 128, string.byte(" "), description .. " right gutter")
-        assert_text(row, column, text)
-    end
-
-    local function assert_high_score_overlay_gutter()
-        local left = inv_attract_scores_col - 1
-        local width = inv_attract_scores_len + 2
-        local top = inv_attract_scores_row - 1
-        local bottom = inv_high_score_first_row + inv_high_score_count
-        assert_spaces(top, left, width, "high score top gutter")
-        assert_spaces(bottom, left, width, "high score bottom gutter")
-        for row = inv_attract_scores_row, bottom - 1 do
-            test.assert_eq(cell(row, left) % 128, string.byte(" "), "high score left gutter row " .. tostring(row))
-            test.assert_eq(
-                cell(row, left + width - 1) % 128,
-                string.byte(" "),
-                "high score right gutter row " .. tostring(row))
+    local function assert_box(top, left, height, width, top_corners, bottom_corners, description)
+        local right, bottom = left + width - 1, top + height - 1
+        local function assert_glyph(row, column, source)
+            test.assert_eq(cell(row, column) % 128, string.byte(source) - 0x5f,
+                string.format("%s border at %d,%d", description, row, column))
+        end
+        assert_glyph(top, left, top_corners:sub(1, 1))
+        assert_glyph(top, right, top_corners:sub(2, 2))
+        assert_glyph(bottom, left, bottom_corners:sub(1, 1))
+        assert_glyph(bottom, right, bottom_corners:sub(2, 2))
+        for column = left + 1, right - 1 do
+            assert_glyph(top, column, "q")
+            assert_glyph(bottom, column, "q")
+        end
+        for row = top + 1, bottom - 1 do
+            assert_glyph(row, left, "x")
+            assert_glyph(row, right, "x")
         end
     end
 
@@ -190,9 +188,17 @@ local function make_high_score_load_step()
             test.hex(high_score_units(1), 3)))
     end
 
-    return function()
+    local function step(at_frame_boundary)
         local ok, err = pcall(function()
-            frame = frame + 1
+            if not at_frame_boundary then
+                frame = frame + 1
+                if frame - stage_frame > 120 then
+                    fail_timeout(stage)
+                end
+            end
+            if at_frame_boundary ~= (stage == "wait-overlay-stable") then
+                return
+            end
 
             if stage == "boot" then
                 if frame < 120 then
@@ -253,10 +259,15 @@ local function make_high_score_load_step()
                     return
                 end
                 if read_u8(inv_active) == inv_active_value and read_u8(inv_attract_mode) ~= 0 then
-                    assert_text_gutter(inv_attract_title_row, inv_attract_title_col, "VT100 INVADERS", "title")
-                    assert_text_gutter(inv_attract_prompt_row, inv_attract_prompt_col, "PRESS ENTER", "prompt")
+                    assert_box(inv_attract_title_row - 1, inv_attract_title_col - 1,
+                        3, #"VT100 INVADERS" + 2, "lk", "mj", "title")
+                    assert_box(inv_attract_scores_row - 1, inv_attract_scores_col - 1,
+                        inv_high_score_count + 3, inv_attract_scores_len + 2, "lk", "tu", "high scores")
+                    assert_box(inv_attract_prompt_row - 1, inv_attract_prompt_col - 1,
+                        3, #"PRESS ENTER" + 2, "tu", "mj", "prompt")
+                    assert_text(inv_attract_title_row, inv_attract_title_col, "VT100 INVADERS")
+                    assert_text(inv_attract_prompt_row, inv_attract_prompt_col, "PRESS ENTER")
                     assert_text(inv_attract_scores_row, inv_attract_scores_col, "HIGH SCORES")
-                    assert_high_score_overlay_gutter()
                     assert_loaded_eq(high_score_units(0), 123, "loaded high score slot 0")
                     assert_loaded_eq(high_score_units(1), 45, "loaded high score slot 1")
                     assert_loaded_eq(high_score_units(2), 0, "loaded high score slot 2")
@@ -289,6 +300,12 @@ local function make_high_score_load_step()
             test.fail(err)
         end
     end
+
+    -- Inspect the completed overlay before the next game frame starts drawing.
+    frame_tap = mem:install_write_tap(inv_last_vframe, inv_last_vframe, "invaders-high-score-frame", function()
+        step(true)
+    end)
+    return function() step(false) end
 end
 
 function exports.startplugin()
