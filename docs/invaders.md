@@ -7,9 +7,10 @@ rendering references.
 
 The base firmware ROM contains only same-size trampoline replacements for the
 game hooks. The game code lives in the AVO program
-expansion ROM window starting at `8000h`, while mutable game state lives in the
-AVO RAM range, `3000h`-`3fffh`. While the game is active, the normal terminal
-screen contents and AVO attribute contents are considered owned by the game.
+expansion ROM window starting at `8000h`, while mutable game state lives at the
+tail of byte-wide screen RAM, below `3000h`. Attribute RAM is not game storage.
+While the game is active, it owns the 80-column display and unused screen-RAM
+tail; normal terminal processing resumes on exit.
 Returning to terminal mode clears the game display and restores the saved LED
 and cursor rendition state; it does not restore the previous screen contents.
 
@@ -263,27 +264,37 @@ Only trampoline entry points referenced by `base.asm` are shared through
 `src/invaders-abi.asm`: idle dispatch, SET-UP launch, keyboard sound status,
 reset-time high-score loading, and initials cursor handling. Private entry
 points, constants, and state addresses stay in `src/invaders-avo.asm`.
-The expansion ROM starts at `8000h`; the
-AVO RAM range remains available for mutable state, scratch data, and attribute
-or screen-related storage. Allocate persistent game state from `3fffh`
-downward, leaving lower AVO addresses untouched as long as possible to reduce
-conflict with normal screen and attribute memory use.
+The expansion ROM starts at `8000h`. AVO also supplies an additional 1 KiB of
+byte-wide screen RAM at `2c00h`-`2fffh`, distinct from its four-bit attribute
+RAM at `3000h`-`3fffh`. Game state grows downward from `2fffh`, with `2c00h`
+as the allocation floor.
 
 ```asm
 inv_avo_base    equ 8000h
 inv_code_base   equ inv_avo_base
 inv_code_top    equ 9fffh       ; 8 KiB AVO program expansion ROM
 
-inv_avo_ram_start equ 3000h
-inv_avo_ram_top equ 3fffh
+inv_screen_ram_start equ 2c00h
+inv_screen_ram_top   equ 2fffh
 
-inv_data_top    equ inv_avo_ram_top ; allocate mutable state downward from here
-inv_data_floor  equ 3100h       ; soft low-water mark; move only if needed
+inv_data_top    equ inv_screen_ram_top
+inv_data_floor  equ inv_screen_ram_start
 ```
 
 Keep new game code within the 8 KiB expansion window; changing the RAM layout
 does not increase ROM capacity. Mutable storage is allocated with address
 equates, not `db` or `ds` directives that would emit storage into the ROM image.
+
+The current allocation occupies 647 bytes at `2d79h`-`2fffh`, including the
+high-score cache and test state, leaving 377 bytes free above `2c00h`. The
+80-column display plus its extra SET-UP row ends just before `2aebh`, so neither
+overlaps game state. The unused object-map and dirty-queue reservations have
+been removed; rendering and collisions do not use those buffers.
+
+`inv_active` occupies `2fffh`, just beyond even the 132-column display and its
+extra row. All other state may be overwritten by normal 132-column terminal
+use and is reinitialized or reloaded on game entry. Inactive hooks do not write
+diagnostic values into that screen area.
 
 `inv_enter_impl` prepares the 80-column screen, saves and disables the terminal
 cursor rendition, saves the LED state, reloads high scores from NVR, and enters
@@ -298,12 +309,12 @@ prior terminal screen and prior 132-column layout are not saved and restored.
 
 ### Hardware RAM Constraint
 
-Real AVO attribute RAM is four bits wide. Much of the current layout uses
-nibble pairs or nibble-sized cell codes, but some state, including the active
-guard, missile coordinates, and sound/UFO timers, uses full bytes. The MAME
-driver maps `2000h`-`3fffh` as byte-wide screen/scratch RAM, so passing its tests
-does not establish compatibility with physical four-bit AVO RAM. A hardware
-port still needs an audit of those full-byte fields and attribute-memory use.
+All mutable game state must remain in byte-wide screen RAM, not four-bit
+attribute RAM. Existing nibble pairs and cell codes remain unchanged, but
+full-byte flags, coordinates, and timers now use physical byte-wide storage.
+Static layout tests enforce the screen-RAM bounds and non-overlap with display
+storage. MAME tests restrict attribute reads/writes to four writable bits so
+the emulator's byte-wide mapping cannot conceal another allocation error.
 
 ## Frame Clock
 
@@ -402,7 +413,7 @@ inv_update_gunner_leds:
         ret
 ```
 
-On entry, the game saves the previous low nibble of `led_state` in AVO RAM.
+On entry, the game saves the previous low nibble of `led_state` in game RAM.
 On exit, it restores that nibble while preserving the upper bits. Gunner LEDs
 are refreshed when drawing the static screen and immediately after losing a
 gunner. A new game starts with four gunners; there is no extra-life award.
@@ -534,9 +545,8 @@ inv_puts_sg:
         ret
 ```
 
-The layout still reserves 1440 addresses at `inv_object_map_base` and 32 at
-`inv_dirty_queue_base`, but neither buffer participates in rendering or
-collision detection. `inv_putc` writes screen RAM only. Collisions use entity
+There is no object-map or dirty-queue allocation. `inv_putc` writes screen
+RAM only. Collisions use entity
 coordinates and shield cell state, as described under
 [Collision Strategy](#collision-strategy).
 
@@ -820,17 +830,18 @@ On reset, the stock `recall_nvr` path still loads terminal settings first. The
 Invaders base ROM then replaces the later stock `call init_devices` with a
 same-size trampoline call through the AVO ROM. The AVO hook repeats the
 displaced `init_devices` call, then reads NVR addresses 51 through 75 into the
-high-score cache in the top-down AVO game-state allocation after reset-time
-display initialization has cleared AVO attribute RAM. Score words are decoded
-into three score-unit digits, and the packed initials stream is decoded into
-low-nibble and high-bit arrays because the AVO RAM is 4 bits wide. The RAM
+high-score cache in the top-down screen-RAM allocation after reset-time display
+initialization. If the terminal is in 132-column mode, reset-time cache loading
+is skipped because those addresses contain visible screen data. Score words
+are decoded into three score-unit digits, and the packed initials stream keeps
+its existing low-nibble and high-bit arrays. The RAM
 cache is cleared before loading; any zero-score slot remains unused and has
 its initials cleared even if stale initials are present in NVR.
 
 Launching Invaders from SET-UP refreshes the cache from NVR again before the
-attract screen is drawn. Normal terminal and SET-UP display activity may have
-used AVO RAM as attribute memory before the game owns it, so the game treats
-NVR as the authority and reloads the in-RAM table on entry.
+attract screen is drawn. Normal screen clearing or 132-column terminal activity
+may have overwritten the cache, so the game treats NVR as the authority and
+reloads the table after preparing its 80-column screen.
 
 When a game ends, the current score is compared against the cached table. A
 qualifying non-zero score is inserted, lower entries are shifted down, initials
@@ -1001,8 +1012,8 @@ Collision detection reads game state, not the rendered screen or a shadow map:
 - There is no player-laser/enemy-missile interception test.
 
 The attract overlay clips drawing only. Entities continue to move and collide
-behind its boxes using the same game state as real play. The reserved
-`inv_object_map_base` buffer is not read or written by collision routines.
+behind its boxes using the same game state as real play. No collision state is
+stored in attribute RAM.
 
 ## Level Reset
 
@@ -1069,8 +1080,10 @@ testing:
 3. AVO layout tests parse labels from generated `.sym` files and address
    equates from generated `.equ` files. Invaders code must stay in the
    `8000h`-`9fffh` expansion ROM window, while mutable state grows downward
-   from `3fffh` inside AVO RAM.
-4. Direct MAME Lua smoke tests inspect ROM entry points and AVO RAM without
+   from `2fffh` inside byte-wide screen RAM, above the 80-column display and
+   its SET-UP scratch row. The active guard must also sit beyond the 132-column
+   display and its scratch row.
+4. Direct MAME Lua smoke tests inspect ROM entry points and game RAM without
    needing frame-by-frame input.
 5. Plugin-backed MAME Lua tests boot the terminal, enter SET-UP, launch the
    game, inject keyboard input, wait for frames, and inspect game state and
@@ -1177,13 +1190,14 @@ and `-plugin <PluginName>`.
 
 ### Scriptable Test Hooks
 
-Test-only state bytes live in AVO RAM and are defined in
+Test-only state bytes live in the byte-wide screen-RAM tail and are defined in
 `src/invaders-avo.asm` alongside the rest of the game state. Keep these in the
 same top-down allocation style as the game state, and load their addresses from
 generated `.equ` files in tests instead of duplicating numeric addresses.
 
 ```asm
-inv_test_signature  equ     inv_data_top-2        ; 3 bytes, through 3fffh
+inv_active          equ     inv_data_top          ; 2fffh, beyond terminal DMA
+inv_test_signature  equ     inv_active-3          ; 3 bytes, 2ffch-2ffeh
 inv_test_signature0 equ     05h
 inv_test_signature1 equ     0ah
 inv_test_signature2 equ     0fh
@@ -1197,15 +1211,22 @@ inv_test_trace_top  equ     inv_test_trace_head-1
 inv_test_trace_base equ     inv_test_trace_top-inv_test_trace_size+1
 ```
 
-Before any MAME test enters Invaders through SET-UP, it fills the mutable AVO
+Before any MAME test enters Invaders through SET-UP, it fills the mutable
 game-state allocation from `inv_volatile_data_low` through `inv_data_top` by
 repeating the `de ad be ef` junk byte pattern. The poison helper skips the
 persistent high-score cache range, `inv_high_score_cache_base` through
 `inv_high_score_cache_top`, so reset-loaded table data survives while the rest
 of the game proves that it initializes its own state. Tests that need firmware
 test mode then write the three signature bytes before setting `inv_test_mode`;
-normal gameplay tests leave the signature cleared so random AVO RAM cannot
+normal gameplay tests leave the signature cleared so stale screen data cannot
 turn into an accidental test command.
+
+The state-layout test round-trips full `de ad be ef` bytes through every game
+allocation, checking that terminal RAM, display storage, and attribute RAM
+outside the allocation are unchanged. The entry test also fills the reused
+132-column character cells with `Z` (`5ah`, the active guard value), preserving
+line links, and verifies that inactive hooks neither enter the game nor corrupt
+the text. It then launches from 132-column SET-UP and checks reinitialization.
 
 Current result codes:
 
@@ -1227,6 +1248,12 @@ All Lua tests live under `src/tests`. The shared `mame-test.lua` helper loads
 addresses from generated `.equ` files, loads labels from generated `.sym`
 files, returns the `:maincpu` program address space, and reports test status by
 printing `VT100_INVADERS_TEST_PASS` or `VT100_INVADERS_TEST_FAIL`.
+
+The helper installs memory taps that allow only bits 0-3 to be stored in
+`3000h`-`3fffh` and force bits 4-7 high on CPU reads. This is a test constraint
+on writable storage, not a claim about the electrical value of unused hardware
+data bits. All gameplay tests run with it; values requiring more than four bits
+must round-trip through byte-wide game RAM instead.
 
 Direct Lua scripts are enough for immediate checks that do not need to stay
 attached to the emulator frame loop. These tests are run with
@@ -1328,7 +1355,7 @@ The current `invaders` workflow gate is:
 - the stock VT100 ROM and split-ROM regression tests pass;
 - the Invaders ROM layout test passes;
 - direct MAME scripts can see the staged ROMs, generated equates, generated
-  symbols, and writable AVO RAM;
+  symbols, and byte-wide game RAM;
 - plugin-backed MAME tests can enter SET-UP, start Invaders, advance frames,
   verify screen rendering, inject input, move the turret, fire the laser, and
   damage a shield cell.
@@ -1345,11 +1372,8 @@ interactions, and exact video timing.
 - Should 50 Hz machines play slower, or should frame timers be scaled?
 - Should the first implementation require AVO presence and refuse to start
   without it?
-- Can AVO attributes be disabled or ignored while game state occupies AVO RAM,
-  or should the game reserve a safe subrange that does not conflict with active
-  attribute bytes?
 - Does the installed MAME `vt100` configuration expose both the `8000h`
-  expansion ROM and the `3000h`-`3fffh` AVO RAM range, or do we need a small
+  expansion ROM and the `2c00h`-`2fffh` byte-wide screen-RAM range, or do we need a small
   driver patch for full automated testing?
 
 # Implementation
@@ -1372,5 +1396,5 @@ Attract-mode demo work should add orchestration only where possible. Reuse
 `inv_reset_for_attract`, `inv_start_game`, `inv_frame`, `inv_update_aliens`,
 `inv_update_heartbeat`, `inv_update_ufo`, `inv_update_enemy_fire`,
 `inv_update_turret`, `inv_update_laser`, `inv_draw_static_screen`,
-`inv_draw_high_score_table`, and the existing sprite/object-map routines rather
+`inv_draw_high_score_table`, and the existing sprite/collision routines rather
 than creating parallel demo renderers.

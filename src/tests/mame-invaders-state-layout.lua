@@ -63,6 +63,7 @@ test.run(function()
         { "inv_high_score_slot", 1 },
         { "inv_high_shift_index", 1 },
         { "inv_high_nvr_index", 1 },
+        { "inv_high_initial_ready", 1 },
         { "inv_turret_x_lo", 1 },
         { "inv_turret_x_hi", 1 },
         { "inv_laser_active", 1 },
@@ -96,8 +97,6 @@ test.run(function()
         { "inv_missile_data_base", 12 },
         { "inv_shield_damage_base", 28 },
         { "inv_shield_cells_base", 84 },
-        { "inv_dirty_queue_base", 32 },
-        { "inv_object_map_base", 1440 },
         { "inv_high_initial_index", 1 },
         { "inv_high_initial_used", 1 },
         { "inv_saved_curs_attr_rend", 2 },
@@ -107,8 +106,14 @@ test.run(function()
     }
 
     local screen_snapshot = {}
-    for address = 0x2000, 0x2fff do
-        screen_snapshot[address] = mem:read_u8(address)
+    local low = test.required_equate(equates, "inv_data_low")
+    local top = test.required_equate(equates, "inv_data_top")
+    test.assert_between(low, 0x2c00, 0x2fff, "state lower bound")
+    test.assert_eq(top, 0x2fff, "state upper bound")
+    for address = 0x2000, 0x3fff do
+        if address < low or address > top then
+            screen_snapshot[address] = mem:read_u8(address)
+        end
     end
 
     local sentinel = 1
@@ -116,20 +121,26 @@ test.run(function()
         local address = test.required_equate(equates, range[1])
         local byte_count = range[2]
         for offset = 0, byte_count - 1 do
-            local value = sentinel % 16
+            test.assert_between(address + offset, low, top, range[1] .. " allocation")
+            local value = test.invaders_junk_byte(sentinel, 1)
             mem:write_u8(address + offset, value)
             test.assert_eq(
-                mem:read_u8(address + offset) % 16,
+                mem:read_u8(address + offset),
                 value,
                 range[1] .. " sentinel at offset " .. tostring(offset))
             sentinel = sentinel + 1
         end
     end
 
-    for address = 0x2000, 0x2fff do
+    for address, value in pairs(screen_snapshot) do
         test.assert_eq(
             mem:read_u8(address),
-            screen_snapshot[address],
-            "visible screen RAM unchanged at " .. test.hex(address))
+            value,
+            "terminal/screen/attribute RAM unchanged at " .. test.hex(address))
     end
+
+    local attribute = mem:read_u8(0x3000)
+    mem:write_u8(0x3000, 0x5a)
+    test.assert_eq(mem:read_u8(0x3000), 0xfa, "attribute RAM cannot retain a full byte")
+    mem:write_u8(0x3000, attribute)
 end)

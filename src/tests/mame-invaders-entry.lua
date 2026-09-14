@@ -33,11 +33,16 @@ local function make_entry_step()
     local latest_key_scan = test.required_equate(equates, "latest_key_scan")
     local pending_setup = test.required_equate(equates, "pending_setup")
     local inv_level_timer = test.required_equate(equates, "inv_level_timer")
+    local screen_cols = test.required_equate(equates, "screen_cols")
+    local main_video = test.required_equate(equates, "main_video")
+    local inv_gunners = test.required_equate(equates, "inv_gunners")
+    local inv_initial_gunners = test.required_equate(equates, "inv_initial_gunners")
 
     local key_flag_shift = 0x20
     local key_flag_eos = 0x80
     local scan_setup = 0x7b
     local scan_i = 0x16
+    local scan_9 = 0x26
 
     local mem = test.program_space()
 
@@ -69,6 +74,12 @@ local function make_entry_step()
     local enter_key_repeats = 0
     local exit_key_repeats = 0
     local saved_action_value = 0
+    local test_132_columns = false
+    local checked_132_columns = false
+    local columns_key_repeats = 0
+    local terminal_exit_repeats = 0
+    local screen_132_last = main_video + (132 + 3) * 24 - 1
+    local screen_132_snapshot = {}
 
     local function enter_stage(next_stage)
         stage = next_stage
@@ -130,12 +141,69 @@ local function make_entry_step()
             if stage == "wait-setup" then
                 if read_u8(in_setup) ~= 0 then
                     saved_action_value = read_u16(saved_action)
-                    enter_stage("lower-i")
+                    if test_132_columns and not checked_132_columns then
+                        enter_stage("switch-columns")
+                    else
+                        enter_stage("lower-i")
+                    end
                     return
                 end
                 if frame - stage_frame > 120 then
                     fail_timeout("entering SET-UP")
                 end
+                return
+            end
+
+            if stage == "switch-columns" then
+                if columns_key_repeats < 2 then
+                    inject_key(scan_9, 0)
+                    columns_key_repeats = columns_key_repeats + 1
+                    return
+                end
+                if read_u8(screen_cols) == 132 then
+                    enter_stage("leave-132-setup")
+                    return
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("switching to 132 columns")
+                end
+                return
+            end
+
+            if stage == "leave-132-setup" then
+                if terminal_exit_repeats < 2 then
+                    inject_key(scan_setup, 0)
+                    terminal_exit_repeats = terminal_exit_repeats + 1
+                    return
+                end
+                if read_u8(in_setup) == 0 then
+                    for address = 0x2c00, screen_132_last do
+                        if (address - main_video) % (132 + 3) < 132 then
+                            write_u8(address, inv_active_value)
+                        end
+                        screen_132_snapshot[address] = read_u8(address)
+                    end
+                    enter_stage("132-terminal")
+                    return
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("leaving 132-column SET-UP")
+                end
+                return
+            end
+
+            if stage == "132-terminal" then
+                if frame - stage_frame < 8 then
+                    return
+                end
+                test.assert_eq(read_u8(inv_active), 0, "132-column text does not activate game")
+                for address = 0x2c00, screen_132_last do
+                    test.assert_eq(read_u8(address), screen_132_snapshot[address],
+                        "inactive game does not corrupt 132-column text at " .. test.hex(address))
+                end
+                checked_132_columns = true
+                setup_key_repeats = 0
+                enter_stage("setup-key")
                 return
             end
 
@@ -154,6 +222,8 @@ local function make_entry_step()
                     test.assert_eq(read_u8(inv_attract_mode), 0xff, "attract mode after Invaders entry")
                     test.assert_eq(read_u8(in_setup), 0, "in_setup after Invaders entry")
                     test.assert_eq(read_u16(char_action), saved_action_value, "char_action after Invaders entry")
+                    test.assert_eq(read_u8(screen_cols), 80, "game owns an 80-column screen")
+                    test.assert_eq(read_u8(inv_gunners), inv_initial_gunners, "gunners initialized over old screen data")
                     enter_stage("enter-key")
                     return
                 end
@@ -197,6 +267,15 @@ local function make_entry_step()
             if stage == "wait-exit" then
                 if read_u8(inv_active) == 0 then
                     test.assert_eq(read_u8(inv_attract_mode), 0, "attract mode after exit")
+                    if not test_132_columns then
+                        test_132_columns = true
+                        setup_key_repeats = 0
+                        lower_i_repeats = 0
+                        enter_key_repeats = 0
+                        exit_key_repeats = 0
+                        enter_stage("setup-key")
+                        return
+                    end
                     test.pass()
                     return
                 end

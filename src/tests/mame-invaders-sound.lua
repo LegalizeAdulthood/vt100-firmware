@@ -19,6 +19,11 @@ local function make_sound_step()
     local iow_kbd_click = test.required_equate(equates, "iow_kbd_click")
     local kbd_click_mask = test.required_equate(equates, "kbd_click_mask")
     local kbd_scan_mask = test.required_equate(equates, "kbd_scan_mask")
+    local keyboard_locked = test.required_equate(equates, "keyboard_locked")
+    local iow_kbd_locked = test.required_equate(equates, "iow_kbd_locked")
+    local local_mode = test.required_equate(equates, "local_mode")
+    local led_state = test.required_equate(equates, "led_state")
+    local kbd_online_mask = test.required_equate(equates, "kbd_online_mask")
     local inv_active = test.required_equate(equates, "inv_active")
     local inv_active_value = test.required_equate(equates, "inv_active_value")
     local inv_attract_mode = test.required_equate(equates, "inv_attract_mode")
@@ -208,7 +213,7 @@ local function make_sound_step()
     local function validate_status_entries(start_index)
         for index = start_index, #output_log do
             local entry = output_log[index]
-            if entry.data ~= entry.output then
+            if entry.active == inv_active_value and entry.data ~= entry.output then
                 error(string.format(
                     "keyboard status write %d did not match hook output: data=%s output=%s",
                     index,
@@ -231,7 +236,7 @@ local function make_sound_step()
                         test.hex(entry.heartbeat, 2),
                         test.hex(entry.death, 2)), 0)
                 end
-            elseif entry.output ~= entry.stock then
+            elseif entry.active == inv_active_value and entry.output ~= entry.stock then
                 error(string.format(
                     "keyboard status write %d did not preserve stock status: stock=%s output=%s",
                     index,
@@ -540,6 +545,8 @@ local function make_sound_step()
 
             if stage == "wait-exit" then
                 if read_u8(inv_active) == 0 then
+                    write_u8(inv_last_stock_kbd_status, 0xde)
+                    write_u8(inv_last_output_kbd_status, 0xad)
                     write_u8(kbd_click_mask, iow_kbd_click)
                     write_u8(kbd_scan_mask, 0)
                     log_start = #output_log + 1
@@ -558,8 +565,14 @@ local function make_sound_step()
                 end)
                 if entry ~= nil then
                     validate_status_entries(log_start)
-                    test.assert_eq(entry.stock, entry.data, "inactive stock click status")
-                    test.assert_eq(entry.output, entry.data, "inactive hook output")
+                    local expected = read_u8(local_mode) | read_u8(led_state) | read_u8(kbd_online_mask)
+                    if read_u8(keyboard_locked) ~= 0 then
+                        expected = expected | iow_kbd_locked
+                    end
+                    test.assert_eq(entry.data % 64, expected % 64, "inactive stock LED status")
+                    test.assert_eq(read_u8(kbd_click_mask), 0, "inactive stock click consumed")
+                    test.assert_eq(read_u8(inv_last_stock_kbd_status), 0xde, "inactive hook leaves screen RAM alone")
+                    test.assert_eq(read_u8(inv_last_output_kbd_status), 0xad, "inactive hook leaves output diagnostic alone")
                     test.pass()
                     return
                 end
