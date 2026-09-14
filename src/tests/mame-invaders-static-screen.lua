@@ -205,6 +205,16 @@ local function make_static_screen_step()
         assert_cell(inv_turret_top_row + 1, inv_turret_start_x + 1, sg("a"), "turret bottom")
         assert_cell(inv_turret_top_row + 1, inv_turret_start_x + 5, sg("a"), "turret bottom right")
         assert_cell(inv_turret_top_row + 1, inv_turret_start_x + 6, sg("_"), "turret bottom blank")
+        for row = 0, 23 do
+            for column = 0, 79 do
+                local underlined = row == inv_turret_top_row + 1
+                    and column > inv_turret_start_x and column < inv_turret_start_x + 6
+                test.assert_eq(
+                    read_u8(row_address(row) + column + 0x1000) % 16,
+                    underlined and 0x0d or 0x0f,
+                    string.format("cell attributes at %d,%d", row, column))
+            end
+        end
         assert_shields()
     end
 
