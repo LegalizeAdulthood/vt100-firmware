@@ -349,6 +349,7 @@ inv_start_demo:
         call    inv_reset_for_attract
         call    inv_init_play_state
         call    inv_draw_attract_overlay
+inv_demo_ready:
         lda     frame_count
         sta     inv_last_vframe
         mvi     a,0ffh
@@ -356,6 +357,13 @@ inv_start_demo:
         mvi     a,inv_active_value
         sta     inv_active
         ret
+;
+inv_restart_demo:
+        call    inv_reset_for_attract
+        mvi     a,0ffh
+        sta     inv_attract_mode
+        call    inv_init_play_state
+        jmp     inv_demo_ready
 ;
 inv_reset_for_attract:
         xra     a
@@ -527,11 +535,12 @@ inv_frame:
         rnz
         lda     inv_attract_mode
         ora     a
-        rnz
+        jnz     inv_demo_frame
         call    inv_test_tick
         lda     inv_active
         cpi     inv_active_value
         rnz
+inv_play_frame:
         call    inv_update_level_reset
         rnz
         call    inv_update_turret_death
@@ -548,6 +557,38 @@ inv_frame:
         rnz
         call    inv_update_turret
         call    inv_update_laser
+        ret
+;
+inv_demo_frame:
+        xra     a
+        sta     inv_left_pressed
+        sta     inv_right_pressed
+        sta     inv_fire_pressed
+        lda     inv_level_timer
+        ora     a
+        jnz     inv_demo_pause
+        lda     inv_game_over
+        ora     a
+        jnz     inv_demo_end
+        call    inv_play_frame
+        lda     inv_game_over
+        ora     a
+        jnz     inv_demo_end
+        call    inv_get_alien_last
+        cpi     inv_alien_count
+        rnc
+        mov     b,a
+        call    inv_get_alien_y
+        cpi     inv_ground_row-inv_alien_h+1
+        rc
+inv_demo_end:
+        mvi     a,inv_level_pause_frames
+        sta     inv_level_timer
+        ret
+inv_demo_pause:
+        dcr     a
+        sta     inv_level_timer
+        jz      inv_restart_demo
         ret
 ;
 inv_prepare_screen:
@@ -658,10 +699,50 @@ inv_putc:
         mov     a,c
         cpi     inv_screen_cols
         rnc
+        lda     inv_attract_mode
+        ora     a
+        jz      inv_putc_visible
+        call    inv_attract_cell
+        rc
+inv_putc_visible:
         push    d
         call    inv_cell_addr
         pop     d
         mov     m,e
+        ret
+;
+; Carry marks a cell inside an attract rectangle, including its gutters.
+; Preserve BC and DE so drawing and erasing share the same clipping path.
+;
+inv_attract_cell:
+        mov     a,b
+        sui     inv_attract_title_row-1
+        cpi     3
+        jnc     inv_attract_cell_scores
+        mov     a,c
+        sui     inv_attract_title_col-1
+        cpi     inv_attract_title_len+2
+        rc
+inv_attract_cell_scores:
+        mov     a,b
+        sui     inv_attract_scores_row-1
+        cpi     inv_high_score_count+3
+        jnc     inv_attract_cell_prompt
+        mov     a,c
+        sui     inv_attract_scores_col-1
+        cpi     inv_attract_scores_len+2
+        rc
+inv_attract_cell_prompt:
+        mov     a,b
+        sui     inv_attract_prompt_row-1
+        cpi     3
+        jnc     inv_attract_cell_outside
+        mov     a,c
+        sui     inv_attract_prompt_col-1
+        cpi     inv_attract_prompt_len+2
+        ret
+inv_attract_cell_outside:
+        ora     a
         ret
 ;
 ; Write zero-terminated already-mapped glyph bytes from HL.
@@ -2099,7 +2180,9 @@ inv_set_game_over:
         sta     inv_game_over
         xra     a
         sta     inv_turret_death_timer
-        call    inv_maybe_add_high_score
+        lda     inv_attract_mode
+        ora     a
+        cz      inv_maybe_add_high_score
         call    inv_clear_ufo
         ret
 ;
@@ -3547,17 +3630,25 @@ inv_draw_attract_overlay:
         mvi     c,inv_attract_title_col-1
         mvi     d,3
         mvi     e,inv_attract_title_len+2
-        call    inv_clear_space_rect
+        call    inv_draw_box
         mvi     b,inv_attract_scores_row-1
         mvi     c,inv_attract_scores_col-1
         mvi     d,inv_high_score_count+3
         mvi     e,inv_attract_scores_len+2
-        call    inv_clear_space_rect
+        call    inv_draw_box
         mvi     b,inv_attract_prompt_row-1
         mvi     c,inv_attract_prompt_col-1
         mvi     d,3
         mvi     e,inv_attract_prompt_len+2
-        call    inv_clear_space_rect
+        call    inv_draw_box
+        mvi     b,inv_attract_prompt_row-1
+        mvi     c,inv_attract_prompt_col-1
+        mvi     a,'t'-inv_sg_source_base
+        call    inv_putc
+        mvi     b,inv_attract_prompt_row-1
+        mvi     c,inv_attract_prompt_col+inv_attract_prompt_len
+        mvi     a,'u'-inv_sg_source_base
+        call    inv_putc
         mvi     b,inv_attract_title_row
         mvi     c,inv_attract_title_col
         lxi     h,inv_attract_title
@@ -3723,7 +3814,72 @@ inv_clear_space_rect_row:
         jnz     inv_clear_space_rect_row
         ret
 ;
+; Draw a blank box at BC, D rows by E columns (at least 3 by 3).
+;
+inv_draw_box:
+        push    b
+        push    d
+        call    inv_clear_space_rect
+        pop     d
+        pop     b
+        push    b
+        push    d
+        mov     d,e
+        mvi     e,'k'-inv_sg_source_base
+        mvi     a,'l'-inv_sg_source_base
+        call    inv_draw_box_edge
+        pop     d
+        pop     b
+        inr     b
+        dcr     d
+        dcr     d
+inv_draw_box_sides:
+        push    b
+        push    d
+        mvi     a,'x'-inv_sg_source_base
+        call    inv_putc
+        pop     d
+        pop     b
+        push    b
+        push    d
+        mov     a,c
+        add     e
+        dcr     a
+        mov     c,a
+        mvi     a,'x'-inv_sg_source_base
+        call    inv_putc
+        pop     d
+        pop     b
+        inr     b
+        dcr     d
+        jnz     inv_draw_box_sides
+        mov     d,e
+        mvi     e,'j'-inv_sg_source_base
+        mvi     a,'m'-inv_sg_source_base
+        jmp     inv_draw_box_edge
+;
+; Draw an edge at BC, D columns wide, with corner glyphs A and E.
+;
+inv_draw_box_edge:
+        push    b
+        push    d
+        call    inv_putc
+        pop     d
+        pop     b
+        inr     c
+        push    d
+        dcr     d
+        dcr     d
+        mvi     a,'q'-inv_sg_source_base
+        call    inv_fill_cells
+        pop     d
+        mov     a,e
+        jmp     inv_putc
+;
 inv_clear_playfield:
+        lda     inv_attract_mode
+        ora     a
+        jnz     inv_clear_clipped_playfield
         lxi     h,inv_row_addr
         mvi     b,inv_screen_rows
 inv_clear_row:
@@ -3743,6 +3899,24 @@ inv_clear_col:
         pop     h
         dcr     b
         jnz     inv_clear_row
+        ret
+;
+inv_clear_clipped_playfield:
+        lxi     b,0
+inv_clear_clipped_cell:
+        push    b
+        xra     a
+        call    inv_putc
+        pop     b
+        inr     c
+        mov     a,c
+        cpi     inv_screen_cols
+        jc      inv_clear_clipped_cell
+        mvi     c,0
+        inr     b
+        mov     a,b
+        cpi     inv_screen_rows
+        jc      inv_clear_clipped_cell
         ret
 ;
 inv_test_render_probe:
