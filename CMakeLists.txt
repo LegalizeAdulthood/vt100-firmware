@@ -16,9 +16,9 @@ add_subdirectory(src)
 misc_target(FILES
     cmake/misc_target.cmake
     CMakePresets.json
-    README.md
+    ReadMe.md
 )
-misc_group_sources("Docs" FILES README.md)
+misc_group_sources("Docs" FILES ReadMe.md)
 misc_group_sources("CMake" FILES CMakePresets.json)
 misc_group_sources("CMake Scripts" FILES "cmake/misc_target.cmake")
 

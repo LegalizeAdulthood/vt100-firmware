@@ -1,17 +1,23 @@
 # VT100 Firmware Invaders Design
 
-This note sketches an 8080 implementation of a Space Invaders-style game in
+This note describes the current 8080 implementation of a Space Invaders-style game in
 VT100 firmware, using [vtinvaders](https://github.com/j4james/vtinvaders) and
 [ascii-invaders](https://github.com/macdice/ascii-invaders) as gameplay and
 rendering references.
 
-The design assumes that the base firmware ROM contains only the launcher,
-dispatch glue, and clean exit path. The game code lives in the AVO program
+The base firmware ROM contains only same-size trampoline replacements for the
+game hooks. The game code lives in the AVO program
 expansion ROM window starting at `8000h`, while mutable game state lives in the
 AVO RAM range, `3000h`-`3fffh`. While the game is active, the normal terminal
 screen contents and AVO attribute contents are considered owned by the game.
-Returning to terminal mode should restore or rebuild the normal terminal display
-state.
+Returning to terminal mode clears the game display and restores the saved LED
+and cursor rendition state; it does not restore the previous screen contents.
+
+The implementation is in [invaders-avo.asm](../src/invaders-avo.asm), with the
+base-ROM trampoline addresses in [invaders-abi.asm](../src/invaders-abi.asm).
+The build and test definitions in [src/CMakeLists.txt](../src/CMakeLists.txt)
+and [src/tests/CMakeLists.txt](../src/tests/CMakeLists.txt) are the authority for
+target names, artifacts, and registered tests.
 
 ## Goals
 
@@ -43,9 +49,8 @@ matrix.
 a realtime signal handler, heap allocation, linked-list bombs, and random bomb
 drops. Those choices should not be copied into ROM. Its art direction is still
 useful, though: two-line aliens, a chunky two-line gunner, a two-line mystery
-ship, a 7 by 3 shelter, and a simple animated bomb. The firmware version should
-translate those silhouettes into DEC Special Graphics line, block, and scanline
-characters.
+ship, and a 7 by 3 shelter. The firmware version adapts those silhouettes using
+DEC Special Graphics and ordinary ASCII; it does not use a downloadable font.
 
 Adopted choices:
 
@@ -55,12 +60,13 @@ Adopted choices:
 | Alien movement | `vtinvaders` | One alien per frame is cheap and produces arcade-like speedup. |
 | Enemy firing | `vtinvaders` | Fixed shoot order is deterministic and testable. |
 | Missile storage | `vtinvaders` | Three fixed slots are simpler than linked-list bombs on 8080. |
-| Collision IDs | `vtinvaders` | A shadow object map is affordable with AVO RAM. |
+| Collisions | Firmware implementation | Coordinate rectangles for entities and cell codes for shields; no active shadow ID map. |
 | Alien, gunner, UFO, shelter silhouettes | `ascii-invaders` | Larger sprites read better on a VT100. |
 | Actual sprite character set | VT100 firmware | DEC Special Graphics is native and already mapped by the ROM. |
 | Formation bounds | `ascii-invaders` | Cached live edges avoid scanning empty margins every frame. |
-| Shield storage | `ascii-invaders` | A cell buffer is simpler and more expressive than packed damage nibbles. |
-| Bomb animation | `ascii-invaders` | A one-cell rotating glyph is compact and animates well. |
+| Shield shape | `ascii-invaders` | Four 7 by 3 shelters leave room for recognizable roofs and openings. |
+| Shield durability | `vtinvaders` | Per-column damage drives full, damaged, weak, and empty cell appearances. |
+| Enemy missile rendering | Firmware implementation | A fixed one-cell glyph keeps drawing inexpensive. |
 
 The result is a hybrid: `vtinvaders` for behavior, `ascii-invaders` for the
 visual language.
@@ -81,12 +87,13 @@ The stock firmware already provides the scheduling pieces needed by the game:
 - `kbd_click_mask` and `kbd_online_mask` are ORed into the keyboard status
   byte by `update_kbd`; the former is a one-shot keyclick latch and the latter
   carries the stock BEL bit pattern.
-- Game sound should trampoline the keyboard status-byte assembly path so
+- Game sound trampolines the keyboard status-byte assembly path so
   Invaders can own only the click/bell bit while active and leave LEDs,
   local/online state, lock state, and scan-start behavior under stock control.
 
-The game should add an `inv_active` mode flag, but the base ROM has too little
-slack for inline game dispatch. Every Invaders change in `base.asm` should be a
+The game uses `inv_active == inv_active_value` (`5ah`) as its mode guard; a
+nonzero byte alone does not mean game mode. The base ROM has too little slack
+for inline game dispatch. Every Invaders change in `base.asm` must be a
 same-size replacement of existing bytes with a call into the AVO ROM. The AVO
 hook must repeat the displaced stock bytes on the normal terminal path and only
 skip them when game mode owns control.
@@ -101,10 +108,10 @@ idle_loop:
         ; existing setup/local handling remains here
         jmp     idle_loop
 
-inv_idle_hook:
+inv_idle_hook_impl:
         lda     inv_active
-        ora     a
-        jnz     inv_idle_active
+        cpi     inv_active_value
+        jz      inv_idle_active
         call    keyboard_tick       ; displaced base-ROM call
         ret
 
@@ -113,15 +120,15 @@ inv_idle_active:
         pop     h                   ; discard return into terminal idle path
         jmp     idle_loop
 
-inv_idle:
+inv_idle_impl:
         call    update_kbd          ; keep scan/status/click output alive
         call    inv_read_keys       ; consume raw game keys
         lda     inv_active          ; input may have requested exit
-        ora     a
-        jz      idle_loop
+        cpi     inv_active_value
+        rnz
         call    inv_wait_frame      ; wait for frame_count to change
         call    inv_frame
-        jmp     idle_loop
+        ret
 ```
 
 `vertical_int` should not run the game. It should continue to do short,
@@ -209,8 +216,7 @@ inv_key_setup:
         ret
 ```
 
-`q`/`Q` can remain as a development or MAME convenience exit, but the
-hardware-facing launcher and escape hatch should be SET-UP based.
+SET-UP is the game exit key. There is no `q`/`Q` exit binding.
 
 ## Attract Mode
 
@@ -223,7 +229,7 @@ The shared renderer must leave them untouched so the overlay does not flicker
 as objects move behind it. RETURN removes the overlay and disables clipping
 when initializing the real game.
 
-The demo should reuse the same game state, frame clock, object map, update
+The demo reuses the same game state, frame clock, update
 routines, and rendering paths as real gameplay. The demo driver waits for the
 formation to finish spawning, then steers below the lowest live alien in the
 leftmost occupied column. It fires when aligned and no player laser is active.
@@ -253,8 +259,11 @@ moving gameplay cannot show through holes in the text area.
 
 ## Invaders ROM And AVO Memory Plan
 
-The Invaders entry points are shared between the base ROM and the AVO expansion
-image through `src/invaders-abi.asm`. The expansion ROM starts at `8000h`; the
+Only trampoline entry points referenced by `base.asm` are shared through
+`src/invaders-abi.asm`: idle dispatch, SET-UP launch, keyboard sound status,
+reset-time high-score loading, and initials cursor handling. Private entry
+points, constants, and state addresses stay in `src/invaders-avo.asm`.
+The expansion ROM starts at `8000h`; the
 AVO RAM range remains available for mutable state, scratch data, and attribute
 or screen-related storage. Allocate persistent game state from `3fffh`
 downward, leaving lower AVO addresses untouched as long as possible to reduce
@@ -265,158 +274,101 @@ inv_avo_base    equ 8000h
 inv_code_base   equ inv_avo_base
 inv_code_top    equ 9fffh       ; 8 KiB AVO program expansion ROM
 
-avo_ram_start   equ 3000h
-avo_ram_top     equ 3fffh
+inv_avo_ram_start equ 3000h
+inv_avo_ram_top equ 3fffh
 
-inv_data_top    equ avo_ram_top ; allocate mutable state downward from here
+inv_data_top    equ inv_avo_ram_top ; allocate mutable state downward from here
 inv_data_floor  equ 3100h       ; soft low-water mark; move only if needed
 ```
 
-If code size grows, keep it in the expansion ROM and adjust only the mutable
-AVO RAM layout. The main constraint is that the game should own the selected
-top-down AVO RAM state range while active. If the normal terminal display is to
-be restored exactly, save the visible screen and attribute data before
-entering. If exact restoration is not required, leave through a normal terminal
-reset/rebuild path.
+Keep new game code within the 8 KiB expansion window; changing the RAM layout
+does not increase ROM capacity. Mutable storage is allocated with address
+equates, not `db` or `ds` directives that would emit storage into the ROM image.
 
-Suggested entry sequence:
+`inv_enter_impl` prepares the 80-column screen, saves and disables the terminal
+cursor rendition, saves the LED state, reloads high scores from NVR, and enters
+`inv_start_demo`. Shared initialization resets play state, starts with four
+gunners at level 1, initializes shields and aliens, and draws the static screen.
+The attract overlay is drawn before setting the active-mode guard.
 
-```asm
-inv_enter:
-        di
-        mvi     a,0ffh
-        sta     inv_active
-        call    inv_save_leds
-        call    inv_save_terminal_state
-        call    inv_init_screen
-        call    inv_reset_state
-        call    inv_update_gunner_leds
-        lda     frame_count
-        sta     inv_last_vframe
-        ei
-        ret
-```
+`inv_exit_impl` hides an initials cursor if necessary, clears game-mode flags,
+resets projectiles and sound, clears the playfield, and restores saved LED and
+cursor rendition state. The SET-UP key path also clears the keyboard silo. The
+prior terminal screen and prior 132-column layout are not saved and restored.
 
-Suggested exit sequence:
+### Hardware RAM Constraint
 
-```asm
-inv_exit:
-        di
-        xra     a
-        sta     inv_active
-        call    inv_restore_leds
-        call    inv_restore_terminal_state
-        call    clear_keyboard
-        ei
-        ret
-```
+Real AVO attribute RAM is four bits wide. Much of the current layout uses
+nibble pairs or nibble-sized cell codes, but some state, including the active
+guard, missile coordinates, and sound/UFO timers, uses full bytes. The MAME
+driver maps `2000h`-`3fffh` as byte-wide screen/scratch RAM, so passing its tests
+does not establish compatibility with physical four-bit AVO RAM. A hardware
+port still needs an audit of those full-byte fields and attribute-memory use.
 
 ## Frame Clock
 
-Use the low byte `frame_count` as the hardware refresh marker. The game keeps a
-separate 16-bit logical frame counter for gameplay timing.
+`inv_wait_frame` waits for `frame_count` to differ from `inv_last_vframe`,
+calling `update_kbd` while waiting so keyboard status and sound keep flowing.
+It then records the refresh marker and advances the logical game counter once.
 
-```asm
-inv_wait_frame:
-        lda     frame_count
-        lxi     h,inv_last_vframe
-        cmp     m
-        jz      inv_wait_frame
-        mov     m,a
-        call    inv_inc_frame16
-        ret
+Despite its historical name, `inv_inc_frame16` maintains an eight-bit counter
+in two four-bit locations, `inv_frame_lo` and `inv_frame_hi`. It carries at 16,
+uses descending addresses, and wraps after 256 frames. Longer gameplay timers
+have their own state; they do not rely on a 16-bit global frame count.
 
-inv_inc_frame16:
-        lxi     h,inv_frame_lo
-        inr     m
-        rnz
-        inx     h
-        inr     m
-        ret
-```
-
-At 60 Hz, `vtinvaders` timings map directly. At 50 Hz, either accept slightly
-slower play or scale long timers using `refresh_rate`.
+Timers use refresh frames without 50 Hz compensation. The same frame counts
+therefore take longer in wall-clock time on a 50 Hz terminal.
 
 ## Main Game Loop
 
-The C++ reference does this in `engine::run`:
+`inv_frame` checks the active guard, then dispatches attract mode to
+`inv_demo_frame` or runs the optional test hook before `inv_play_frame`.
+The shared play loop runs in this order:
 
-1. Reset screen, status, shields, aliens, missiles, turret, laser, and UFO.
-2. Initialize one alien per frame until all 44 are present.
-3. Each frame, move one live alien.
-4. Start full gameplay after `aliens::count + 73` frames.
-5. Every third frame, possibly fire and update alien missiles.
-6. Process turret movement, firing, explosions, and laser collisions.
-7. Flush only the changed output.
+1. Handle a pending level reset; pause ordinary updates while its timer runs.
+2. Handle turret death or game over; pause ordinary updates during that state.
+3. Call `inv_update_aliens` to spawn one alien or move one live alien.
+4. Update heartbeat, UFO, and enemy fire, including active missiles.
+5. Stop this frame if an enemy missile caused turret death or game over.
+6. In attract mode, synthesize the demo's movement and fire input.
+7. Update the turret, then the player laser.
 
-The firmware loop should keep the same ordering:
+The turret is drawn at initialization and real-game input is available while
+the 44 aliens spawn. Enemy firing and the UFO countdown wait for spawn
+completion; there is no additional `count + 73` start gate.
 
-```asm
-inv_frame:
-        call    inv_spawn_one_alien     ; Z while still spawning
-        rz
-
-        call    inv_update_alien        ; one live alien per frame
-        call    inv_update_heartbeat
-        call    inv_score_pending_kill
-        call    inv_check_landed
-        call    inv_check_level_done
-
-        call    inv_update_ufo
-        call    inv_update_shields
-
-        call    inv_after_start_gate    ; frame >= 44 + 73
-        rz
-
-        call    inv_enemy_fire_tick     ; every 3 frames
-        call    inv_update_missiles
-
-        call    inv_update_turret
-        call    inv_update_laser
-        ret
-```
-
-When `inv_check_level_done` sees no remaining aliens and the turret is not
-exploding, pause for about 30 frames, increment `inv_level`, and restart the
-level with lower initial alien rows.
+The last alien kill starts a 15-frame level pause. `inv_next_level` increments
+the displayed level up to 9, resets aliens, enemy fire, sound, and UFO state,
+and redraws the screen. It preserves score, remaining gunners, turret position,
+and existing shield damage.
 
 ## Keyboard Handling
 
-Game input should read raw scan results, not normal translated terminal reports.
+Gameplay input reads raw scan results, not normal translated terminal reports.
 `keyboard_int` already queues up to four scan codes in `key_silo`; `update_kbd`
 keeps the keyboard scan and LED/status write side alive.
 
-`inv_read_keys` can interpret the scan codes directly:
+`inv_read_keys` clears the movement/fire flags, then interprets the key silo:
 
-- RETURN: if attract mode is active, start the real game
-- left arrow: set `inv_left_pressed`
-- right arrow: set `inv_right_pressed`
-- space: set `inv_fire_pressed`
-- SET-UP: call `inv_exit`
-- `q`, `Q`, or a chosen control chord: call `inv_exit`
+| Key | Scan code | Gameplay action |
+|---|---|---|
+| RETURN | `04h` or `64h` | Start a fresh real game from attract mode |
+| Left arrow | `20h` | Set `inv_left_pressed` |
+| Right arrow | `10h` | Set `inv_right_pressed` |
+| Space | `77h` | Set `inv_fire_pressed` |
+| SET-UP | `7bh` | Exit to normal terminal operation |
 
-The exact scan codes should be confirmed on real hardware or MAME. For the
-first implementation, it is acceptable to support a small physical-key subset
-with a table near the game code:
+Both movement flags together cancel movement. Attract mode replaces movement
+and fire input with its demo driver. Consumed gameplay keys are discarded with
+`clear_keyboard` rather than sent to the host.
 
-```asm
-inv_key_table:
-        db      <left_scan>,  inv_key_left
-        db      <right_scan>, inv_key_right
-        db      <space_scan>, inv_key_fire
-        db      64h,          inv_key_start
-        db      7bh,          inv_key_setup
-        db      <q_scan>,     inv_key_quit
-        db      0ffh
-```
-
-After consuming keys, clear the stock keyboard silo with `clear_keyboard` or an
-equivalent local routine. Do not call `send_key_byte` while the game is active.
+Initials entry is the exception: it temporarily uses the stock SET-UP-style
+keycode-to-ASCII path, including modifier processing and bounded cursor editing,
+as described under [Persistent High Scores](#persistent-high-scores).
 
 ## Keyboard LEDs
 
-The game should use the four VT100 keyboard LEDs as the gunner counter. During
+The game uses the four VT100 keyboard LEDs as the gunner counter. During
 game mode, the number of lit LEDs equals the number of player gunners
 available:
 
@@ -450,20 +402,20 @@ inv_update_gunner_leds:
         ret
 ```
 
-On entry, save the previous `led_state` byte in AVO RAM. On exit, restore it so
-terminal mode gets its previous LEDs back. Gunner LEDs should be refreshed on
-game start, after losing a gunner, after earning an extra gunner, and when
-entering game-over state.
+On entry, the game saves the previous low nibble of `led_state` in AVO RAM.
+On exit, it restores that nibble while preserving the upper bits. Gunner LEDs
+are refreshed when drawing the static screen and immediately after losing a
+gunner. A new game starts with four gunners; there is no extra-life award.
 
 ## Game Sound
 
-The game should use the VT100 keyboard click/bell bit for sound effects, but it
-should do so at the same point where the stock firmware assembles the keyboard
-status word. The base-ROM patch should replace existing bytes in `update_kbd`
-with a same-size call into the AVO ROM. The AVO hook must repeat the displaced
-stock instructions when the game is inactive. When the game is active, it must
-preserve every keyboard status bit except bit 7, then merge in the current game
-sound bit before the status word is written to `iow_keyboard`.
+The game uses the VT100 keyboard click/bell bit at the point where the stock
+firmware assembles the keyboard status word. The base-ROM patch replaces
+`ora m` / `mvi m,0` in `update_kbd` with a same-size call to
+`inv_sound_status_hook`. The AVO implementation repeats those instructions to
+merge and clear the stock click latch, then checks the active-mode guard.
+While game sound owns the output, it preserves bits 0-6 and replaces bit 7
+before the status word is written to `iow_keyboard`.
 
 This keeps keyboard LEDs, local/online indication, keyboard lock, scan start,
 and normal key scanning on the stock path while allowing Invaders to pattern
@@ -477,37 +429,17 @@ Do not call `make_keyclick` for game audio. That routine checks
 intentional game sound. Likewise, do not write `iow_keyboard` directly from
 gameplay code; that risks corrupting unrelated keyboard status bits.
 
-The heartbeat state should select periodic one-status-word pulses. The turret
-death state should take priority over the heartbeat and emit a longer patterned
-stream, such as a short descending or raspy pulse train. MAME is expected to
-make the result audible, but real hardware remains the final test for whether
-non-stock click-bit patterns produce distinct tones.
+Heartbeat output is a one-status-word pulse. Turret death takes priority and
+starts a 200-status-word countdown, gating the click bit with a repeating
+two-on/two-off pattern. `inv_next_sound_mask` advances the sound at keyboard
+status cadence, not at video-frame cadence.
 
-```asm
-inv_sound_status_hook:
-        ; A = stock keyboard status byte after displaced merge work
-        ; Return A = keyboard status byte to write to iow_keyboard
-        mov     b,a
-        lda     inv_active
-        ora     a
-        mov     a,b
-        rz
-        ; Preserve bits 0-6 from the stock status byte and replace bit 7 with
-        ; the game sound sequencer's current output.
-        ani     7fh
-        mov     b,a
-        call    inv_next_sound_mask ; A = 00h or iow_kbd_click
-        ora     b
-        ret
-```
+`inv_update_heartbeat` runs after `inv_update_aliens`. It does not schedule new
+pulses during turret death, level pauses, or game over. The final death sound
+continues after game over until its countdown expires; the hook then returns
+to stock status output. Level pauses and game exit also reset game sound.
 
-Call `inv_update_heartbeat` once per game frame after `inv_update_alien` to
-schedule heartbeat pulses. The heartbeat should stop during level pauses and
-after game over, while the final turret death sound should continue long enough
-to be audible. The period should shrink as aliens are killed so the click
-cadence accelerates with the game:
-
-Suggested 50/60 Hz frame periods:
+Heartbeat frame periods for the current 44-alien formation are:
 
 ```text
 44-30 aliens remaining: 24 frames
@@ -516,11 +448,10 @@ Suggested 50/60 Hz frame periods:
 6-1 aliens remaining:   6 frames
 ```
 
-MAME currently makes the VT100 keyboard click audible, but it may model the
-speaker as a gated fixed-frequency beeper rather than the exact RC discharge
-circuit. Automated tests should therefore verify the status-word bit pattern,
-not sampled audio. Real hardware remains the final gate for the exact timbre of
-heartbeat and death-sound patterns.
+Automated tests verify the status-word bit pattern and preservation of the
+other keyboard bits, not sampled audio. Audible output in MAME does not prove
+that its speaker model reproduces the hardware RC circuit. Real hardware
+remains the final gate for the exact timbre of heartbeat and death sound.
 
 ## Screen Model
 
@@ -528,8 +459,7 @@ The hybrid playfield keeps the VT100-friendly fixed dimensions from
 `vtinvaders`, but uses taller `ascii-invaders`-style sprites:
 
 - physical width: 80 columns
-- logical playfield width: 60 columns, centered or left-biased inside the
-  physical display
+- logical playfield width: 60 columns, centered at physical columns 11-70
 - height: 24 rows
 - UFO rows: 1 and 2, with no top gutter
 - alien rows: 2 visible rows in a 3-row slot starting at row 3
@@ -545,27 +475,29 @@ slot. That keeps the 11-column arcade formation inside a 60-column playfield:
 11 columns * 5-cell slots = 55 columns
 ```
 
-The recommended geometry is:
+These screen row/column descriptions are one-based. Assembly coordinates are
+zero-based. The implemented geometry is:
 
 ```asm
-inv_play_w      equ 60
+inv_play_width  equ 60
 inv_alien_cols  equ 11
 inv_alien_rows  equ 4
 inv_alien_w     equ 4        ; visible sprite width
-inv_alien_slot  equ 5        ; width plus one blank column
+inv_alien_slot_w equ 5       ; width plus one blank column
 inv_alien_h     equ 2
-inv_alien_vslot equ 3        ; height plus one blank row
+inv_alien_slot_h equ 3       ; height plus one blank row
 inv_ufo_w       equ 7
 inv_ufo_h       equ 2
-inv_gunner_w    equ 7
-inv_gunner_h    equ 2
-inv_shelter_w   equ 7
-inv_shelter_h   equ 3
+inv_turret_w    equ 7
+inv_turret_h    equ 2
+inv_shield_w    equ 7
+inv_shield_h    equ 3
 ```
 
-The game should render into normal VT100 screen RAM. A simple first pass can use
-a direct row-address table in the AVO ROM. Do not store this table in AVO RAM:
-the AVO RAM is nibble-wide, so it is unsuitable for 16-bit screen pointers.
+The game renders into normal VT100 screen RAM. `inv_row_addr` is a direct
+row-address table in the AVO ROM; screen rows have an 83-byte stride, including
+their three-byte line links. Keep this pointer table in ROM, not in four-bit
+AVO attribute RAM.
 
 ```asm
 inv_row_addr:
@@ -575,23 +507,20 @@ inv_row_addr:
         dw      main_video+(inv_row_stride*23)
 ```
 
-`inv_init_screen` should:
+`inv_prepare_screen` disables 132-column mode and scrolling, then calls the
+stock `make_screen`, `make_line_t`, and `update_dc011` routines to establish a
+stable 80-column display. `inv_draw_static_screen` clears it and draws the
+status, ground line, shields, turret, and LED count. The active idle hook bypasses
+normal receiver processing. Cursor rendition is disabled except during initials
+entry.
 
-1. Stop normal receive processing for game mode.
-2. Rebuild a stable 80-column screen using the stock screen setup routines or a
-   private 60-column-centered layout.
-3. Clear the visible playfield.
-4. Draw shields, score, and any static playfield decoration.
-5. Reset the cursor state or hide the cursor by keeping the cursor off-screen.
-
-Rendering routines should update only cells that changed:
+Rendering writes changed objects directly; there is no deferred output flush.
+The drawing interfaces are:
 
 ```asm
 ; input: B = row, C = column, A = character
 inv_putc:
-        ; use inv_row_addr[row] + column to find screen RAM
-        ; write already-mapped glyph byte
-        ; optionally write normal AVO attribute byte if attributes are enabled
+        ; bounds-check, clip attract boxes, then write through inv_cell_addr
         ret
 
 ; input: B = row, C = column, HL = zero-terminated mapped-glyph sprite
@@ -605,30 +534,18 @@ inv_puts_sg:
         ret
 ```
 
-If enough RAM is available, keep a compact 60 by 24 object-id shadow map in AVO
-RAM. That is 1440 bytes and makes collision tests cheap. If code simplicity is
-more valuable than RAM, this is the easiest route:
-
-```asm
-id_empty        equ 0ffh
-id_shield       equ 0f0h
-id_turret       equ 0f1h
-id_missile      equ 0f2h
-id_ufo          equ 0f3h
-id_alien0       equ 00h         ; 00h-2bh are the 44 alien IDs
-
-inv_id_map      ds 60 * 24
-```
-
-Without a shadow map, collisions can be resolved from entity coordinates and
-shield damage state. That saves RAM but costs more code.
+The layout still reserves 1440 addresses at `inv_object_map_base` and 32 at
+`inv_dirty_queue_base`, but neither buffer participates in rendering or
+collision detection. `inv_putc` writes screen RAM only. Collisions use entity
+coordinates and shield cell state, as described under
+[Collision Strategy](#collision-strategy).
 
 ## Special Graphics Encoding
 
 The VT100 firmware already knows the DEC Special Graphics character set.
 `charset_list` maps SCS final `0` to internal charset value `88h`, and
 `print_char` maps Special Graphics source bytes from `05fh` through `07eh` down
-to ROM glyphs `00h` through `1fh`. The game should use the same mapping for
+to ROM glyphs `00h` through `1fh`. The game uses the same mapping for
 direct screen RAM writes:
 
 ```asm
@@ -654,12 +571,15 @@ sg_vline        equ 'x' - 05fh
 sg_bullet       equ '~' - 05fh
 ```
 
-Sprite tables in this design are written with the Special Graphics source
-characters for readability. For example, source `lqqk` means "upper-left
-corner, horizontal line, horizontal line, upper-right corner." The assembled
-table should either store those source bytes and have `inv_puts_sg` subtract
-`05fh`, or pre-convert the table to ROM glyph numbers. Pre-converted tables are
-faster and smaller at runtime.
+Alien and UFO tables store Special Graphics source characters and use
+`inv_puts_sg` to subtract `05fh` at runtime. For example, source `lqqk` means
+"upper-left corner, horizontal line, horizontal line, upper-right corner."
+Shield cell codes instead index `inv_cell_glyphs`, a table of final glyph bytes.
+
+`inv_puts_glyphs` writes bytes literally. Text and the turret's mixed ASCII/DEC
+top row use this path so ASCII underscore remains an underscore. Its zero byte
+is the string terminator; use ASCII space for blanks in a literal glyph string.
+The turret bottom uses `inv_puts_sg`, where `_` maps to a blank cell.
 
 Direct screen RAM writes should not change `g0_charset`, `g1_charset`, or
 `gl_invocation`. Those variables matter when characters pass through
@@ -671,69 +591,54 @@ The ordinary ASCII set should still be used for text such as `SCORE`,
 `GAME OVER`, and decimal point values. DEC Special Graphics is for moving game
 sprites, shelters, missiles, and decorative playfield marks.
 
-## Proposed Special Graphics Rendering
+## Special Graphics Rendering
 
-These sprites are written as DEC Special Graphics source characters, not as the
-literal ASCII characters that should appear on screen. They are derived from
-the silhouettes in `ascii-invaders`, with horizontal padding trimmed where
-useful. They are designed for direct screen RAM writes and for a simple
-object-ID shadow map.
+The following tables match the current ROM sprites. Diagrams labelled "source"
+use DEC Special Graphics source characters, not their ASCII appearance; `a`
+means checkerboard and `_` means blank. Literal ASCII and mixed-glyph diagrams
+are identified separately.
 
 ### Alien Formation
 
-There are 5 rows and 11 columns. Each alien is 4 visible columns wide in a
+There are 4 rows and 11 columns. Each alien is 4 visible columns wide in a
 5-column slot. Each alien is 2 rows tall in a 3-row vertical slot.
 
 ```text
 30-point alien, animation A, source:
-laak
+_aa_
 maaj
 
 30-point alien, animation B, source:
-lqqk
-maaj
+a__a
+_aa_
 
 20-point alien, animation A, source:
-lqqk
-x__x
+aqqa
+_xx_
 
 20-point alien, animation B, source:
-xqqx
+xaax
 mqqj
 
 10-point alien, animation A, source:
-_lqk
-mqj_
+laak
+x__x
 
 10-point alien, animation B, source:
-lqk_
-_mqj
-
-Alien explosion, source:
-qnnq
-xnnx
-
-Landed alien, source:
-laak
-maaj
+_aa_
+mqqj
 ```
 
-Here `_` means the Special Graphics blank glyph, not ASCII underscore. These
-shapes use line corners for the outline and checkerboard fill for stronger
-aliens. The 10-point alien intentionally shifts left/right between animation
-frames, echoing the wiggle in both references.
+The global `inv_alien_anim_phase` toggles at each completed sweep. Aliens use
+that phase when drawn; a kill erases the sprite immediately without a separate
+alien-explosion or landed-alien image.
 
-When converting these diagrams to byte tables, right-pad each row to its
-declared sprite width; markdown may not show trailing spaces. The animation
-phase can be selected from the formation phase or from alien X coordinate
-parity; the important point is to keep it global and cheap.
-
-Recommended row types:
+Row types:
 
 ```text
 top row:          30-point alien
 next two rows:    20-point alien
-bottom two rows:  10-point alien
+bottom row:       10-point alien
 ```
 
 ### Player Turret
@@ -746,52 +651,46 @@ Normal, appearance (a = checkerboard):
  _/|\_
  aaaaa
 
-Explosion frame A, source:
-__n_n__
-_n_n_n_
-
-Explosion frame B, source:
-_q_n_q_
-n__n__n
+Explosion, literal ASCII:
+*aaaaa*
+a*a*a*a
 ```
 
-The turret collision point is the center column, `turret_x + 3`. The player
-laser starts above that column.
+The top row mixes ASCII space, underscore, slash, and backslash with the DEC
+vertical-line glyph `19h` at the center. The lower row uses Special Graphics
+checkerboard cells. The explosion is one static, literal ASCII sprite, not an
+alternating Special Graphics animation.
+
+The player laser starts above the center column, `inv_turret_x + 3`. Incoming
+missiles use the whole 7 by 2 turret rectangle for collision detection.
 
 ### Player Laser
 
 ```text
-Normal shot, source:          x
-Top sparkle phase 1, source:  n
-Top sparkle phase 2, source:  a
+Normal shot, source: x
 ```
 
-The laser is a single active shot. Use Special Graphics vertical line and cross
-glyphs, while keeping the `vtinvaders` single-shot state machine and hit
-ordering.
+Only one laser can be active. It uses glyph `19h`, moves upward one row per
+frame, and disappears after reaching row 0 or hitting an object. There is no
+top-edge sparkle animation.
 
 ### Alien Missiles
 
-Use a one-cell rotating bomb glyph, but keep `vtinvaders` fixed missile slots
-and firing cadence.
+Enemy missiles have three fixed slots and a one-cell glyph:
 
 ```text
-Bomb animation source:       x q n a
-Laser/bomb collision source: n
-Ground explosion A source:   a
-Ground explosion B source:   n
-Ground scar, even source:    o
-Ground scar, odd source:     s
+Missile source: w
 ```
 
-Three missile slots are enough. Keep the `vtinvaders` pacing: one active
-missile until frame 2000, then up to three. A new missile may launch 50 frames
-after the last launch, or 12 frames after all missiles have ended.
+The renderer always writes glyph `18h` (`w` in Special Graphics). A phase byte
+toggles during movement but does not select a different glyph. All three slots
+are available from the beginning; there is no later one-to-three missile gate.
+See [Missile Update](#missile-update) for the firing countdowns.
 
 ### UFO
 
 Use the `ascii-invaders` mystery ship. It is 7 columns wide and 2 rows tall,
-moving on rows 2 and 3.
+moving on display rows 1 and 2 (zero-based rows 0 and 1).
 
 ```text
 Normal, source:
@@ -808,142 +707,81 @@ Score 150:                   150
 Score 300:                   300
 ```
 
-The reference alternates UFO direction based on the number of player shots
-fired. Preserve that rule because it costs little and gives deterministic
-arcade-like behavior.
+UFO direction depends on player-shot parity: even counts start at the left and
+move right; odd counts start at the right and move left.
 
 ### Shields
 
-Use the `ascii-invaders` shelter as the preferred shield. It is 7 columns wide
-and 3 rows tall.
+Each of the four shelters is 7 columns wide and 3 rows tall. The roof corners
+use ASCII slash and backslash, with Special Graphics checkerboard fill:
 
 ```text
 Initial, source:
-_lqqqk_
-laaaaak
+/aaaaa\
+aaaaaaa
 aaa_aaa
 ```
 
-Because AVO RAM is nibble-wide, store the shield as one 4-bit cell code per
-visible shield cell rather than as full glyph bytes or packed damage nibbles.
-The cell code indexes a ROM glyph table when rendering. Any code other than
-`inv_cell_blank` is solid. A missile or laser hit turns the struck cell into
-`inv_cell_blank`, optionally also eroding one neighboring cell to make damage
-look less like pinholes.
+The 84 visible cells use four-bit codes indexing a ROM glyph table. A separate
+28-element array tracks damage per column, shared by all three cells in that
+column. Any nonblank cell is solid. Successive hits replace its column's
+remaining cells with `*`, then `.`, then blanks; existing openings stay blank.
 
 ```text
-Light top hit, source:
-_l__qk_
-laaaaak
-aaa_aaa
+One hit in column 2:
+/*aaaa\
+a*aaaaa
+a*a_aaa
 
-Light bottom hit, source:
-_lqqqk_
-laaaaak
-aa___aa
+Two hits in column 2:
+/.aaaa\
+a.aaaaa
+a.a_aaa
 
-Heavy damage, source:
-_l___k_
-la___ak
-a_____a
+Three hits in column 2 (_ = blank):
+/_aaaa\
+a_aaaaa
+a_a_aaa
 ```
 
-This is less compact than the earlier 4-column damage-nibble design, but it is
-simpler to test, fits the AVO RAM hardware, and looks much better. The packed
-damage design remains a fallback if the AVO memory budget tightens.
+Damage from player lasers and enemy missiles shares this same column state.
 
 ### Ground And Status
 
 ```text
-Status row 24:               SCORE 0000
-Game over center:            GAME OVER
+Status row 24: SCORE 0000  LEVEL 1
 ```
 
-Gunners are shown on the keyboard LEDs rather than in the playfield. If
-double-width line support is wanted for score or game-over text, it can be
-added later. The first implementation should keep all game lines single-width
-to simplify addressing.
+The ground line spans the 60-column playfield on display row 22, behind the
+turret's top row. Gunners are shown on the keyboard LEDs. All lines are
+single-width. A qualifying game-over score opens initials entry; there is no
+separate `GAME OVER` text sprite for a nonqualifying score.
 
 ## Entity State
 
-With AVO RAM available, store clear per-entity state rather than packing every
-bit immediately.
+All state addresses are equates in `src/invaders-avo.asm`, allocated downward
+from `inv_data_top`. ROM tables and geometry constants remain in the expansion
+image. The important groups are:
 
-```asm
-inv_active          db 0
-inv_last_vframe     db 0
-inv_frame_lo        db 0
-inv_frame_hi        db 0
+| State | Current representation |
+|---|---|
+| Mode and input | Active guard, attract/game-over flags, and left/right/fire flags |
+| Logical frame | `inv_frame_lo` and `inv_frame_hi`, one nibble each |
+| Score | Three decimal digits, `inv_score0` through `inv_score2`, in units of 10 |
+| Lives and level | `inv_gunners` starts at 4; `inv_level` starts at 1 |
+| Turret and laser positions | Low/high nibble pairs; laser also has active, timer, and shot-count state |
+| Alien state | 44 live flags and four 44-element coordinate-nibble arrays |
+| Formation state | Spawn/live counts, last alien, direction, reversal, descent, animation phase, and live row/column bounds |
+| Enemy missiles | Three-element active, row, column, and phase arrays, plus firing/tick counters |
+| UFO | Idle/active/explosion/score state, position/direction, timers, points, and disabled flag |
+| Sound | Mode, phase, heartbeat and death counters, and diagnostic keyboard status bytes |
+| High scores | 30 decimal score digits and two 30-element initials arrays, plus entry/editing state |
+| Shields | 84 cell codes and 28 shared column-damage values |
 
-inv_level           db 0
-inv_score_lo        db 0
-inv_score_hi        db 0
-inv_gunners         db 4
-inv_game_over       db 0
-inv_attract_mode    db 0
-inv_play_x          db 10       ; physical column for logical playfield col 0
-inv_saved_leds      db 0        ; previous low nibble of terminal led_state
-inv_heartbeat_timer db 0
-inv_heartbeat_phase db 0
-
-inv_left_pressed    db 0
-inv_right_pressed   db 0
-inv_fire_pressed    db 0
-
-turret_x_lo         db 4        ; left edge of 7-column gunner sprite
-turret_x_hi         db 2        ; 24h = physical column 36
-turret_state        db 0        ; 0 normal, 1 exploding
-turret_timer        db 0
-
-laser_x             db 0
-laser_y             db 0
-laser_phase         db 0
-laser_active        db 0
-laser_shots         db 0
-
-alien_last          db 0ffh
-alien_xdelta        db 1
-alien_ydelta        db 0
-alien_reverse       db 0
-alien_kill_timer    db 0
-alien_killed_id     db 0
-alien_dead_count    db 0
-alien_landed        db 0
-alien_best_column   db 0
-alien_shot_index    db 0
-alien_anim_phase    db 0
-alien_bottom_y      db 17       ; top row of bottom alien sprite
-alien_min_col       db 0
-alien_max_col       db 10
-alien_min_row       db 0        ; lowest live row index
-alien_max_row       db 3        ; highest live row index
-alien_x             ds 44
-alien_y             ds 44
-alien_live_bits     ds 6
-alien_shooters      ds 11       ; alien ID per firing column, 0ffh if none
-
-missile_x           ds 3
-missile_y           ds 3
-missile_phase       ds 3
-missile_active      ds 3
-missile_active_n    db 0
-missile_fire_lo     db 0
-missile_fire_hi     db 0
-
-ufo_state           db 0        ; 0 idle, 1 active, 2 exploding, 3 score
-ufo_x               db 0
-ufo_dx              db 0
-ufo_death_lo        db 0
-ufo_death_hi        db 0
-ufo_points          db 0
-ufo_disabled        db 0
-
-shield_cells        ds 84       ; 4-bit cell codes, not full glyph bytes
-shield_x            ds 4        ; left edge of each shelter
-```
-
-`alien_live_bits` can store 44 live/dead bits. The simpler alternative is one
-byte per alien, but six bytes is easy enough and keeps the state tidy.
+Alien state is not a six-byte packed bitset, and there is no cached shooter
+array. `inv_find_column_shooter` searches the live flags when needed. The
+high-score cache sits with the other top-down game state, with a separately
+named range so tests can leave it out of volatile-memory poisoning.
 
 ## Persistent High Scores
 
@@ -959,10 +797,11 @@ The high-score table stores ten entries and uses 25 NVR words:
 | 61-75 | 15 | Initials, two 6-bit characters per word |
 
 Scores are stored divided by 10, matching the displayed arcade score units.
-For example, a displayed score of `2940` is stored as `294`. The value fits in
-one 14-bit ER1400 word, including the maximum displayed score value `999`
-for `9990`. A zero score word marks an unused table entry because no real
-high score can be zero.
+For example, a displayed score of `2940` is stored as `294`. The current
+three-digit score-unit counter supports `0` through `999`, displayed as `0000`
+through `9990`, and wraps on overflow. Those values fit in one 14-bit ER1400
+word. A zero score word marks an unused table entry; zero scores are never
+inserted. Loaded words above `999` are also treated as unused.
 
 Initials are stored as one compact 30-character stream, not as padded per-entry
 records. Entry `n` consumes characters `n*3` through `n*3+2` in that stream.
@@ -997,233 +836,173 @@ When a game ends, the current score is compared against the cached table. A
 qualifying non-zero score is inserted, lower entries are shifted down, initials
 for the new entry are cleared to spaces, and the high-score prompt is shown.
 The prompt temporarily routes key input through the stock firmware keycode to
-ASCII path, then accepts printable ASCII characters from space through
-underscore, using the same 6-bit encoding as the table. Left and Right move the
+ASCII path. `inv_ascii_to_initial_code` clears bit 5 for characters with bit 6
+set, folding ASCII columns 6 and 7 into columns 4 and 5, then rejects values
+below `20h`. The resulting space-through-underscore characters use the same
+6-bit encoding as the table. Left and Right move the
 cursor between the three initial positions without leaving the field. Typing
 replaces the character at the selected position. Backspace moves the cursor
 back and clears the corrected character. RETURN confirms the entry only after
 at least one initial has been entered, regardless of the cursor position;
 moving through empty positions does not count as entering an initial. Unused
 positions are saved as spaces, and addresses 51 through 75 are written back to
-NVR.
+NVR. The cursor is visible only during entry and is hidden before returning to
+attract mode. SET-UP can cancel unconfirmed entry and leave the game without
+writing that pending score.
+
+For manual MAME runs, persistent words are saved in
+`<MAMEDir>\nvram\vt102\nvr` with the default path settings. `run-invaders`
+stages ROMs only; it does not seed or replace this file. Exit MAME normally so
+the emulated NVR state is written to disk. Automated tests use separate,
+disposable NVR directories.
 
 ## Alien Update
 
-`vtinvaders` moves only one live alien per frame. This is the most important
-performance trick to preserve.
+`inv_update_aliens` first spawns one alien per frame in ascending ID order.
+After all 44 have spawned, `inv_next_live_alien` selects one live alien per
+frame, skipping dead entries. `inv_move_alien` erases its old rectangle, moves
+it one column, applies any pending one-row descent, and redraws it.
 
-```asm
-inv_update_alien:
-        lda     alien_kill_timer
-        ora     a
-        jnz     inv_update_kill_timer
+On a completed sweep, `inv_cycle_aliens` toggles the animation phase and clears
+`inv_alien_y_delta`. If `inv_alien_reverse` is pending, it also reverses
+direction, sets a one-row descent for the new sweep, and clears the reversal
+flag. Reaching a horizontal boundary requests reversal for the next sweep.
+Returning to the same ID counts as a completed sweep when only one alien is
+left, so the descent does not incorrectly persist through horizontal movement.
 
-        lda     turret_state
-        ora     a
-        rnz
-
-        call    inv_next_live_alien     ; updates alien_last
-        call    inv_check_cycle_wrap
-        call    inv_move_current_alien
-        call    inv_update_best_shooter
-        ret
-```
-
-On cycle wrap:
-
-- recompute the formation horizontal offset from the first live alien in the
-  new sweep;
-- clear `alien_ydelta`;
-- if `alien_reverse` is set, negate `alien_xdelta`, set `alien_ydelta` to 1,
-  and clear `alien_reverse`.
-
-When an alien reaches the left or right boundary, set `alien_reverse`. The
-actual reversal and downward step happen on the next sweep.
-
-Borrow `ascii-invaders`' formation trimming idea as cached bounds. After a kill,
-if the killed alien was on `alien_min_col`, `alien_max_col`, `alien_min_row`, or
-`alien_max_row`, rescan only that edge and update the cached value. The edge
-cache makes boundary checks, collision coarse tests, and row clearing cheaper
-with the wider two-line sprites.
+`inv_kill_alien` erases the alien, clears its live flag, decrements the live
+count, awards points immediately, and recomputes all live row/column bounds.
+This scans the live flags rather than only rescanning the killed alien's edge.
+There is no alien explosion timer or delayed scoring phase.
 
 ## Alien Firing
 
-The firing column should follow the fixed `vtinvaders` shoot order. Values of
-zero mean "use the column closest to the turret"; other values select a 1-based
-alien column. If the selected column has no shooter, advance through the table
-until a live shooter is found.
+`inv_next_shoot_column` follows the fixed `vtinvaders` shoot order. Zero
+selects a column calculated from the turret's left edge relative to
+`inv_alien_start_x`, divided by the five-cell slot width and clamped to 0-10.
+Other values select a one-based alien column. If a column has no live shooter,
+`inv_enemy_pick_shooter` advances through the table, trying at most one complete
+pass.
 
 ```asm
-inv_shoot_order:
+inv_missile_shoot_order:
         db 0,1,11,1,0,7,0,1,6,3,0,1,1,0,1,1,0,4,11
         db 9,2,0,11,0,1,8,2,0,6,0,3,11,4,0,1,7,0,1
         db 0,11,0,9,0,2,10,11,1,0,8,0,1,6,3,0,7,0,1
         db 1,0,1,1,0,1,11,9,2,0,4,0,11,0,9,0,1,0,5
-inv_shoot_order_len equ 74
+inv_missile_shoot_order_count equ 76
 ```
 
-Fire from `alien_y + 1`, `alien_x + 1`. Keep `alien_shooters[column]` updated
-when an alien dies: if the killed alien was the bottom live alien in that
-column, search upward for the next live alien.
+`inv_find_column_shooter` starts at the bottom ID in the selected column and
+subtracts 11 until it finds a live alien. There is no shooter cache to maintain
+after kills. Missiles start at `alien_y + inv_alien_h` and `alien_x + 1`, just
+below the two-row sprite, in the first free missile slot.
 
 ## Missile Update
 
-Every third frame after the start gate:
+`inv_update_enemy_fire` uses `inv_missile_tick_timer` to run every third play
+frame. It tries to launch a missile, then advances each active missile one row.
+New launches wait until all aliens have spawned and require a live shooter and
+a free slot.
 
-1. If aliens can fire, missiles can fire, and the turret is not exploding, call
-   `inv_alien_fire`.
-2. Update all active missile slots.
-3. On collision with the player laser, cancel both shots and draw a brief `*`.
-4. On collision with turret, start turret explosion.
-5. On collision with shield, erode the shield from above.
-6. On ground impact, show a short two-frame explosion and then a small scar.
+`inv_missile_fire_timer` counts these three-frame ticks, not individual frames:
 
-The frame modulo test can use the low logical frame byte:
+| Event | Countdown loaded |
+|---|---:|
+| Game/level initialization or turret respawn | 40 |
+| A missile launches | 17 |
+| The last active missile ends | 4 |
 
-```asm
-        lda     inv_frame_lo
-        ; divide or table-test for frame % 3
-```
+A nonzero countdown is decremented and returns; firing is tried on a later tick
+that starts at zero. All three slots can be active at any time.
 
-A cheaper implementation can maintain a 0,1,2 counter instead of dividing.
+At each new position, a missile hitting a solid shield cell damages that column
+and ends. At the turret row it either hits the turret rectangle or ends without
+an explosion or ground scar. Missiles do not intercept the player laser.
+Turret death clears every active missile and the player laser before drawing
+the turret blast.
 
 ## Turret And Laser Update
 
-When the turret is alive:
+The turret is visible from initialization. `inv_update_turret` moves it one
+column per frame when exactly one direction flag is set, bounded by physical
+zero-based columns 10 and 63. `inv_update_laser` spawns a shot if fire is pressed
+and no shot is active; otherwise it moves the existing shot upward.
 
-- reveal it on the start gate frame;
-- apply one left or right movement flag per frame;
-- consume one fire flag if no laser is active and no alien explosion is in
-  progress.
+`inv_place_laser` checks shield, UFO, then alien collisions in that order.
+An alien hit is erased and scored immediately. The laser is removed on a hit
+or after reaching the top row; there is no sparkle phase or explosion delay.
 
-When the turret is exploding:
-
-- toggle explosion sprite every 5 frames;
-- after 55 frames, clear the turret;
-- lose one gunner, or all gunners if aliens landed;
-- call `inv_update_gunner_leds`;
-- either reset the turret or enter game-over state.
-
-Laser update:
-
-```asm
-inv_update_laser:
-        lda     laser_active
-        ora     a
-        rz
-        call    inv_test_laser_hit
-        call    inv_render_laser_phase
-        call    inv_advance_laser
-        ret
-```
-
-Hit priority should be shield, UFO, alien. Alien hits set `alien_kill_timer` to
-16 and render the killed-alien explosion immediately. Points are awarded when
-the timer expires, matching the reference.
+`inv_start_turret_death` erases the turret and all projectiles, draws the static
+blast, starts death sound, and immediately decrements the gunner count and
+updates LEDs. With gunners remaining, gameplay pauses for 55 frames before
+erasing the blast and respawning the turret at column 36. With none remaining,
+it enters game over immediately while allowing the death sound to finish.
+A qualifying score opens initials entry; otherwise the game remains stopped
+until SET-UP exits. There is no separate real-game landing-to-game-over check
+in the shared play loop; the demo has its own bottom-row restart condition.
 
 ## UFO Update
 
-Use the reference timing:
+The UFO uses its own countdowns:
 
-- first UFO: around frame `10 * 60` so it appears early enough for demos;
-- later UFOs: every `25 * 60`;
+- first UFO: after 600 UFO-update frames, starting when alien spawning completes;
+- later UFOs: a 1500-frame interval reloaded when a UFO spawns;
 - move every 5 frames;
 - disable UFOs when fewer than 8 aliens remain;
-- direction depends on `laser_shots` parity;
-- point value depends on `laser_shots` modulo 15.
+- direction depends on the player-shot counter's parity;
+- point value depends on the player-shot counter modulo 15.
 
 Point table:
 
 ```asm
-inv_ufo_points:
-        db 100,50,50,100,150,100,100,50,300,100,100,100,50,150,100
+inv_ufo_points_table:
+        db 10,5,5,10,15,10,10,5,30,10,10,10,5,15,10
 ```
 
-If storing values above 255 is inconvenient, encode UFO points as score units of
-10, i.e. `10,5,5,10,15,10,10,5,30,10,10,10,5,15,10`.
+The table stores score units of 10, giving awards of 50, 100, 150, or 300.
+A hit shows an explosion for 21 update frames, then awards and displays the
+points for 72 update frames before clearing the UFO. UFO updates pause along
+with ordinary gameplay during turret death and level transitions. Each level
+resets the first-appearance countdown.
 
 ## Shield Damage
 
-The preferred AVO implementation stores shields as one 4-bit cell code per
-visible shield cell:
+`inv_shield_cell_addr` converts a projectile's row and column into one of the
+84 shield cells. Only a nonblank cell registers a hit. Both the player laser
+and enemy missiles call `inv_try_shield_collision`, which damages the entire
+column through `inv_damage_shield_column`.
 
-```asm
-shield_cells        ds 84       ; 4 shields * 7 columns * 3 rows
-shield_x            ds 4
-```
+The shared damage value at `inv_shield_damage_base` saturates at 3:
 
-A code other than `inv_cell_blank` is solid. `inv_cell_blank` is already
-destroyed. Rendering expands the current `shield_cells` codes through a ROM
-glyph table, writes those glyphs to screen RAM, and writes `id_shield` to the
-object map for every non-blank glyph.
+| Damage | Remaining nonblank cells in the column |
+|---:|---|
+| 0 | Original roof/checkerboard glyphs |
+| 1 | `inv_cell_damaged`, rendered as ASCII `*` |
+| 2 | `inv_cell_weak`, rendered as ASCII `.` |
+| 3 | `inv_cell_blank` |
 
-On a hit from above:
-
-1. convert the playfield hit coordinate to shelter number, local X, and local Y;
-2. scan downward from the top row at that local X until a non-blank cell is
-   found;
-3. blank that cell;
-4. optionally blank one nearby lower-left or lower-right cell using a small
-   deterministic pattern.
-
-On a hit from below:
-
-1. convert the playfield hit coordinate to shelter number, local X, and local Y;
-2. scan upward from the bottom row at that local X until a non-blank cell is
-   found;
-3. blank that cell;
-4. optionally blank one nearby upper-left or upper-right cell.
-
-This reproduces the feel of `ascii-invaders`, where shelters are simply glyph
-art with cells erased by shots. It is also easier to test than a
-packed damage state: MAME tests can compare the 84 shield cell codes directly.
-
-The earlier packed-column design remains a compact fallback. In that version,
-each 4-column shield column has a 4-bit damage value:
-
-```asm
-; compact fallback from above
-damage = (((damage >> 1) + 8) & 15) | (damage & 7)
-
-; compact fallback from below
-damage = (((damage << 1) + 1) & 15) | (damage & 14)
-```
-
-If used, implement those transforms as small table lookups:
-
-```asm
-shield_hit_above_table:
-        db 8,9,9,11,10,11,11,15,12,13,13,15,14,15,15,15
-
-shield_hit_below_table:
-        db 1,3,5,7,5,7,13,15,9,11,13,15,13,15,15,15
-```
+`inv_redraw_shield_cell` updates each of the column's three rows, preserving
+cells that were already blank. The original bottom opening therefore remains
+open. Damage does not spread into neighboring columns and does not use separate
+above/below erosion transforms. `inv_reset_shields` restores both cell codes and
+damage counters at the start of a new game/demo; level changes retain damage.
 
 ## Collision Strategy
 
-Preferred AVO-RAM implementation:
+Collision detection reads game state, not the rendered screen or a shadow map:
 
-- maintain `inv_id_map` for the 60 by 24 logical playfield;
-- every sprite write updates both screen RAM and object ID map;
-- blank characters write `id_empty`;
-- `sg_blank` writes `id_empty`, while every remaining shield glyph writes
-  `id_shield`;
-- multi-line sprites write IDs for each non-blank glyph, not for the whole
-  bounding rectangle.
+- Player laser: test the shield cell, active UFO rectangle, then each live
+  alien rectangle.
+- Enemy missile: test shield cells above the turret row; at the turret row,
+  test the turret rectangle and end the missile whether it hits or misses.
+- Shield blanks are passable. Alien, UFO, and turret rectangles include blank
+  cells inside the sprite bounds.
+- There is no player-laser/enemy-missile interception test.
 
-This matches the reference design closely and keeps missile/laser collision code
-small. It is especially helpful with the larger sprites because the bounding
-boxes contain deliberate blank glyphs.
-
-If `inv_id_map` is too expensive, switch to coordinate tests:
-
-- test UFO rectangle;
-- test current live alien rectangles;
-- test shield cells;
-- test turret rectangle;
-- treat the screen edge below the turret as the bottom boundary.
-
-The map costs 1440 bytes, which is acceptable under the AVO assumption.
+The attract overlay clips drawing only. Entities continue to move and collide
+behind its boxes using the same game state as real play. The reserved
+`inv_object_map_base` buffer is not read or written by collision routines.
 
 ## Level Reset
 
@@ -1240,34 +1019,23 @@ id 22..32    next row, 20-point aliens
 id 33..43    bottom row, 10-point aliens
 ```
 
-That preserves the useful `vtinvaders` shooter rule: the next shooter above a
-killed alien is `id + 11`.
-
-Recommended starting bottom-row Y positions:
-
-```asm
-level 0: bottom-row sprite y = 16
-level 1: bottom-row sprite y = 16
-level 2: bottom-row sprite y = 17
-level 3+: bottom-row sprite y = 17
-```
+With top-first IDs, the next candidate above an alien is `id - 11`.
+Level 1 has no vertical offset; levels 2 through 9 start one row lower.
 
 For alien ID `id`:
 
 ```text
-row = id / 11        ; 0 is bottom, 4 is top
+row = id / 11        ; 0 is top, 3 is bottom
 col = id % 11
-y   = alien_bottom_y - row * inv_alien_vslot
-x   = alien_left_x + col * inv_alien_slot
+y   = 2 + row * inv_alien_slot_h + (level >= 2 ? 1 : 0)
+x   = inv_alien_start_x + col * inv_alien_slot_w
 type = 10, 20, or 30 points from the row table above
 ```
 
-With `alien_bottom_y = 16`, the top row occupies rows 4 and 5 and the bottom
-row occupies rows 16 and 17, leaving row 18 as a buffer before the shelters.
-With `alien_bottom_y = 17`, the top row occupies rows 5 and 6 and the bottom
-row occupies rows 17 and 18, immediately above the shelter rows. If this feels
-cramped on hardware, keep the visual sprites but reduce the formation to 4 rows
-rather than shrinking the sprites.
+These formulas use zero-based screen coordinates. At level 1, the top sprite
+occupies display rows 3-4 and the bottom sprite rows 12-13. At later levels
+those become rows 4-5 and 13-14. Shields begin on display row 19, leaving room
+for several descents before the formation reaches them.
 
 ## Testing
 
