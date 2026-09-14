@@ -229,7 +229,8 @@ inv_high_score_slot     equ     inv_high_score_dirty-1
 inv_high_shift_index    equ     inv_high_score_slot-1
 inv_high_nvr_index      equ     inv_high_shift_index-1
 inv_high_initial_index  equ     inv_high_nvr_index-1
-inv_saved_curs_char_rend equ    inv_high_initial_index-1
+inv_high_initial_ready  equ     inv_high_initial_index-1
+inv_saved_curs_char_rend equ    inv_high_initial_ready-1
 inv_saved_curs_attr_rend equ    inv_saved_curs_char_rend-1
 ;
 ; Reset-loaded high score cache. Keep this with the top-down game state, but
@@ -380,6 +381,7 @@ inv_reset_for_attract:
         sta     inv_level_timer
         sta     inv_high_score_dirty
         sta     inv_high_initial_index
+        sta     inv_high_initial_ready
         sta     inv_test_result
         sta     inv_laser_active
         sta     inv_laser_row_lo
@@ -431,7 +433,17 @@ inv_read_keys:
         sta     inv_fire_pressed
         lda     key_flags
         ani     7
+        jnz     inv_read_key_silo
+        lda     inv_high_score_dirty
+        ora     a
         rz
+        lda     key_flags
+        ani     key_flag_eos
+        rz
+        mvi     a,0ffh
+        sta     inv_high_initial_ready
+        jmp     process_keys
+inv_read_key_silo:
         mov     b,a
         lxi     h,key_silo
 inv_check_keys:
@@ -462,6 +474,9 @@ inv_high_initial_key:
         lda     key_flags
         ani     key_flag_eos
         rz
+        lda     inv_high_initial_ready
+        ora     a
+        jz      clear_keyboard
         lxi     h,inv_high_initial_action
         shld    char_action
         mvi     a,0ffh
@@ -2579,6 +2594,7 @@ inv_return_high_initial:
 ;
 inv_start_high_initials:
         xra     a
+        sta     inv_high_initial_ready ; release gameplay keys before entering initials
         sta     cursor_visible
         mvi     a,80h
         sta     curs_char_rend
