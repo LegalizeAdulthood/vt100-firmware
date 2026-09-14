@@ -188,8 +188,13 @@ local function make_static_screen_step()
         assert_text(inv_score_row, 0, "SCORE 0000  LEVEL 1")
         assert_cell(inv_ground_row, inv_play_left, sg("q"), "ground left edge")
         assert_cell(inv_ground_row, inv_turret_start_x - 1, sg("q"), "ground before turret")
-        assert_cell(inv_ground_row, inv_turret_start_x, sg("_"), "turret clears ground left")
-        assert_cell(inv_ground_row, inv_turret_start_x + 3, sg("a"), "turret top")
+        assert_cell(inv_ground_row, inv_turret_start_x, string.byte(" "), "turret clears ground left")
+        local turret_top = { string.byte(" "), string.byte("_"), string.byte("/"), sg("x"),
+            string.byte("\\"), string.byte("_"), string.byte(" ") }
+        for offset = 0, #turret_top - 1 do
+            assert_cell(inv_ground_row, inv_turret_start_x + offset, turret_top[offset + 1],
+                "turret top " .. tostring(offset))
+        end
         assert_cell(inv_ground_row, inv_turret_start_x + 7, sg("q"), "ground after turret")
         assert_cell(
             inv_ground_row,

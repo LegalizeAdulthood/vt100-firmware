@@ -739,12 +739,12 @@ bottom two rows:  10-point alien
 ### Player Turret
 
 Use the `ascii-invaders` gunner as the player turret. It is 7 columns wide and
-2 rows tall, rendered with checkerboard cells.
+2 rows tall, with a `_/|\_` top row above checkerboard cells.
 
 ```text
-Normal, source:
-___a___
-_aaaaa_
+Normal, appearance (a = checkerboard):
+ _/|\_
+ aaaaa
 
 Explosion frame A, source:
 __n_n__

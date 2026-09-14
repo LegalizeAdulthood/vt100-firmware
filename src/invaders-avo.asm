@@ -975,7 +975,7 @@ inv_draw_turret_at:
         push    b
         mvi     b,inv_turret_top_row
         lxi     h,inv_turret_top
-        call    inv_puts_sg
+        call    inv_puts_glyphs
         pop     b
         mvi     b,inv_turret_top_row+1
         lxi     h,inv_turret_bottom
@@ -4270,7 +4270,7 @@ inv_ground_line:
         db      'q','q','q','q','q','q','q','q','q','q'
         db      0
 inv_turret_top:
-        db      '_','_','_','a','_','_','_',0
+        db      ' ','_','/',19h,5ch,'_',' ',0
 inv_turret_bottom:
         db      '_','a','a','a','a','a','_',0
 inv_turret_explosion_top:

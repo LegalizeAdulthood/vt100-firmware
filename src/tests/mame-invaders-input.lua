@@ -135,20 +135,28 @@ local function make_input_step()
     local function assert_left_position()
         test.assert_eq(turret_x(), inv_turret_start_x - 1, "turret left movement")
         test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x + 6), sg("q"), "old right edge restored")
-        test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x + 2), sg("a"), "new left center")
+        test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x), string.byte("_"), "moved left shoulder")
+        test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x + 1), string.byte("/"), "moved barrel left")
+        test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x + 2), sg("x"), "new left center")
+        test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x + 3), string.byte("\\"), "moved barrel right")
+        test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x + 4), string.byte("_"), "moved right shoulder")
     end
 
     local function assert_start_position()
         test.assert_eq(turret_x(), inv_turret_start_x, "turret returned to start")
         test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x - 1), sg("q"), "old left edge restored")
-        test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x + 3), sg("a"), "start center")
+        test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x + 1), string.byte("_"), "start left shoulder")
+        test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x + 2), string.byte("/"), "start barrel left")
+        test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x + 3), sg("x"), "start center")
+        test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x + 4), string.byte("\\"), "start barrel right")
+        test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x + 5), string.byte("_"), "start right shoulder")
     end
 
     local function static_screen_ready()
         return read_u8(inv_active) ~= 0
             and read_u8(inv_attract_mode) == 0
             and turret_x() == inv_turret_start_x
-            and cell(inv_turret_top_row, inv_turret_start_x + 3) == sg("a")
+            and cell(inv_turret_top_row, inv_turret_start_x + 3) == sg("x")
     end
 
     local frame = 0
