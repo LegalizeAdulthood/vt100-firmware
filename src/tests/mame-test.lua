@@ -1,4 +1,6 @@
 local M = {}
+local attribute_read_tap
+local attribute_write_tap
 
 function M.required_env(name)
     local value = os.getenv(name)
@@ -87,6 +89,18 @@ function M.program_space()
     local space = cpu.spaces["program"]
     if space == nil then
         error("could not find :maincpu program space", 0)
+    end
+    -- MAME provides byte-wide RAM here. Make only the physical attribute bits
+    -- writable, with fixed high bits on reads, so game state cannot rely on it.
+    if attribute_write_tap == nil then
+        attribute_write_tap = space:install_write_tap(0x3000, 0x3fff,
+            "vt100-four-bit-attribute-write", function(offset, data)
+                return data % 16
+            end)
+        attribute_read_tap = space:install_read_tap(0x3000, 0x3fff,
+            "vt100-four-bit-attribute-read", function(offset, data)
+                return 0xf0 + data % 16
+            end)
     end
     return space
 end

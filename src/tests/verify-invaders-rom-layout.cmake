@@ -232,6 +232,7 @@ function(assert_mutable_state_layout EQUATE_FILE RAM_START RAM_TOP DATA_FLOOR)
         inv_high_score_slot 1
         inv_high_shift_index 1
         inv_high_nvr_index 1
+        inv_high_initial_ready 1
         inv_turret_x_lo 1
         inv_turret_x_hi 1
         inv_laser_active 1
@@ -265,8 +266,6 @@ function(assert_mutable_state_layout EQUATE_FILE RAM_START RAM_TOP DATA_FLOOR)
         inv_missile_data_base 12
         inv_shield_damage_base 28
         inv_shield_cells_base 84
-        inv_dirty_queue_base 32
-        inv_object_map_base 1440
         inv_high_initial_index 1
         inv_high_initial_used 1
         inv_saved_curs_attr_rend 2
@@ -287,7 +286,7 @@ function(assert_mutable_state_layout EQUATE_FILE RAM_START RAM_TOP DATA_FLOOR)
         math(EXPR MUTABLE_END "${MUTABLE_START} + ${MUTABLE_BYTE_COUNT} - 1")
 
         if(MUTABLE_START LESS RAM_START OR MUTABLE_END GREATER RAM_TOP)
-            message(FATAL_ERROR "${MUTABLE_EQUATE_NAME} is outside AVO RAM: 0x${MUTABLE_EQUATE_ADDRESS}")
+            message(FATAL_ERROR "${MUTABLE_EQUATE_NAME} is outside byte-wide screen RAM: 0x${MUTABLE_EQUATE_ADDRESS}")
         endif()
         if(MUTABLE_START LESS DATA_FLOOR)
             message(FATAL_ERROR "${MUTABLE_EQUATE_NAME} crosses inv_data_floor: 0x${MUTABLE_EQUATE_ADDRESS}")
@@ -296,7 +295,7 @@ function(assert_mutable_state_layout EQUATE_FILE RAM_START RAM_TOP DATA_FLOOR)
         foreach(MUTABLE_OFFSET RANGE ${MUTABLE_START} ${MUTABLE_END})
             list(FIND USED_MUTABLE_OFFSETS "${MUTABLE_OFFSET}" MUTABLE_OFFSET_INDEX)
             if(NOT MUTABLE_OFFSET_INDEX EQUAL -1)
-                message(FATAL_ERROR "${MUTABLE_EQUATE_NAME} overlaps another mutable AVO RAM allocation at ${MUTABLE_OFFSET}")
+                message(FATAL_ERROR "${MUTABLE_EQUATE_NAME} overlaps another game-state allocation at ${MUTABLE_OFFSET}")
             endif()
             list(APPEND USED_MUTABLE_OFFSETS "${MUTABLE_OFFSET}")
         endforeach()
@@ -415,8 +414,11 @@ read_equate("${INVADERS_BASE_EQUATES}" inv_setup_keys_hook INV_SETUP_KEYS_HOOK)
 read_equate("${INVADERS_BASE_EQUATES}" inv_sound_status_hook INV_SOUND_STATUS_HOOK)
 read_equate("${INVADERS_BASE_EQUATES}" inv_reset_hook INV_RESET_HOOK)
 read_equate("${INVADERS_BASE_EQUATES}" inv_setup_cursor_hook INV_SETUP_CURSOR_HOOK)
-read_equate("${INVADERS_AVO_EQUATES}" inv_avo_ram_start INV_AVO_RAM_START)
-read_equate("${INVADERS_AVO_EQUATES}" inv_avo_ram_top INV_AVO_RAM_TOP)
+read_equate("${INVADERS_AVO_EQUATES}" inv_screen_ram_start INV_SCREEN_RAM_START)
+read_equate("${INVADERS_AVO_EQUATES}" inv_screen_ram_top INV_SCREEN_RAM_TOP)
+read_equate("${INVADERS_AVO_EQUATES}" inv_screen_buffer_end INV_SCREEN_BUFFER_END)
+read_equate("${INVADERS_AVO_EQUATES}" inv_active INV_ACTIVE)
+read_equate("${INVADERS_BASE_EQUATES}" main_video MAIN_VIDEO)
 read_equate("${INVADERS_AVO_EQUATES}" inv_data_top INV_DATA_TOP)
 read_equate("${INVADERS_AVO_EQUATES}" inv_data_floor INV_DATA_FLOOR)
 read_equate("${INVADERS_AVO_EQUATES}" inv_volatile_data_low INV_VOLATILE_DATA_LOW)
@@ -534,10 +536,22 @@ assert_address_in_window(inv_setup_keys_hook "${INV_SETUP_KEYS_HOOK}")
 assert_address_in_window(inv_sound_status_hook "${INV_SOUND_STATUS_HOOK}")
 assert_address_in_window(inv_reset_hook "${INV_RESET_HOOK}")
 assert_address_equals(inv_setup_cursor_hook "${INV_SETUP_CURSOR_HOOK}" "8015")
-assert_address_equals(inv_avo_ram_start "${INV_AVO_RAM_START}" "3000")
-assert_address_equals(inv_avo_ram_top "${INV_AVO_RAM_TOP}" "3FFF")
-assert_address_equals(inv_data_top "${INV_DATA_TOP}" "3FFF")
-assert_address_equals(inv_data_floor "${INV_DATA_FLOOR}" "3100")
+assert_address_equals(inv_screen_ram_start "${INV_SCREEN_RAM_START}" "2C00")
+assert_address_equals(inv_screen_ram_top "${INV_SCREEN_RAM_TOP}" "2FFF")
+assert_address_equals(inv_data_top "${INV_DATA_TOP}" "2FFF")
+assert_address_equals(inv_active "${INV_ACTIVE}" "2FFF")
+assert_address_equals(inv_data_floor "${INV_DATA_FLOOR}" "2C00")
+assert_address_equals(inv_screen_buffer_end "${INV_SCREEN_BUFFER_END}" "2AEB")
+math(EXPR SCREEN_132_END "0x${MAIN_VIDEO} + (132 + 3) * 25")
+math(EXPR INV_ACTIVE_ADDRESS "0x${INV_ACTIVE}")
+if(INV_ACTIVE_ADDRESS LESS SCREEN_132_END)
+    message(FATAL_ERROR "inv_active overlaps the 132-column display or SET-UP scratch row")
+endif()
+math(EXPR SCREEN_80_END "0x${INV_SCREEN_BUFFER_END}")
+math(EXPR STATE_LOW "0x${INV_VOLATILE_DATA_LOW}")
+if(STATE_LOW LESS SCREEN_80_END)
+    message(FATAL_ERROR "Game state overlaps the 80-column display or SET-UP scratch row")
+endif()
 assert_address_equals(idle_loop "${INVADERS_IDLE_LOOP}" "${VT100_IDLE_LOOP}")
 assert_address_equals(init_devices "${INVADERS_INIT_DEVICES}" "${VT100_INIT_DEVICES}")
 assert_address_equals(keyboard_tick "${INVADERS_KEYBOARD_TICK}" "${VT100_KEYBOARD_TICK}")
@@ -545,8 +559,8 @@ assert_address_equals(kb_scan_status "${INVADERS_KB_SCAN_STATUS}" "${VT100_KB_SC
 assert_address_equals(setup_keys "${INVADERS_SETUP_KEYS}" "${VT100_SETUP_KEYS}")
 assert_address_equals(setup_cursor "${INVADERS_SETUP_CURSOR}" "${VT100_SETUP_CURSOR}")
 
-math(EXPR INVADERS_RAM_START "0x${INV_AVO_RAM_START}")
-math(EXPR INVADERS_RAM_TOP "0x${INV_AVO_RAM_TOP}")
+math(EXPR INVADERS_RAM_START "0x${INV_SCREEN_RAM_START}")
+math(EXPR INVADERS_RAM_TOP "0x${INV_SCREEN_RAM_TOP}")
 math(EXPR INVADERS_DATA_FLOOR_VALUE "0x${INV_DATA_FLOOR}")
 assert_mutable_state_layout("${INVADERS_AVO_EQUATES}" ${INVADERS_RAM_START} ${INVADERS_RAM_TOP} ${INVADERS_DATA_FLOOR_VALUE})
 

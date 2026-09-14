@@ -144,16 +144,23 @@ inv_cell_roof_right     equ     8
 inv_cell_damaged        equ     9
 inv_cell_weak           equ     10
 ;
-; Mutable Invaders state lives in AVO RAM and grows downward from the top.
+; Byte-wide screen RAM above the 80-column display and its SET-UP scratch row.
+; AVO adds 2c00h-2fffh; 3000h-3fffh is four-bit attribute RAM, not game storage.
 ;
-inv_avo_ram_start       equ     3000h
-inv_avo_ram_top         equ     3fffh
-inv_data_top            equ     inv_avo_ram_top
-inv_data_floor          equ     3100h
+inv_screen_ram_start    equ     2c00h
+inv_screen_ram_top      equ     2fffh
+inv_screen_buffer_end   equ     main_video+(inv_row_stride*(inv_screen_rows+1))
+inv_data_top            equ     inv_screen_ram_top
+inv_data_floor          equ     inv_screen_ram_start
+;
+; Even the 132-column display plus its scratch row ends before this byte.
+; Keep the mode guard outside that layout; other state is owned only in game mode.
+;
+inv_active              equ     inv_data_top
 ;
 ; Fixed test and diagnostic bytes.
 ;
-inv_test_signature      equ     inv_data_top-2
+inv_test_signature      equ     inv_active-3
 inv_test_signature0     equ     05h
 inv_test_signature1     equ     0ah
 inv_test_signature2     equ     0fh
@@ -186,8 +193,7 @@ inv_test_input_fire     equ     04h
 ;
 ; Persistent scalar game state.
 ;
-inv_active              equ     inv_test_trace_base-1
-inv_last_vframe         equ     inv_active-1
+inv_last_vframe         equ     inv_test_trace_base-1
 inv_frame_lo            equ     inv_last_vframe-1
 inv_frame_hi            equ     inv_frame_lo-1
 inv_left_pressed        equ     inv_frame_hi-1
@@ -315,14 +321,8 @@ inv_shield_damage_top   equ     inv_state_low-1
 inv_shield_damage_base  equ     inv_shield_damage_top-inv_shield_damage_count+1
 inv_shield_cells_top    equ     inv_shield_damage_base-1
 inv_shield_cells_base   equ     inv_shield_cells_top-inv_shield_cell_count+1
-inv_dirty_queue_top     equ     inv_shield_cells_base-1
-inv_dirty_queue_size    equ     32
-inv_dirty_queue_base    equ     inv_dirty_queue_top-inv_dirty_queue_size+1
-inv_object_map_top      equ     inv_dirty_queue_base-1
-inv_object_map_size     equ     1440
-inv_object_map_base     equ     inv_object_map_top-inv_object_map_size+1
-inv_volatile_data_low   equ     inv_object_map_base
-inv_data_low            equ     inv_object_map_base
+inv_volatile_data_low   equ     inv_shield_cells_base
+inv_data_low            equ     inv_shield_cells_base
 
         org     inv_enter
         jmp     inv_enter_impl
@@ -1768,11 +1768,12 @@ inv_reset_sound:
 inv_sound_status_hook_impl:
         ora     m
         mvi     m,0
-        sta     inv_last_stock_kbd_status
         mov     b,a
         lda     inv_active
         cpi     inv_active_value
-        jnz     inv_sound_status_stock
+        mov     a,b
+        rnz                     ; inactive tail may contain 132-column text
+        sta     inv_last_stock_kbd_status
         lda     inv_game_over
         ora     a
         jnz     inv_sound_status_game_over
@@ -4323,7 +4324,12 @@ inv_exit_impl:
 ; following base-ROM instruction.
 ;
 inv_reset_hook_impl:
+        xra     a
+        sta     inv_active
         call    init_devices
+        lda     columns_132
+        ora     a
+        rnz                     ; cache would overlap the 132-column display
         jmp     inv_load_high_scores
 ;
 ; Initials use SET-UP's ASCII conversion, but keep cursor movement in the field.
