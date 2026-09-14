@@ -142,6 +142,19 @@ local function make_input_step()
         test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x + 4), string.byte("_"), "moved right shoulder")
     end
 
+    local function assert_turret_attributes(x)
+        for row = inv_turret_top_row, inv_turret_top_row + 1 do
+            for column = 0, 79 do
+                local underlined = row == inv_turret_top_row + 1
+                    and column > x and column < x + 6
+                test.assert_eq(
+                    read_u8(row_address(row) + column + 0x1000) % 16,
+                    underlined and 0x0d or 0x0f,
+                    string.format("turret attributes at %d,%d", row, column))
+            end
+        end
+    end
+
     local function assert_start_position()
         test.assert_eq(turret_x(), inv_turret_start_x, "turret returned to start")
         test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x - 1), sg("q"), "old left edge restored")
@@ -256,6 +269,7 @@ local function make_input_step()
             if stage == "wait-static" then
                 if static_screen_ready() then
                     test.assert_eq(read_u8(inv_test_result), 0, "initial input result")
+                    assert_turret_attributes(inv_turret_start_x)
                     assert_no_function_key_output()
                     enter_stage("press-left")
                     return
@@ -275,6 +289,7 @@ local function make_input_step()
             if stage == "wait-left" then
                 if turret_x() == inv_turret_start_x - 1 then
                     assert_left_position()
+                    assert_turret_attributes(inv_turret_start_x - 1)
                     assert_latch_seen(inv_test_input_left, "left arrow")
                     assert_no_function_key_output()
                     write_u8(inv_test_result, 0)
@@ -296,6 +311,7 @@ local function make_input_step()
             if stage == "wait-right" then
                 if turret_x() == inv_turret_start_x then
                     assert_start_position()
+                    assert_turret_attributes(inv_turret_start_x)
                     assert_latch_seen(inv_test_input_right, "right arrow")
                     assert_no_function_key_output()
                     write_u8(inv_test_result, 0)

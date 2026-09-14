@@ -256,6 +256,10 @@ local function make_enemy_fire_step()
                 cell(inv_turret_top_row + 1, x + offset),
                 string.byte(bottom[offset + 1]),
                 "turret explosion bottom " .. tostring(offset))
+            for row = inv_turret_top_row, inv_turret_top_row + 1 do
+                test.assert_eq(read_u8(row_address(row) + x + offset + 0x1000) % 16,
+                    0x0f, "turret explosion has no underline")
+            end
         end
     end
 
@@ -425,6 +429,11 @@ local function make_enemy_fire_step()
                     clear_all_shields()
                     active_laser_row, active_laser_col = seed_active_laser()
                     set_turret_x(turret_shooter_x)
+                    -- The test repositions the turret directly, including its underline.
+                    for offset = 1, inv_turret_w - 2 do
+                        write_u8(row_address(inv_turret_top_row + 1) + turret_shooter_x + offset + 0x1000,
+                            0x0d)
+                    end
                     prepare_single_shooter(turret_shooter_id, turret_shooter_x, turret_shooter_y)
                     force_next_enemy_fire()
                     enter_stage("wait-turret-hit")
@@ -466,6 +475,12 @@ local function make_enemy_fire_step()
                     test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x + 3), sg("x"), "respawn turret top")
                     test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x + 4), string.byte("\\"), "respawn barrel right")
                     test.assert_eq(cell(inv_turret_top_row, inv_turret_start_x + 5), string.byte("_"), "respawn right shoulder")
+                    for offset = 0, inv_turret_w - 1 do
+                        local underlined = offset > 0 and offset < inv_turret_w - 1
+                        test.assert_eq(
+                            read_u8(row_address(inv_turret_top_row + 1) + inv_turret_start_x + offset + 0x1000) % 16,
+                            underlined and 0x0d or 0x0f, "respawn turret underline " .. tostring(offset))
+                    end
 
                     write_u8(inv_gunners, 1)
                     write_u8(inv_game_over, 0)

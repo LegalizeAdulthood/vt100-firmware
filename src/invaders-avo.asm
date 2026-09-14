@@ -21,6 +21,8 @@ inv_screen_cols         equ     80
 inv_row_stride          equ     inv_screen_cols+3
 inv_sg_source_base      equ     5fh
 inv_sg_source_limit     equ     7fh
+inv_attr_normal         equ     0fh
+inv_attr_underline      equ     0dh
 inv_play_left           equ     10
 inv_play_width          equ     60
 inv_score_row           equ     23
@@ -753,9 +755,14 @@ inv_cell_addr:
         dad     b
         ret
 ;
-; Write already-mapped glyph A at row B, column C.
+; Write already-mapped glyph A at row B, column C with normal attributes.
 ;
 inv_putc:
+        mvi     d,inv_attr_normal
+;
+; D supplies the attribute nibble; clip both glyph and attribute together.
+;
+inv_putc_attr:
         mov     e,a
         mov     a,b
         cpi     inv_screen_rows
@@ -773,6 +780,10 @@ inv_putc_visible:
         call    inv_cell_addr
         pop     d
         mov     m,e
+        mov     a,h
+        adi     10h
+        mov     h,a
+        mov     m,d
         ret
 ;
 ; Carry marks a cell inside an attract rectangle, including its gutters.
@@ -827,6 +838,11 @@ inv_puts_glyphs:
 ; Write zero-terminated DEC Special Graphics source bytes from HL.
 ;
 inv_puts_sg:
+        mvi     d,inv_attr_normal
+;
+; D supplies the attribute nibble for the whole string.
+;
+inv_puts_sg_attr:
         mov     a,m
         ora     a
         rz
@@ -838,12 +854,12 @@ inv_puts_sg:
 inv_puts_sg_emit:
         push    h
         push    b
-        call    inv_putc
+        call    inv_putc_attr
         pop     b
         pop     h
         inx     h
         inr     c
-        jmp     inv_puts_sg
+        jmp     inv_puts_sg_attr
 ;
 inv_cell_code_to_glyph:
         ani     0fh
@@ -978,8 +994,18 @@ inv_draw_turret_at:
         call    inv_puts_glyphs
         pop     b
         mvi     b,inv_turret_top_row+1
+        push    b
+        xra     a
+        call    inv_putc
+        pop     b
+        inr     c
         lxi     h,inv_turret_bottom
-        jmp     inv_puts_sg
+        mvi     d,inv_attr_underline
+        call    inv_puts_sg_attr
+        xra     a
+        call    inv_putc
+        xra     a               ; retain the string renderer's zero-flag result
+        ret
 ;
 inv_erase_turret_at:
         push    b
@@ -4273,7 +4299,7 @@ inv_ground_line:
 inv_turret_top:
         db      ' ','_','/',19h,5ch,'_',' ',0
 inv_turret_bottom:
-        db      '_','a','a','a','a','a','_',0
+        db      'a','a','a','a','a',0
 inv_turret_explosion_top:
         db      '*','a','a','a','a','a','*',0
 inv_turret_explosion_bottom:
