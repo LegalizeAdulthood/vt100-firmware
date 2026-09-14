@@ -257,7 +257,6 @@ local function make_laser_step()
             end
 
             if stage == "fire-empty" then
-                inject_key(inv_scan_space, 0)
                 enter_stage("wait-empty-shot")
                 return
             end
@@ -271,6 +270,7 @@ local function make_laser_step()
                     enter_stage("refire-while-active")
                     return
                 end
+                inject_key(inv_scan_space, 0)
                 if frame - stage_frame > 120 then
                     fail_timeout("empty laser launch")
                 end
@@ -321,7 +321,6 @@ local function make_laser_step()
             end
 
             if stage == "fire-shield" then
-                inject_key(inv_scan_space, 0)
                 enter_stage("wait-shield-hit")
                 return
             end
@@ -337,6 +336,7 @@ local function make_laser_step()
                     enter_stage("fire-shield-weak")
                     return
                 end
+                inject_key(inv_scan_space, 0)
                 if frame - stage_frame > 120 then
                     fail_timeout("shield laser hit")
                 end
@@ -344,7 +344,6 @@ local function make_laser_step()
             end
 
             if stage == "fire-shield-weak" then
-                inject_key(inv_scan_space, 0)
                 enter_stage("wait-shield-weak")
                 return
             end
@@ -360,6 +359,7 @@ local function make_laser_step()
                     enter_stage("fire-shield-clear")
                     return
                 end
+                inject_key(inv_scan_space, 0)
                 if frame - stage_frame > 120 then
                     fail_timeout("shield weak hit")
                 end
@@ -367,7 +367,6 @@ local function make_laser_step()
             end
 
             if stage == "fire-shield-clear" then
-                inject_key(inv_scan_space, 0)
                 enter_stage("wait-shield-clear")
                 return
             end
@@ -383,6 +382,7 @@ local function make_laser_step()
                     test.pass()
                     return
                 end
+                inject_key(inv_scan_space, 0)
                 if frame - stage_frame > 120 then
                     fail_timeout("shield clear hit")
                 end
