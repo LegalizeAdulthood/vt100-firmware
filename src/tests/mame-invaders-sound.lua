@@ -158,6 +158,7 @@ local function make_sound_step()
                 stock = read_u8(inv_last_stock_kbd_status),
                 output = read_u8(inv_last_output_kbd_status),
                 active = read_u8(inv_active),
+                attract = read_u8(inv_attract_mode),
                 game_over = read_u8(inv_game_over),
                 level_timer = read_u8(inv_level_timer),
                 mode = read_u8(inv_sound_mode),
@@ -214,15 +215,21 @@ local function make_sound_step()
                     test.hex(entry.data, 2),
                     test.hex(entry.output, 2)), 0)
             end
-            if entry.active == inv_active_value
+            if entry.attract ~= 0 then
+                -- Attract mode owns the screen but is not part of this gameplay sound test.
+            elseif entry.active == inv_active_value
                 and entry.level_timer == 0
                 and (entry.game_over == 0 or entry.death > 0) then
                 if low7(entry.data) ~= low7(entry.stock) then
                     error(string.format(
-                        "keyboard status write %d changed stock bits 0-6: stock=%s data=%s",
+                        "keyboard status write %d changed stock bits 0-6: stock=%s data=%s attract=%s mode=%s heartbeat=%s death=%s",
                         index,
                         test.hex(entry.stock, 2),
-                        test.hex(entry.data, 2)), 0)
+                        test.hex(entry.data, 2),
+                        test.hex(entry.attract, 2),
+                        test.hex(entry.mode, 2),
+                        test.hex(entry.heartbeat, 2),
+                        test.hex(entry.death, 2)), 0)
                 end
             elseif entry.output ~= entry.stock then
                 error(string.format(
@@ -248,6 +255,7 @@ local function make_sound_step()
         local total = 0
         local clicks = 0
         local silences = 0
+        local first_index = nil
         for index = start_index, #output_log do
             local entry = output_log[index]
             local game_over_matches = entry.game_over == 0
@@ -258,6 +266,9 @@ local function make_sound_step()
                 and game_over_matches
                 and entry.level_timer == 0
                 and entry.death > 0 then
+                if first_index == nil then
+                    first_index = index
+                end
                 total = total + 1
                 if bit7(entry.data) then
                     clicks = clicks + 1
@@ -266,7 +277,7 @@ local function make_sound_step()
                 end
             end
         end
-        return total, clicks, silences
+        return total, clicks, silences, first_index
     end
 
     local function start_heartbeat_case()
@@ -410,7 +421,7 @@ local function make_sound_step()
             end
 
             if stage == "heartbeat" then
-                local entry = find_entry_since(log_start, function(candidate)
+                local entry, entry_index = find_entry_since(log_start, function(candidate)
                     return candidate.active == inv_active_value
                         and candidate.game_over == 0
                         and candidate.level_timer == 0
@@ -418,7 +429,7 @@ local function make_sound_step()
                         and bit7(candidate.data)
                 end)
                 if entry ~= nil then
-                    validate_status_entries(log_start)
+                    validate_status_entries(entry_index)
                     local expected = heartbeat_cases[heartbeat_case].period
                     local timer = read_u8(inv_heartbeat_timer)
                     if timer > expected or timer + 2 < expected then
@@ -444,9 +455,9 @@ local function make_sound_step()
 
             if stage == "wait-death-sound" then
                 if read_u8(inv_turret_death_timer) ~= 0 then
-                    local total, clicks, silences = count_death_entries(log_start, false)
+                    local total, clicks, silences, first_index = count_death_entries(log_start, false)
                     if total >= 8 and clicks >= 2 and silences >= 2 then
-                        validate_status_entries(log_start)
+                        validate_status_entries(first_index)
                         test.assert_eq(read_u8(inv_gunners), inv_initial_gunners - 1, "gunners after sound-tested turret hit")
                         test.assert_eq(read_u8(inv_heartbeat_timer), 0, "death sound suppresses heartbeat")
                         if read_u8(inv_death_sound_timer) >= inv_sound_death_words then
@@ -467,9 +478,9 @@ local function make_sound_step()
 
             if stage == "wait-final-death-sound" then
                 if read_u8(inv_game_over) ~= 0 then
-                    local total, clicks, silences = count_death_entries(log_start, true)
+                    local total, clicks, silences, first_index = count_death_entries(log_start, true)
                     if total >= 8 and clicks >= 2 and silences >= 2 then
-                        validate_status_entries(log_start)
+                        validate_status_entries(first_index)
                         test.assert_eq(read_u8(inv_gunners), 0, "gunners after final sound-tested hit")
                         test.assert_eq(read_u8(inv_turret_death_timer), 0, "final hit has no respawn timer")
                         if read_u8(inv_death_sound_timer) >= inv_sound_death_words then
