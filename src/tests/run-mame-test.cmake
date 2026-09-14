@@ -119,6 +119,10 @@ endfunction()
 if(DEFINED MAME_SEED_NVR_WORDS AND NOT MAME_SEED_NVR_WORDS STREQUAL "")
     write_mame_nvr_file("${MAME_TEST_OUTPUT_DIRECTORY}/nvram/${MAME_MACHINE}/nvr" "${MAME_SEED_NVR_WORDS}")
 endif()
+if(MAME_EXPECT_NVR_UNCHANGED)
+    set(MAME_NVR_FILE "${MAME_TEST_OUTPUT_DIRECTORY}/nvram/${MAME_MACHINE}/nvr")
+    file(SHA256 "${MAME_NVR_FILE}" MAME_INITIAL_NVR_HASH)
+endif()
 
 execute_process(
     COMMAND
@@ -155,6 +159,12 @@ if(MAME_TEST_OUTPUT MATCHES "VT100_INVADERS_TEST_FAIL")
 endif()
 if(NOT MAME_TEST_OUTPUT MATCHES "VT100_INVADERS_TEST_PASS")
     message(FATAL_ERROR "MAME Invaders test did not report success\n${MAME_TEST_OUTPUT}")
+endif()
+if(MAME_EXPECT_NVR_UNCHANGED)
+    file(SHA256 "${MAME_NVR_FILE}" MAME_FINAL_NVR_HASH)
+    if(NOT MAME_FINAL_NVR_HASH STREQUAL MAME_INITIAL_NVR_HASH)
+        message(FATAL_ERROR "MAME Invaders demo modified the seeded NVR file: ${MAME_NVR_FILE}")
+    endif()
 endif()
 
 function(check_mame_nvr_word MAME_NVR_WORD_INDEX MAME_EXPECTED_NVR_WORD)

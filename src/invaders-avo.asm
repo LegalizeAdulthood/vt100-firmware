@@ -2244,9 +2244,7 @@ inv_set_game_over:
         sta     inv_game_over
         xra     a
         sta     inv_turret_death_timer
-        lda     inv_attract_mode
-        ora     a
-        cz      inv_maybe_add_high_score
+        call    inv_maybe_add_high_score
         call    inv_clear_ufo
         ret
 ;
@@ -2450,6 +2448,9 @@ inv_add_alien_score20:
         jmp     inv_add_score_units
 ;
 inv_maybe_add_high_score:
+        lda     inv_attract_mode
+        ora     a
+        rnz
         lda     inv_score0
         mov     c,a
         lda     inv_score1
@@ -2904,6 +2905,9 @@ inv_unused_high_score_next:
         ret
 ;
 inv_store_high_scores:
+        lda     inv_attract_mode
+        ora     a
+        rnz
         di
         call    inv_store_high_scores_raw
         call    inv_finish_high_score_nvr

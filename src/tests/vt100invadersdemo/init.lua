@@ -18,6 +18,7 @@ local test = dofile(script_directory .. "/../mame-test.lua")
 local frame_subscription
 local frame_tap
 local screen_tap
+local persistence_taps = {}
 
 local function make_demo_state_step()
     local binary_directory = test.required_env("VT100_INVADERS_BINARY_DIRECTORY")
@@ -46,6 +47,11 @@ local function make_demo_state_step()
     local inv_turret_x_lo = test.required_equate(equates, "inv_turret_x_lo")
     local inv_turret_x_hi = test.required_equate(equates, "inv_turret_x_hi")
     local inv_laser_active = test.required_equate(equates, "inv_laser_active")
+    local inv_laser_row_lo = test.required_equate(equates, "inv_laser_row_lo")
+    local inv_laser_row_hi = test.required_equate(equates, "inv_laser_row_hi")
+    local inv_laser_col_lo = test.required_equate(equates, "inv_laser_col_lo")
+    local inv_laser_col_hi = test.required_equate(equates, "inv_laser_col_hi")
+    local inv_laser_glyph = test.required_equate(equates, "inv_laser_glyph")
     local inv_laser_shots_lo = test.required_equate(equates, "inv_laser_shots_lo")
     local inv_laser_shots_hi = test.required_equate(equates, "inv_laser_shots_hi")
     local inv_initial_gunners = test.required_equate(equates, "inv_initial_gunners")
@@ -179,22 +185,46 @@ local function make_demo_state_step()
     local overlay_cells = {}
     local watch_overlay = false
     local overlay_writes = 0
-    local function protect_rectangle(row, column, height, width)
+    local persistence_events = 0
+    local function protect_rectangle(row, column, height, width, name)
         for y = row, row + height - 1 do
             for x = column, column + width - 1 do
-                overlay_cells[row_address(y) + x] = true
+                overlay_cells[row_address(y) + x] = name
             end
         end
     end
-    protect_rectangle(inv_attract_title_row - 1, inv_attract_title_col - 1, 3, inv_attract_title_len + 2)
+    protect_rectangle(inv_attract_title_row - 1, inv_attract_title_col - 1,
+        3, inv_attract_title_len + 2, "title")
     protect_rectangle(inv_attract_scores_row - 1, inv_attract_scores_col - 1,
-        inv_high_score_count + 3, inv_attract_scores_len + 2)
-    protect_rectangle(inv_attract_prompt_row - 1, inv_attract_prompt_col - 1, 3, inv_attract_prompt_len + 2)
+        inv_high_score_count + 3, inv_attract_scores_len + 2, "scores")
+    protect_rectangle(inv_attract_prompt_row - 1, inv_attract_prompt_col - 1,
+        3, inv_attract_prompt_len + 2, "prompt")
     screen_tap = mem:install_write_tap(row_address(inv_attract_title_row - 1),
         row_address(inv_attract_prompt_row + 1) + inv_attract_prompt_col + inv_attract_prompt_len,
         "invaders-demo-overlay", function(address)
             if watch_overlay and overlay_cells[address] then
                 overlay_writes = overlay_writes + 1
+            end
+        end)
+
+    for _, name in ipairs({ "inv_insert_high_score", "inv_start_high_initials", "inv_store_high_scores" }) do
+        local address = test.required_symbol(symbols, name)
+        persistence_taps[#persistence_taps + 1] = mem:install_read_tap(address, address, name, function()
+            if watch_overlay then
+                persistence_events = persistence_events + 1
+            end
+        end)
+    end
+    persistence_taps[#persistence_taps + 1] = mem:install_write_tap(
+        inv_high_score_dirty, inv_high_score_dirty, "invaders-demo-dirty", function(_, value)
+            if watch_overlay and value ~= 0 then
+                persistence_events = persistence_events + 1
+            end
+        end)
+    persistence_taps[#persistence_taps + 1] = mem:install_write_tap(
+        inv_high_score_cache_base, inv_high_score_cache_top, "invaders-demo-cache", function()
+            if watch_overlay then
+                persistence_events = persistence_events + 1
             end
         end)
 
@@ -381,6 +411,7 @@ local function make_demo_state_step()
 
     local function assert_overlay()
         test.assert_eq(overlay_writes, 0, "writes inside protected overlay rectangles")
+        test.assert_eq(persistence_events, 0, "demo high-score persistence events")
         assert_text(inv_attract_title_row, inv_attract_title_col, "VT100 INVADERS")
         assert_text(inv_attract_scores_row, inv_attract_scores_col, "HIGH SCORES")
         assert_text(inv_attract_prompt_row, inv_attract_prompt_col, "PRESS ENTER")
@@ -441,6 +472,24 @@ local function make_demo_state_step()
     local replay_frame = 0
     local real_idle_frames = 0
     local real_right_x = nil
+    local shot_rectangles = {}
+    local shot_visible_rows = {}
+    local overlay_turret_moved = false
+    local shot_column
+
+    local function prepare_overlay_shot()
+        -- Put four aliens above the title so the autopilot's shot crosses all boxes.
+        write_nibble_pair(inv_alien_init_lo, inv_alien_init_hi, inv_alien_count)
+        write_nibble_pair(inv_alien_live_lo, inv_alien_live_hi, 4)
+        write_u8(inv_alien_max_col, 3)
+        write_u8(inv_alien_max_row, 0)
+        for id = 0, 3 do
+            write_u8(inv_alien_live_base + id, 1)
+            write_nibble_pair(inv_alien_x_lo_base + id, inv_alien_x_hi_base + id,
+                inv_high_score_col + 2 + id * inv_alien_slot_w)
+            write_nibble_pair(inv_alien_y_lo_base + id, inv_alien_y_hi_base + id, 0)
+        end
+    end
 
     local function poison_uncovered_screen()
         for address in pairs(initial_screen) do
@@ -493,6 +542,7 @@ local function make_demo_state_step()
                 or stage == "wait-respawn" or stage == "wait-pause"
                 or stage == "wait-restart" or stage == "wait-real-game"
                 or stage == "replay-demo" or stage == "real-idle"
+                or stage == "overlay-shot"
                 or stage == "real-right" or stage == "real-left" or stage == "real-fire"
             if at_frame_boundary ~= boundary_stage then
                 return
@@ -677,8 +727,41 @@ local function make_demo_state_step()
                     pause_alien_y = alien_y(0)
                     poison_uncovered_screen()
                 else
-                    mutate_demo_state()
-                    enter_stage("enter-key")
+                    prepare_overlay_shot()
+                    enter_stage("overlay-shot")
+                end
+                return
+            end
+
+            if stage == "overlay-shot" then
+                assert_overlay()
+                assert_high_scores_loaded("autopilot behind overlay")
+                overlay_turret_moved = overlay_turret_moved or turret_x() ~= inv_turret_start_x
+                if read_u8(inv_laser_active) ~= 0 then
+                    local row = read_nibble_pair(inv_laser_row_lo, inv_laser_row_hi)
+                    local column = read_nibble_pair(inv_laser_col_lo, inv_laser_col_hi)
+                    shot_column = shot_column or column
+                    test.assert_eq(column, shot_column, "autopilot shot stays in its column")
+                    local rectangle = overlay_cells[row_address(row) + column]
+                    if rectangle then
+                        shot_rectangles[rectangle] = true
+                    elseif row == inv_attract_title_row - 2 or row == inv_attract_title_row + 2 then
+                        test.assert_eq(cell(row, column), inv_laser_glyph, "laser visible outside boxes")
+                        shot_visible_rows[row] = true
+                    end
+                    if row < inv_attract_title_row - 2 then
+                        for _, name in ipairs({ "title", "scores", "prompt" }) do
+                            test.assert_eq(shot_rectangles[name] and 1 or 0, 1, "laser behind " .. name)
+                        end
+                        for _, visible_row in ipairs({ inv_attract_title_row - 2, inv_attract_title_row + 2 }) do
+                            test.assert_eq(shot_visible_rows[visible_row] and 1 or 0, 1, "laser emerged from box")
+                            test.assert_eq(cell(visible_row, column), 0, "laser erased outside box")
+                        end
+                        test.assert_eq(overlay_turret_moved and 1 or 0, 1, "autopilot moved behind prompt")
+                        test.assert_eq(laser_shots(), 1, "autopilot fired the overlay shot")
+                        mutate_demo_state()
+                        enter_stage("enter-key")
+                    end
                 end
                 return
             end
