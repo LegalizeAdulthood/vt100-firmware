@@ -555,8 +555,53 @@ inv_play_frame:
         lda     inv_turret_death_timer
         ora     a
         rnz
+        lda     inv_attract_mode
+        ora     a
+        cnz     inv_demo_input
         call    inv_update_turret
         call    inv_update_laser
+        ret
+;
+; Aim below the lowest live alien in the leftmost occupied column.
+; Only synthesize input; the shared frame loop moves and draws the objects.
+;
+inv_demo_input:
+        call    inv_get_alien_init
+        cpi     inv_alien_count
+        rc
+        lda     inv_alien_min_col
+        mov     c,a
+        call    inv_find_column_shooter
+        ora     a
+        rz
+        call    inv_get_alien_x
+        sui     inv_turret_w/2-inv_alien_w/2
+        cpi     inv_turret_min_x
+        jnc     inv_demo_target_right_bound
+        mvi     a,inv_turret_min_x
+inv_demo_target_right_bound:
+        cpi     inv_turret_max_x+1
+        jc      inv_demo_target_ready
+        mvi     a,inv_turret_max_x
+inv_demo_target_ready:
+        mov     e,a
+        call    inv_get_turret_x
+        cmp     e
+        jc      inv_demo_right
+        jz      inv_demo_fire
+        mvi     a,0ffh
+        sta     inv_left_pressed
+        ret
+inv_demo_right:
+        mvi     a,0ffh
+        sta     inv_right_pressed
+        ret
+inv_demo_fire:
+        lda     inv_laser_active
+        ora     a
+        rnz
+        mvi     a,0ffh
+        sta     inv_fire_pressed
         ret
 ;
 inv_demo_frame:

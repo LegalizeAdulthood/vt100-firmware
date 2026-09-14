@@ -45,6 +45,9 @@ local function make_demo_state_step()
     local inv_high_initial_index = test.required_equate(equates, "inv_high_initial_index")
     local inv_turret_x_lo = test.required_equate(equates, "inv_turret_x_lo")
     local inv_turret_x_hi = test.required_equate(equates, "inv_turret_x_hi")
+    local inv_laser_active = test.required_equate(equates, "inv_laser_active")
+    local inv_laser_shots_lo = test.required_equate(equates, "inv_laser_shots_lo")
+    local inv_laser_shots_hi = test.required_equate(equates, "inv_laser_shots_hi")
     local inv_initial_gunners = test.required_equate(equates, "inv_initial_gunners")
     local inv_initial_level = test.required_equate(equates, "inv_initial_level")
     local inv_turret_start_x = test.required_equate(equates, "inv_turret_start_x")
@@ -123,6 +126,9 @@ local function make_demo_state_step()
     local inv_high_score_entry_width = test.required_equate(equates, "inv_high_score_entry_width")
     local inv_scan_setup = test.required_equate(equates, "inv_scan_setup")
     local inv_scan_return_b = test.required_equate(equates, "inv_scan_return_b")
+    local inv_scan_arrow_left = test.required_equate(equates, "inv_scan_arrow_left")
+    local inv_scan_arrow_right = test.required_equate(equates, "inv_scan_arrow_right")
+    local inv_scan_space = test.required_equate(equates, "inv_scan_space")
     local in_setup = test.required_equate(equates, "in_setup")
     local key_flags = test.required_equate(equates, "key_flags")
     local key_silo = test.required_equate(equates, "key_silo")
@@ -206,6 +212,10 @@ local function make_demo_state_step()
 
     local function turret_x()
         return read_nibble_pair(inv_turret_x_lo, inv_turret_x_hi)
+    end
+
+    local function laser_shots()
+        return read_nibble_pair(inv_laser_shots_lo, inv_laser_shots_hi)
     end
 
     local function set_turret_x(value)
@@ -426,6 +436,11 @@ local function make_demo_state_step()
     local pause_alien_x = nil
     local pause_alien_y = nil
     local initial_screen = {}
+    local demo_moved = false
+    local demo_trace = {}
+    local replay_frame = 0
+    local real_idle_frames = 0
+    local real_right_x = nil
 
     local function poison_uncovered_screen()
         for address in pairs(initial_screen) do
@@ -477,6 +492,8 @@ local function make_demo_state_step()
                 or stage == "demo-running" or stage == "wait-death"
                 or stage == "wait-respawn" or stage == "wait-pause"
                 or stage == "wait-restart" or stage == "wait-real-game"
+                or stage == "replay-demo" or stage == "real-idle"
+                or stage == "real-right" or stage == "real-left" or stage == "real-fire"
             if at_frame_boundary ~= boundary_stage then
                 return
             end
@@ -550,6 +567,8 @@ local function make_demo_state_step()
                 test.assert_eq(game_frame(), (previous_game_frame + 1) % 256, "demo frame clock")
                 previous_game_frame = game_frame()
                 demo_frames = demo_frames + 1
+                demo_trace[demo_frames] = { x = turret_x(), shots = laser_shots() }
+                demo_moved = demo_moved or turret_x() ~= inv_turret_start_x
                 assert_overlay()
                 if alien_init_count() == inv_alien_count then
                     if alien_positions == nil then
@@ -557,7 +576,7 @@ local function make_demo_state_step()
                         for id = 0, inv_alien_count - 1 do
                             alien_positions[id] = alien_x(id)
                         end
-                    elseif demo_frames >= inv_alien_count + 8 then
+                    elseif demo_frames >= inv_alien_count + 8 and demo_moved and laser_shots() > 0 then
                         local moved = 0
                         for id = 0, inv_alien_count - 1 do
                             if alien_x(id) ~= alien_positions[id] then
@@ -569,6 +588,7 @@ local function make_demo_state_step()
                         end
                         test.assert_eq(cell(alien_y(0) + 1, alien_x(0) + 1), sg("a"), "moving demo alien")
                         test.assert_eq(cell(alien_y(0) + 1, alien_positions[0]), 0, "erased demo alien position")
+                        test.assert_eq(read_u8(inv_laser_active), 0xff, "autopilot launched a laser")
                         assert_high_scores_loaded("moving demo")
                         force_turret_hit()
                         enter_stage("wait-death")
@@ -595,7 +615,7 @@ local function make_demo_state_step()
 
             if stage == "wait-respawn" then
                 if read_u8(inv_turret_death_timer) == 0 then
-                    test.assert_eq(turret_x(), inv_turret_start_x, "demo respawn position")
+                    test.assert_eq(turret_x(), inv_turret_start_x - 1, "autopilot resumes after respawn")
                     assert_overlay()
                     write_u8(inv_gunners, 1)
                     write_u8(inv_score2, 9)
@@ -647,13 +667,7 @@ local function make_demo_state_step()
                 assert_play_state("restarted " .. restart_case)
                 assert_reset_screen()
                 if restart_case == "game over" then
-                    write_nibble_pair(inv_alien_init_lo, inv_alien_init_hi, inv_alien_count)
-                    write_nibble_pair(inv_alien_live_lo, inv_alien_live_hi, 1)
-                    write_u8(inv_alien_live_base, 1)
-                    write_nibble_pair(inv_alien_x_lo_base, inv_alien_x_hi_base, inv_alien_start_x)
-                    write_nibble_pair(inv_alien_y_lo_base, inv_alien_y_hi_base, inv_ground_row - inv_alien_h + 1)
-                    restart_case = "landing"
-                    enter_stage("wait-pause")
+                    enter_stage("replay-demo")
                 elseif restart_case == "landing" then
                     write_nibble_pair(inv_alien_init_lo, inv_alien_init_hi, inv_alien_count)
                     write_u8(inv_level_timer, inv_level_pause_frames)
@@ -665,6 +679,27 @@ local function make_demo_state_step()
                 else
                     mutate_demo_state()
                     enter_stage("enter-key")
+                end
+                return
+            end
+
+            if stage == "replay-demo" then
+                replay_frame = replay_frame + 1
+                local expected = demo_trace[replay_frame]
+                test.assert_eq(turret_x(), expected.x, "deterministic demo turret")
+                test.assert_eq(laser_shots(), expected.shots, "deterministic demo firing")
+                assert_overlay()
+                if replay_frame == #demo_trace then
+                    for id = 0, inv_alien_count - 1 do
+                        write_u8(inv_alien_live_base + id, 0)
+                    end
+                    write_nibble_pair(inv_alien_live_lo, inv_alien_live_hi, 1)
+                    write_u8(inv_alien_live_base, 1)
+                    write_nibble_pair(inv_alien_last_lo, inv_alien_last_hi, 0xff)
+                    write_nibble_pair(inv_alien_x_lo_base, inv_alien_x_hi_base, inv_alien_start_x)
+                    write_nibble_pair(inv_alien_y_lo_base, inv_alien_y_hi_base, inv_ground_row - inv_alien_h + 1)
+                    restart_case = "landing"
+                    enter_stage("wait-pause")
                 end
                 return
             end
@@ -690,11 +725,49 @@ local function make_demo_state_step()
                     test.assert_eq(cell(inv_attract_title_row, inv_attract_title_col), 0, "title cleared for real play")
                     test.assert_eq(cell(inv_attract_scores_row, inv_attract_scores_col), 0, "scores cleared for real play")
                     test.assert_eq(cell(inv_ground_row, inv_attract_prompt_col), sg("q"), "ground restored inside prompt gutter")
-                    test.pass()
+                    enter_stage("real-idle")
                     return
                 end
                 if frame - stage_frame > 120 then
                     fail_timeout("starting real game")
+                end
+                return
+            end
+
+            if stage == "real-idle" then
+                real_idle_frames = real_idle_frames + 1
+                test.assert_eq(turret_x(), inv_turret_start_x, "no autopilot movement in real game")
+                test.assert_eq(laser_shots(), 0, "no autopilot firing in real game")
+                if real_idle_frames > inv_alien_count + 8 then
+                    enter_stage("real-right")
+                end
+                return
+            end
+
+            if stage == "real-right" then
+                if turret_x() > inv_turret_start_x then
+                    real_right_x = turret_x()
+                    enter_stage("real-left")
+                else
+                    inject_key(inv_scan_arrow_right, 0)
+                end
+                return
+            end
+
+            if stage == "real-left" then
+                if turret_x() < real_right_x then
+                    enter_stage("real-fire")
+                else
+                    inject_key(inv_scan_arrow_left, 0)
+                end
+                return
+            end
+
+            if stage == "real-fire" then
+                if laser_shots() > 0 then
+                    test.pass()
+                else
+                    inject_key(inv_scan_space, 0)
                 end
                 return
             end

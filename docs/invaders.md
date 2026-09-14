@@ -224,10 +224,11 @@ as objects move behind it. RETURN removes the overlay and disables clipping
 when initializing the real game.
 
 The demo should reuse the same game state, frame clock, object map, update
-routines, and rendering paths as real gameplay. Attract mode may add a small
-demo driver that writes the existing input state bytes before the normal frame
-update, but it should not duplicate alien, shield, UFO, turret, laser, missile,
-score, or high-score rendering.
+routines, and rendering paths as real gameplay. The demo driver waits for the
+formation to finish spawning, then steers below the lowest live alien in the
+leftmost occupied column. It fires when aligned and no player laser is active.
+The driver only writes the existing input state bytes before the normal turret
+and laser updates; it does not duplicate rendering or collision handling.
 
 Pressing RETURN leaves attract mode and starts a fresh real game by running the
 normal gameplay initialization path. Pressing SET-UP from attract mode exits
@@ -1589,25 +1590,6 @@ Attract-mode demo work should add orchestration only where possible. Reuse
 `inv_update_turret`, `inv_update_laser`, `inv_draw_static_screen`,
 `inv_draw_high_score_table`, and the existing sprite/object-map routines rather
 than creating parallel demo renderers.
-
-### 4. Demo Autopilot
-
-Add a small deterministic autopilot used only while `inv_attract_mode` is set.
-The autopilot should write the existing input state bytes (`inv_left_pressed`,
-`inv_right_pressed`, and `inv_fire_pressed`) before the normal turret and laser
-updates run. It should not call the turret, laser, missile, alien, or collision
-renderers directly.
-
-Start with a simple policy: drift the turret toward a live alien column, fire
-when no player laser is active and a target column is plausible, and otherwise
-let the normal enemy fire and UFO timing run. Determinism matters more than
-skill; the point is to keep the screen alive and exercise the same gameplay
-paths users will see after pressing RETURN.
-
-Test this with a MAME Lua plugin that enters attract mode without injecting
-gameplay keys, waits long enough for the autopilot to act, and verifies turret
-movement plus at least one player laser launch. The test should also confirm
-that real keyboard input still controls only the real game path after RETURN.
 
 ### 5. Overlay Clipping And Persistence Guard
 
