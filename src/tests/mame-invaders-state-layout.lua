@@ -99,6 +99,7 @@ test.run(function()
         { "inv_dirty_queue_base", 32 },
         { "inv_object_map_base", 1440 },
         { "inv_high_initial_index", 1 },
+        { "inv_high_initial_used", 1 },
         { "inv_saved_curs_attr_rend", 2 },
         { "inv_high_score_digit_base", 30 },
         { "inv_high_initial_lo_base", 30 },

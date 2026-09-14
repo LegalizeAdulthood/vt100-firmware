@@ -360,7 +360,12 @@ wait_break:     push    b
                 jnz     wait_break
                 jmp     ready_comms
 ;
-setup_cursor:   lxi     h,pk_click      ; Push a return address that will tidy up keyboard
+setup_cursor:
+        if vt100
+                lxi     h,pk_click      ; Push a return address that will tidy up keyboard
+        else
+                call    inv_setup_cursor_hook
+        endif
                 push    h
                 xra     a
                 sta     csi_params
