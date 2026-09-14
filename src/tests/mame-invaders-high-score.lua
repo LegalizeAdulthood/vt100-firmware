@@ -28,6 +28,7 @@ local function make_high_score_step()
     local inv_high_score_slot = test.required_equate(equates, "inv_high_score_slot")
     local inv_high_shift_index = test.required_equate(equates, "inv_high_shift_index")
     local inv_high_initial_index = test.required_equate(equates, "inv_high_initial_index")
+    local inv_high_initial_ready = test.required_equate(equates, "inv_high_initial_ready")
     local inv_high_score_cache_base = test.required_equate(equates, "inv_high_score_cache_base")
     local inv_high_score_cache_top = test.required_equate(equates, "inv_high_score_cache_top")
     local inv_high_score_count = test.required_equate(equates, "inv_high_score_count")
@@ -38,6 +39,15 @@ local function make_high_score_step()
     local inv_score0 = test.required_equate(equates, "inv_score0")
     local inv_score1 = test.required_equate(equates, "inv_score1")
     local inv_score2 = test.required_equate(equates, "inv_score2")
+    local inv_gunners = test.required_equate(equates, "inv_gunners")
+    local inv_turret_top_row = test.required_equate(equates, "inv_turret_top_row")
+    local inv_turret_x_lo = test.required_equate(equates, "inv_turret_x_lo")
+    local inv_turret_x_hi = test.required_equate(equates, "inv_turret_x_hi")
+    local inv_missile_active_base = test.required_equate(equates, "inv_missile_active_base")
+    local inv_missile_active_count = test.required_equate(equates, "inv_missile_active_count")
+    local inv_missile_row_base = test.required_equate(equates, "inv_missile_row_base")
+    local inv_missile_col_base = test.required_equate(equates, "inv_missile_col_base")
+    local inv_missile_tick_timer = test.required_equate(equates, "inv_missile_tick_timer")
     local inv_high_score_first_row = test.required_equate(equates, "inv_high_score_first_row")
     local inv_high_score_col = test.required_equate(equates, "inv_high_score_col")
     local inv_high_prompt_title_row = test.required_equate(equates, "inv_high_prompt_title_row")
@@ -49,10 +59,13 @@ local function make_high_score_step()
     local inv_high_prompt_score_col = test.required_equate(equates, "inv_high_prompt_score_col")
     local inv_scan_setup = test.required_equate(equates, "inv_scan_setup")
     local inv_scan_return_b = test.required_equate(equates, "inv_scan_return_b")
+    local inv_scan_space = test.required_equate(equates, "inv_scan_space")
     local curs_col = test.required_equate(equates, "curs_col")
     local curs_row = test.required_equate(equates, "curs_row")
     local curs_char_rend = test.required_equate(equates, "curs_char_rend")
     local curs_attr_rend = test.required_equate(equates, "curs_attr_rend")
+    local cursor_address = test.required_equate(equates, "cursor_address")
+    local cursor_visible = test.required_equate(equates, "cursor_visible")
     local in_setup = test.required_equate(equates, "in_setup")
     local key_flags = test.required_equate(equates, "key_flags")
     local key_silo = test.required_equate(equates, "key_silo")
@@ -174,6 +187,10 @@ local function make_high_score_step()
             description .. " cursor column")
         test.assert_eq(read_u8(curs_char_rend), 0x80, description .. " cursor character rendition")
         test.assert_eq(read_u8(curs_attr_rend), 0, description .. " cursor attribute rendition")
+        test.assert_eq(
+            read_u16(cursor_address),
+            row_address(inv_high_prompt_initials_row) + inv_high_prompt_entry_col + cursor_index,
+            description .. " cursor screen address")
     end
 
     local function assert_game_cursor_disabled(description)
@@ -309,7 +326,7 @@ local function make_high_score_step()
                     assert_text(inv_high_prompt_initials_row, inv_high_prompt_initials_col, "ENTER INITIALS ___")
                     assert_text(inv_high_prompt_score_row, inv_high_prompt_score_col, "SCORE 1230")
                     assert_initial_cursor(0, "pending initials")
-                    enter_stage("initial-key")
+                    enter_stage("wait-first-cursor")
                     return
                 end
                 if result ~= inv_test_pending and result ~= inv_test_high_score_waiting then
@@ -317,6 +334,22 @@ local function make_high_score_step()
                 end
                 if frame - stage_frame > 240 then
                     fail_timeout("high-score prompt")
+                end
+                return
+            end
+
+            if stage == "wait-first-cursor" then
+                assert_initial_cursor(0, "waiting for first initial")
+                if read_u8(cursor_visible) ~= 0 then
+                    test.assert_eq(
+                        cell(inv_high_prompt_initials_row, inv_high_prompt_entry_col),
+                        string.byte("_") + 0x80,
+                        "visible cursor on first initial")
+                    enter_stage("initial-key")
+                    return
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("first initial cursor")
                 end
                 return
             end
@@ -406,11 +439,75 @@ local function make_high_score_step()
                 if read_u8(inv_active) == inv_active_value
                     and read_u8(inv_attract_mode) == 0 then
                     assert_game_cursor_disabled("gameplay after high-score entry")
-                    test.pass()
+                    write_u8(inv_test_mode, 0)
+                    write_u8(inv_score0, 4)
+                    write_u8(inv_score1, 2)
+                    write_u8(inv_score2, 1)
+                    write_u8(inv_gunners, 1)
+                    write_u8(inv_missile_active_base, 0xff)
+                    write_u8(inv_missile_active_count, 1)
+                    write_u8(inv_missile_row_base, inv_turret_top_row - 1)
+                    write_u8(inv_missile_col_base,
+                        read_nibble(inv_turret_x_lo) + read_nibble(inv_turret_x_hi) * 16 + 3)
+                    write_u8(inv_missile_tick_timer, 1)
+                    inject_key(inv_scan_space, 0)
+                    enter_stage("wait-final-life-cursor")
                     return
                 end
                 if frame - stage_frame > 120 then
                     fail_timeout("restart after high-score entry")
+                end
+            end
+
+            if stage == "wait-final-life-cursor" then
+                if frame - stage_frame < 12 then
+                    inject_key(inv_scan_space, 0)
+                    return
+                end
+                if read_u8(inv_high_score_dirty) ~= 0 and read_u8(curs_char_rend) ~= 0
+                    and read_u8(cursor_visible) ~= 0 then
+                    test.assert_eq(read_u8(inv_high_initial_index), 0, "final life initial index")
+                    assert_initial_cursor(0, "final life initials")
+                    assert_text(inv_high_prompt_initials_row, inv_high_prompt_initials_col, "ENTER INITIALS ___")
+                    test.assert_eq(
+                        cell(inv_high_prompt_initials_row, inv_high_prompt_entry_col),
+                        string.byte("_") + 0x80,
+                        "final life visible cursor on first initial")
+                    initial_key_repeats = 0
+                    enter_stage("release-fire-key")
+                    return
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("final life initial cursor")
+                end
+            end
+
+            if stage == "release-fire-key" then
+                test.assert_eq(read_u8(inv_high_initial_index), 0, "released fire leaves initials empty")
+                if read_u8(inv_high_initial_ready) ~= 0 then
+                    enter_stage("fresh-initial-key")
+                    return
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("releasing fire before initials")
+                end
+                return
+            end
+
+            if stage == "fresh-initial-key" then
+                if initial_key_repeats < 2 then
+                    inject_key(scan_a, 0)
+                    initial_key_repeats = initial_key_repeats + 1
+                    return
+                end
+                if read_u8(inv_high_initial_index) == 1 then
+                    assert_text(inv_high_prompt_initials_row, inv_high_prompt_entry_col, "A__")
+                    assert_initial_cursor(1, "fresh initial after fire release")
+                    test.pass()
+                    return
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("fresh initial after fire release")
                 end
             end
         end)
