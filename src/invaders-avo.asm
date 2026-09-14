@@ -229,7 +229,8 @@ inv_high_score_slot     equ     inv_high_score_dirty-1
 inv_high_shift_index    equ     inv_high_score_slot-1
 inv_high_nvr_index      equ     inv_high_shift_index-1
 inv_high_initial_index  equ     inv_high_nvr_index-1
-inv_high_initial_ready  equ     inv_high_initial_index-1
+inv_high_initial_used   equ     inv_high_initial_index-1
+inv_high_initial_ready  equ     inv_high_initial_used-1
 inv_saved_curs_char_rend equ    inv_high_initial_ready-1
 inv_saved_curs_attr_rend equ    inv_saved_curs_char_rend-1
 ;
@@ -337,6 +338,8 @@ inv_data_low            equ     inv_object_map_base
         jmp     inv_sound_status_hook_impl
         org     inv_reset_hook
         jmp     inv_reset_hook_impl
+        org     inv_setup_cursor_hook
+        jmp     inv_setup_cursor_hook_impl
 
 inv_enter_impl:
         call    inv_prepare_screen
@@ -381,6 +384,7 @@ inv_reset_for_attract:
         sta     inv_level_timer
         sta     inv_high_score_dirty
         sta     inv_high_initial_index
+        sta     inv_high_initial_used
         sta     inv_high_initial_ready
         sta     inv_test_result
         sta     inv_laser_active
@@ -2564,8 +2568,34 @@ inv_accept_high_initial_char:
         sta     char_und_curs
         lhld    cursor_address
         mov     m,a
+        call    inv_high_initial_bit
+        lxi     h,inv_high_initial_used
+        ora     m
+        mov     m,a
         lda     inv_high_initial_index
         inr     a
+        sta     inv_high_initial_index
+        jmp     inv_show_high_initial_cursor
+;
+inv_left_high_initial:
+        lda     inv_high_initial_index
+        cpi     3
+        jc      inv_left_high_initial_in_range
+        mvi     a,2             ; full entry still displays the cursor on position 2
+inv_left_high_initial_in_range:
+        ora     a
+        rz
+        dcr     a
+        sta     inv_high_initial_index
+        jmp     inv_show_high_initial_cursor
+;
+inv_right_high_initial:
+        lda     inv_high_initial_index
+        inr     a
+        cpi     3
+        jc      inv_right_high_initial_in_range
+        mvi     a,2
+inv_right_high_initial_in_range:
         sta     inv_high_initial_index
         jmp     inv_show_high_initial_cursor
 ;
@@ -2576,6 +2606,11 @@ inv_backspace_high_initial:
         dcr     a
         sta     inv_high_initial_index
         call    inv_show_high_initial_cursor
+        call    inv_high_initial_bit
+        cma
+        lxi     h,inv_high_initial_used
+        ana     m
+        mov     m,a
         call    inv_current_initial_char_index
         mov     c,a
         xra     a
@@ -2587,13 +2622,26 @@ inv_backspace_high_initial:
         ret
 ;
 inv_return_high_initial:
-        lda     inv_high_initial_index
+        lda     inv_high_initial_used
         ora     a
         rz
         jmp     inv_finish_high_initials
 ;
+; Return the occupied-position bit for the current initial in A.
+;
+inv_high_initial_bit:
+        lda     inv_high_initial_index
+        mov     c,a
+        mvi     a,1
+inv_high_initial_bit_next:
+        dcr     c
+        rm
+        rlc
+        jmp     inv_high_initial_bit_next
+;
 inv_start_high_initials:
         xra     a
+        sta     inv_high_initial_used
         sta     inv_high_initial_ready ; release gameplay keys before entering initials
         sta     cursor_visible
         mvi     a,80h
@@ -2691,6 +2739,7 @@ inv_finish_high_initials:
         xra     a
         sta     inv_high_score_dirty
         sta     inv_high_initial_index
+        sta     inv_high_initial_used
         call    inv_draw_attract_screen
         mvi     a,0ffh
         sta     inv_attract_mode
@@ -4272,6 +4321,31 @@ inv_exit_impl:
 inv_reset_hook_impl:
         call    init_devices
         jmp     inv_load_high_scores
+;
+; Initials use SET-UP's ASCII conversion, but keep cursor movement in the field.
+;
+inv_setup_cursor_hook_impl:
+        lxi     h,pk_click      ; repeat the displaced instruction
+        push    psw
+        lda     inv_active
+        cpi     inv_active_value
+        jnz     inv_setup_cursor_stock
+        lda     inv_high_score_dirty
+        ora     a
+        jz      inv_setup_cursor_stock
+        pop     psw
+        pop     h               ; discard return into setup_cursor
+        lxi     h,pk_click
+        push    h
+        mov     a,c
+        cpi     'C'
+        jz      inv_right_high_initial
+        cpi     'D'
+        jz      inv_left_high_initial
+        ret
+inv_setup_cursor_stock:
+        pop     psw
+        ret
 ;
 inv_idle_hook_impl:
         lda     inv_active

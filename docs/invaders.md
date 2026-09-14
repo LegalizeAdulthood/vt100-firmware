@@ -998,10 +998,14 @@ qualifying non-zero score is inserted, lower entries are shifted down, initials
 for the new entry are cleared to spaces, and the high-score prompt is shown.
 The prompt temporarily routes key input through the stock firmware keycode to
 ASCII path, then accepts printable ASCII characters from space through
-underscore, using the same 6-bit encoding as the table. Backspace moves the
-cursor back and clears the corrected character. RETURN confirms the entry only
-after at least one initial has been entered, then addresses 51 through 75 are
-written back to NVR.
+underscore, using the same 6-bit encoding as the table. Left and Right move the
+cursor between the three initial positions without leaving the field. Typing
+replaces the character at the selected position. Backspace moves the cursor
+back and clears the corrected character. RETURN confirms the entry only after
+at least one initial has been entered, regardless of the cursor position;
+moving through empty positions does not count as entering an initial. Unused
+positions are saved as spaces, and addresses 51 through 75 are written back to
+NVR.
 
 ## Alien Update
 

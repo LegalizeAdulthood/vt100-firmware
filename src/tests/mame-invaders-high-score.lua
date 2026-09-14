@@ -28,6 +28,7 @@ local function make_high_score_step()
     local inv_high_score_slot = test.required_equate(equates, "inv_high_score_slot")
     local inv_high_shift_index = test.required_equate(equates, "inv_high_shift_index")
     local inv_high_initial_index = test.required_equate(equates, "inv_high_initial_index")
+    local inv_high_initial_used = test.required_equate(equates, "inv_high_initial_used")
     local inv_high_initial_ready = test.required_equate(equates, "inv_high_initial_ready")
     local inv_high_score_cache_base = test.required_equate(equates, "inv_high_score_cache_base")
     local inv_high_score_cache_top = test.required_equate(equates, "inv_high_score_cache_top")
@@ -60,6 +61,9 @@ local function make_high_score_step()
     local inv_scan_setup = test.required_equate(equates, "inv_scan_setup")
     local inv_scan_return_b = test.required_equate(equates, "inv_scan_return_b")
     local inv_scan_space = test.required_equate(equates, "inv_scan_space")
+    local inv_scan_arrow_left = test.required_equate(equates, "inv_scan_arrow_left")
+    local inv_scan_arrow_right = test.required_equate(equates, "inv_scan_arrow_right")
+    local brightness = test.required_equate(equates, "brightness")
     local curs_col = test.required_equate(equates, "curs_col")
     local curs_row = test.required_equate(equates, "curs_row")
     local curs_char_rend = test.required_equate(equates, "curs_char_rend")
@@ -78,12 +82,46 @@ local function make_high_score_step()
     local scan_b = 0x68
     local scan_1 = 0x1a
     local scan_backspace = 0x33
+    local scan_up = 0x30
+    local scan_down = 0x22
+    local setup_actions = {
+        { scan = inv_scan_arrow_right, column = 1 },
+        { scan = inv_scan_arrow_left, column = 0 },
+    }
     local initial_actions = {
         { scan = inv_scan_return_b, modifiers = 0, index = 0, field = "___", reject_empty = true },
-        { scan = scan_a, modifiers = 0, index = 1, value = 0x21, field = "A__" },
-        { scan = scan_b, modifiers = 0, index = 2, value = 0x22, field = "AB_" },
-        { scan = scan_backspace, modifiers = 0, index = 1, cleared = 1, field = "A__" },
-        { scan = scan_1, modifiers = key_flag_shift, index = 2, value = 0x01, field = "A!_" },
+        { scan = inv_scan_arrow_left, modifiers = 0, index = 0, field = "___" },
+        { scan = inv_scan_arrow_right, modifiers = 0, index = 1, field = "___" },
+        { scan = inv_scan_arrow_right, modifiers = 0, index = 2, field = "___" },
+        { scan = inv_scan_arrow_right, modifiers = 0, index = 2, field = "___" },
+        { scan = inv_scan_return_b, modifiers = 0, index = 2, field = "___", reject_empty = true },
+        { scan = scan_up, modifiers = 0, index = 2, field = "___" },
+        { scan = scan_down, modifiers = 0, index = 2, field = "___" },
+        { scan = scan_b, modifiers = 0, index = 3, value = 0x22, field = "__B", used = 4 },
+        { scan = scan_backspace, modifiers = 0, index = 2, cleared = 2, field = "___", used = 0 },
+        { scan = inv_scan_return_b, modifiers = 0, index = 2, field = "___", reject_empty = true },
+        { scan = inv_scan_arrow_left, modifiers = 0, index = 1, field = "___" },
+        { scan = inv_scan_arrow_left, modifiers = 0, index = 0, field = "___" },
+        { scan = scan_a, modifiers = 0, index = 1, value = 0x21, field = "A__", used = 1 },
+        { scan = scan_b, modifiers = 0, index = 2, value = 0x22, field = "AB_", used = 3 },
+        { scan = scan_backspace, modifiers = 0, index = 1, cleared = 1, field = "A__", used = 1 },
+        { scan = scan_1, modifiers = key_flag_shift, index = 2, value = 0x01, field = "A!_", used = 3 },
+        { scan = scan_b, modifiers = 0, index = 3, value = 0x22, field = "A!B", used = 7 },
+        { scan = scan_a, modifiers = 0, index = 3, field = "A!B" },
+        { scan = inv_scan_arrow_left, modifiers = 0, index = 1, field = "A!B" },
+        { scan = inv_scan_arrow_left, modifiers = 0, index = 0, field = "A!B" },
+        { scan = inv_scan_arrow_left, modifiers = 0, index = 0, field = "A!B" },
+        { scan = scan_b, modifiers = 0, index = 1, value = 0x22, field = "B!B", used = 7 },
+        { scan = inv_scan_arrow_right, modifiers = 0, index = 2, field = "B!B" },
+        { scan = inv_scan_arrow_right, modifiers = 0, index = 2, field = "B!B" },
+        { scan = scan_b, modifiers = 0, index = 3, value = 0x22, field = "B!B", used = 7 },
+        { scan = scan_backspace, modifiers = 0, index = 2, cleared = 2, field = "B!_", used = 3 },
+        { scan = inv_scan_arrow_left, modifiers = 0, index = 1, field = "B!_" },
+        { scan = scan_backspace, modifiers = 0, index = 0, cleared = 0, field = "_!_", used = 2 },
+        { scan = scan_a, modifiers = 0, index = 1, value = 0x21, field = "A!_", used = 3 },
+        { scan = inv_scan_arrow_left, modifiers = 0, index = 0, field = "A!_" },
+        { scan = scan_up, modifiers = 0, index = 0, field = "A!_" },
+        { scan = scan_down, modifiers = 0, index = 0, field = "A!_" },
         { scan = inv_scan_return_b, modifiers = 0, commit = true },
     }
     local mem = test.program_space()
@@ -191,6 +229,30 @@ local function make_high_score_step()
             read_u16(cursor_address),
             row_address(inv_high_prompt_initials_row) + inv_high_prompt_entry_col + cursor_index,
             description .. " cursor screen address")
+        for row = 0, 23 do
+            for column = 0, 79 do
+                local expected = read_u8(cursor_visible) ~= 0
+                    and row == inv_high_prompt_initials_row
+                    and column == inv_high_prompt_entry_col + cursor_index and 0x80 or 0
+                test.assert_eq(cell(row, column) & 0x80, expected,
+                    description .. " cursor bit at " .. row .. "," .. column)
+            end
+        end
+    end
+
+    local function assert_rendered_initial_cursor()
+        local screen = manager.machine.screens[":screen"]
+        local cell_width = screen.width / 80
+        local cell_height = screen.height / 25
+        screen:snapshot("initial-cursor.png")
+        for y = 0, cell_height - 1 do
+            for x = 0, screen.width - 1 do
+                test.assert_eq(screen:pixel(x, y) & 0xffffff, 0, "no cursor on top row")
+            end
+        end
+        test.assert_between(screen:pixel(inv_high_prompt_entry_col * cell_width + 1,
+            inv_high_prompt_initials_row * cell_height + 1) & 0xffffff, 1, 0xffffff,
+            "rendered cursor on first initial")
     end
 
     local function assert_game_cursor_disabled(description)
@@ -206,6 +268,9 @@ local function make_high_score_step()
     local enter_key_repeats = 0
     local initial_action_index = 1
     local initial_key_repeats = 0
+    local setup_action_index = 1
+    local setup_action_repeats = 0
+    local initial_brightness
 
     local function enter_stage(next_stage)
         stage = next_stage
@@ -254,12 +319,31 @@ local function make_high_score_step()
             end
 
             if stage == "wait-setup" then
-                if read_u8(in_setup) ~= 0 then
-                    enter_stage("shift-i")
+                if read_u8(in_setup) ~= 0 and frame - stage_frame >= 3 then
+                    enter_stage("setup-arrow")
                     return
                 end
                 if frame - stage_frame > 120 then
                     fail_timeout("entering SET-UP")
+                end
+                return
+            end
+
+            if stage == "setup-arrow" then
+                local action = setup_actions[setup_action_index]
+                if setup_action_repeats < 2 then
+                    inject_key(action.scan, 0)
+                    setup_action_repeats = setup_action_repeats + 1
+                    return
+                end
+                if read_u8(curs_col) == action.column then
+                    setup_action_index = setup_action_index + 1
+                    setup_action_repeats = 0
+                    enter_stage(setup_action_index <= #setup_actions and "setup-arrow" or "shift-i")
+                    return
+                end
+                if frame - stage_frame > 120 then
+                    fail_timeout("ordinary SET-UP arrow")
                 end
                 return
             end
@@ -322,10 +406,12 @@ local function make_high_score_step()
                     test.assert_eq(high_score_units(1), 0, "stored high score slot 1")
                     test.assert_eq(read_u8(inv_high_score_slot), 0, "pending high score slot")
                     test.assert_eq(read_u8(inv_high_initial_index), 0, "pending initial index")
+                    test.assert_eq(read_u8(inv_high_initial_used), 0, "pending initials empty")
                     assert_text(inv_high_prompt_title_row, inv_high_prompt_title_col, "NEW HIGH SCORE")
                     assert_text(inv_high_prompt_initials_row, inv_high_prompt_initials_col, "ENTER INITIALS ___")
                     assert_text(inv_high_prompt_score_row, inv_high_prompt_score_col, "SCORE 1230")
                     assert_initial_cursor(0, "pending initials")
+                    initial_brightness = read_u8(brightness)
                     enter_stage("wait-first-cursor")
                     return
                 end
@@ -340,7 +426,7 @@ local function make_high_score_step()
 
             if stage == "wait-first-cursor" then
                 assert_initial_cursor(0, "waiting for first initial")
-                if read_u8(cursor_visible) ~= 0 then
+                if read_u8(cursor_visible) ~= 0 and frame - stage_frame >= 3 then
                     test.assert_eq(
                         cell(inv_high_prompt_initials_row, inv_high_prompt_entry_col),
                         string.byte("_") + 0x80,
@@ -373,8 +459,8 @@ local function make_high_score_step()
                         and read_u8(inv_attract_mode) ~= 0 then
                         test.assert_eq(high_score_units(0), 123, "stored high score slot 0")
                         test.assert_eq(high_score_units(1), 0, "stored high score slot 1")
-                        test.assert_eq(initial_value(0), initial_actions[2].value, "stored initials char 0")
-                        test.assert_eq(initial_value(1), initial_actions[5].value, "stored initials char 1")
+                        test.assert_eq(initial_value(0), 0x21, "stored initials char 0")
+                        test.assert_eq(initial_value(1), 0x01, "stored initials char 1")
                         test.assert_eq(initial_value(2), 0, "stored initials char 2")
                         test.assert_eq(read_nibble(inv_high_score_dirty), 0, "high score dirty flag")
                         assert_text(inv_high_score_first_row, inv_high_score_col, "A!  1230")
@@ -388,8 +474,13 @@ local function make_high_score_step()
                     return
                 end
                 if read_u8(inv_high_initial_index) == action.index then
+                    test.assert_eq(read_u8(brightness), initial_brightness, "initials do not change brightness")
                     if action.reject_empty then
                         test.assert_eq(read_nibble(inv_high_score_dirty), 15, "empty return leaves entry dirty")
+                        test.assert_eq(read_u8(inv_high_initial_used), 0, "empty return requires an initial")
+                    end
+                    if action.used ~= nil then
+                        test.assert_eq(read_u8(inv_high_initial_used), action.used, "occupied initial positions")
                     end
                     if action.value ~= nil then
                         test.assert_eq(
@@ -467,12 +558,14 @@ local function make_high_score_step()
                 if read_u8(inv_high_score_dirty) ~= 0 and read_u8(curs_char_rend) ~= 0
                     and read_u8(cursor_visible) ~= 0 then
                     test.assert_eq(read_u8(inv_high_initial_index), 0, "final life initial index")
+                    test.assert_eq(read_u8(inv_high_initial_used), 0, "final life initials empty")
                     assert_initial_cursor(0, "final life initials")
                     assert_text(inv_high_prompt_initials_row, inv_high_prompt_initials_col, "ENTER INITIALS ___")
                     test.assert_eq(
                         cell(inv_high_prompt_initials_row, inv_high_prompt_entry_col),
                         string.byte("_") + 0x80,
                         "final life visible cursor on first initial")
+                    assert_rendered_initial_cursor()
                     initial_key_repeats = 0
                     enter_stage("release-fire-key")
                     return
