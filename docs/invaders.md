@@ -1477,6 +1477,18 @@ entry through SET-UP, frame advancement, rendering after boot, static screen
 state, keyboard input, laser movement, collisions, missiles, and game-over
 behavior. Use direct scripts for ROM layout and memory layout probes.
 
+The demo-state test watches screen-RAM writes throughout demo play and restarts
+so even transient writes into the overlay boxes fail. An autopilot-fired laser
+crosses all three rectangles, appears in the gaps, and leaves no trail. The
+test also watches high-score insertion, initials entry, NVR-save calls, dirty
+flag writes, and cache writes while forcing a qualifying demo game-over score.
+RETURN must discard the demo score and restore unclipped real gameplay.
+
+The high-score load test checks seeded entries and empty rows after 64 demo
+frames. Both it and the demo-state test compare the complete seeded NVR file
+before and after MAME runs; demo play must leave it byte-for-byte unchanged.
+The real-game high-score test still verifies initials entry and saved NVR words.
+
 ### Screenshot Regression
 
 Screenshot tests should use a small set of deterministic frames:
@@ -1594,23 +1606,3 @@ Attract-mode demo work should add orchestration only where possible. Reuse
 `inv_update_turret`, `inv_update_laser`, `inv_draw_static_screen`,
 `inv_draw_high_score_table`, and the existing sprite/object-map routines rather
 than creating parallel demo renderers.
-
-### 5. Overlay Clipping And Persistence Guard
-
-Preserve the title, high-score fixed rectangle, instructions, and their
-one-character box borders by clipping gameplay writes around them. Do not refresh
-the overlay each frame. Keep this clipping active for demo restarts and disable
-it for real gameplay. Extend the clipping tests to cover autopilot movement and
-firing behind the overlay; monitor screen-RAM writes so transient overwrites
-cannot pass merely because the final text looks correct.
-
-Guard persistence paths so demo play cannot add a high score, enter initials,
-set `inv_high_score_dirty`, or call `inv_store_high_scores`. A demo score may
-exist on the status row while the demo runs, but it is disposable and must be
-lost when RETURN starts the real game or when the demo loops.
-
-Extend the high-score load/save MAME tests so seeded scores remain visible
-after the demo has advanced for several frames, while a forced demo game-over
-does not modify the staged NVR file. Existing real-game high-score tests should
-continue to prove that qualifying real scores still prompt for initials and
-write NVR.

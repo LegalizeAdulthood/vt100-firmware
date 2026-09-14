@@ -60,6 +60,7 @@ if(MAME_COMMAND)
         if(TEST_NAME STREQUAL "mame-invaders-high-score-load" OR
                 TEST_NAME STREQUAL "mame-invaders-demo-state")
             list(APPEND MAME_TEST_DRIVER_ARGUMENTS "-DMAME_SEED_NVR_WORDS=51=007B,52=002D,61=08A1,62=08C0")
+            list(APPEND MAME_TEST_DRIVER_ARGUMENTS "-DMAME_EXPECT_NVR_UNCHANGED=TRUE")
         endif()
 
         add_test(NAME ${TEST_NAME}

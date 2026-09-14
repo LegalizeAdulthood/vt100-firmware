@@ -170,6 +170,7 @@ local function make_high_score_load_step()
     local stage_frame = 0
     local setup_key_repeats = 0
     local shift_i_repeats = 0
+    local demo_frames = 0
 
     local function enter_stage(next_stage)
         stage = next_stage
@@ -255,7 +256,8 @@ local function make_high_score_load_step()
             end
 
             if stage == "wait-overlay-stable" then
-                if frame - stage_frame < 6 then
+                demo_frames = demo_frames + 1
+                if demo_frames < 64 then
                     return
                 end
                 if read_u8(inv_active) == inv_active_value and read_u8(inv_attract_mode) ~= 0 then
