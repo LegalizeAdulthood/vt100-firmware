@@ -112,11 +112,34 @@ function(write_mame_nvr_file MAME_NVR_FILE MAME_NVR_WORD_SPECS)
 
     get_filename_component(MAME_NVR_DIRECTORY "${MAME_NVR_FILE}" DIRECTORY)
     file(MAKE_DIRECTORY "${MAME_NVR_DIRECTORY}")
-    string(ASCII ${MAME_NVR_BYTE_VALUES} MAME_NVR_BYTES)
-    file(WRITE "${MAME_NVR_FILE}" "${MAME_NVR_BYTES}")
+    # Use the existing assembler for binary data: CMake text output changes LF
+    # bytes on Windows, and string(ASCII) cannot construct NUL bytes.
+    if(NOT ASM8080_EXECUTABLE)
+        find_program(ASM8080_EXECUTABLE NAMES asm8080 REQUIRED)
+    endif()
+    set(MAME_NVR_ASM "        org     0\n")
+    foreach(BYTE IN LISTS MAME_NVR_BYTE_VALUES)
+        string(APPEND MAME_NVR_ASM "        db      ${BYTE}\n")
+    endforeach()
+    string(APPEND MAME_NVR_ASM "        end\n")
+    file(CONFIGURE OUTPUT "${MAME_NVR_DIRECTORY}/seed.asm" CONTENT "${MAME_NVR_ASM}" @ONLY NEWLINE_STYLE CRLF)
+    execute_process(COMMAND "${ASM8080_EXECUTABLE}" -oseed seed.asm
+        WORKING_DIRECTORY "${MAME_NVR_DIRECTORY}"
+        COMMAND_ERROR_IS_FATAL ANY)
+    file(COPY_FILE "${MAME_NVR_DIRECTORY}/seed.bin" "${MAME_NVR_FILE}")
+    file(SIZE "${MAME_NVR_FILE}" MAME_NVR_SIZE)
+    if(NOT MAME_NVR_SIZE EQUAL 200)
+        message(FATAL_ERROR "NVR fixture must contain exactly 200 bytes, got ${MAME_NVR_SIZE}")
+    endif()
 endfunction()
 
-if(DEFINED MAME_SEED_NVR_WORDS AND NOT MAME_SEED_NVR_WORDS STREQUAL "")
+if(DEFINED MAME_INPUT_NVR_FILE)
+    if(DEFINED MAME_SEED_NVR_WORDS)
+        message(FATAL_ERROR "Cannot both seed NVR and load a previous MAME NVR file")
+    endif()
+    file(MAKE_DIRECTORY "${MAME_TEST_OUTPUT_DIRECTORY}/nvram/${MAME_MACHINE}")
+    file(COPY_FILE "${MAME_INPUT_NVR_FILE}" "${MAME_TEST_OUTPUT_DIRECTORY}/nvram/${MAME_MACHINE}/nvr")
+elseif(DEFINED MAME_SEED_NVR_WORDS AND NOT MAME_SEED_NVR_WORDS STREQUAL "")
     write_mame_nvr_file("${MAME_TEST_OUTPUT_DIRECTORY}/nvram/${MAME_MACHINE}/nvr" "${MAME_SEED_NVR_WORDS}")
 endif()
 if(MAME_EXPECT_NVR_UNCHANGED)
@@ -130,6 +153,8 @@ execute_process(
             "VT100_INVADERS_BINARY_DIRECTORY=${VT100_BINARY_DIRECTORY}"
             "VT100_INVADERS_SOURCE_DIRECTORY=${VT100_PROJECT_SOURCE_DIRECTORY}"
             "VT100_INVADERS_MAME_MACHINE=${MAME_MACHINE}"
+            "VT100_INVADERS_TEST_CASE=${MAME_TEST_CASE}"
+            "VT100_INVADERS_TEST_PHASE=${MAME_TEST_PHASE}"
             "${MAME_COMMAND}" "${MAME_MACHINE}"
                 -rompath "${MAME_TEST_ROMPATH}"
                 -cfg_directory "${MAME_TEST_OUTPUT_DIRECTORY}/cfg"
@@ -171,6 +196,10 @@ function(check_mame_nvr_word MAME_NVR_WORD_INDEX MAME_EXPECTED_NVR_WORD)
     set(MAME_NVR_FILE "${MAME_TEST_OUTPUT_DIRECTORY}/nvram/${MAME_MACHINE}/nvr")
     if(NOT EXISTS "${MAME_NVR_FILE}")
         message(FATAL_ERROR "MAME NVR file was not written: ${MAME_NVR_FILE}")
+    endif()
+    file(SIZE "${MAME_NVR_FILE}" MAME_NVR_SIZE)
+    if(NOT MAME_NVR_SIZE EQUAL 200)
+        message(FATAL_ERROR "MAME NVR file must contain exactly 200 bytes, got ${MAME_NVR_SIZE}")
     endif()
     file(READ "${MAME_NVR_FILE}" MAME_NVR_HEX HEX)
     string(TOUPPER "${MAME_NVR_HEX}" MAME_NVR_HEX)

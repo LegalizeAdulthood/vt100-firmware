@@ -43,6 +43,7 @@ if(MAME_COMMAND)
         endif()
         set(MAME_TEST_DRIVER_ARGUMENTS
             "-DMAME_COMMAND=${MAME_COMMAND}"
+            "-DASM8080_EXECUTABLE=${ASM8080_EXECUTABLE}"
             "-DMAME_WORKING_DIRECTORY=${MAME_WORKING_DIRECTORY}"
             "-DMAME_MACHINE=vt102"
             "-DMAME_TEST_NAME=${TEST_NAME}"
@@ -66,11 +67,16 @@ if(MAME_COMMAND)
             list(APPEND MAME_TEST_DRIVER_ARGUMENTS "-DMAME_EXPECT_NVR_UNCHANGED=TRUE")
         endif()
 
+        set(MAME_TEST_DRIVER run-mame-test.cmake)
+        if(TEST_NAME MATCHES "^mame-invaders-high-score-(edges|invalid)$")
+            list(APPEND MAME_TEST_DRIVER_ARGUMENTS "-DMAME_TEST_CASE=${CMAKE_MATCH_1}")
+            set(MAME_TEST_DRIVER run-high-score-test.cmake)
+        endif()
         add_test(NAME ${TEST_NAME}
             COMMAND
                 "${CMAKE_COMMAND}"
                     ${MAME_TEST_DRIVER_ARGUMENTS}
-                    -P "${CMAKE_CURRENT_SOURCE_DIR}/run-mame-test.cmake"
+                    -P "${CMAKE_CURRENT_SOURCE_DIR}/${MAME_TEST_DRIVER}"
         )
         set_tests_properties(${TEST_NAME}
             PROPERTIES
@@ -78,6 +84,9 @@ if(MAME_COMMAND)
                 SKIP_REGULAR_EXPRESSION "^SKIP:"
                 TIMEOUT 15
         )
+        if(MAME_TEST_DRIVER STREQUAL "run-high-score-test.cmake")
+            set_tests_properties(${TEST_NAME} PROPERTIES TIMEOUT 30)
+        endif()
     endfunction()
 
     add_mame_invaders_test(mame-invaders-rom-layout mame-invaders-rom-layout.lua)
@@ -93,6 +102,8 @@ if(MAME_COMMAND)
     add_mame_invaders_test(mame-invaders-scoring vt100invadersscoring/init.lua vt100invadersscoring 10)
     add_mame_invaders_test(mame-invaders-high-score vt100invadershighscore/init.lua vt100invadershighscore 15)
     add_mame_invaders_test(mame-invaders-high-score-load vt100invadershighscoreload/init.lua vt100invadershighscoreload 10)
+    add_mame_invaders_test(mame-invaders-high-score-edges vt100invadershighscoreedges/init.lua vt100invadershighscoreedges 90)
+    add_mame_invaders_test(mame-invaders-high-score-invalid vt100invadershighscoreedges/init.lua vt100invadershighscoreedges 30)
     add_mame_invaders_test(mame-invaders-demo-state vt100invadersdemo/init.lua vt100invadersdemo 30)
     add_mame_invaders_test(mame-invaders-enemy-fire vt100invadersenemyfire/init.lua vt100invadersenemyfire 10)
     add_mame_invaders_test(mame-invaders-game-over vt100invadersgameover/init.lua vt100invadersgameover 30)

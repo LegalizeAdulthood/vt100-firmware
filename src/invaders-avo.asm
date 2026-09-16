@@ -2990,11 +2990,8 @@ inv_load_high_scores_raw:
 inv_load_high_score_words:
         push    b
         push    h
-        call    read_nvr_byte
+        call    inv_read_high_nvr_word
         lhld    nvr_data
-        mov     a,h
-        ani     1fh
-        mov     h,a
         xchg
         pop     h
         call    inv_store_score_word_digits
@@ -3010,7 +3007,7 @@ inv_load_high_initial_words:
         push    b
         push    d
         push    h
-        call    read_nvr_byte
+        call    inv_read_high_nvr_word
         pop     h
         pop     d
         call    inv_load_initial_word_chars
@@ -3020,6 +3017,54 @@ inv_load_high_initial_words:
         jnz     inv_load_high_initial_words
         call    inv_clear_unused_high_initials
         jmp     inv_finish_high_score_nvr
+;
+; Enable output in the high half-cycle before the first shift. Sample on
+; the following low half-cycle, allowing the ER1400's 20 us propagation
+; delay both on output enable and after each shift. Keep all 14 data bits.
+;
+inv_read_high_nvr_word:
+        mvi     c,iob_flags_lba7
+        call    set_nvr_addr
+        call    inv_nvr_wait_high
+        call    inv_nvr_wait_low
+        mvi     a,2dh           ; read addressed word
+        out     iow_nvr_latch
+        call    inv_nvr_wait_high
+        call    inv_nvr_wait_low
+        mvi     a,2fh           ; standby keeps the loaded data register
+        out     iow_nvr_latch
+        call    inv_nvr_wait_high
+        mvi     a,25h           ; enable output before the next shift edge
+        out     iow_nvr_latch
+        lxi     h,nvr_bits
+        mvi     b,14
+inv_read_high_nvr_bit:
+        call    inv_nvr_wait_low
+        in      ior_flags
+        mov     m,a
+        inx     h
+        dcr     b
+        jz      inv_read_high_nvr_done
+        call    inv_nvr_wait_high
+        jmp     inv_read_high_nvr_bit
+inv_read_high_nvr_done:
+        mvi     a,2fh
+        out     iow_nvr_latch
+        lxi     d,nvr_bits
+        mvi     b,14
+        lxi     h,0
+        call    accum_bits
+        jmp     nvr_idle
+inv_nvr_wait_high:
+        in      ior_flags
+        ana     c
+        jz      inv_nvr_wait_high
+        ret
+inv_nvr_wait_low:
+        in      ior_flags
+        ana     c
+        jnz     inv_nvr_wait_low
+        ret
 ;
 inv_clear_high_score_cache:
         lxi     h,inv_high_initial_hi_base
