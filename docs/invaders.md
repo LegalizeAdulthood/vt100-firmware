@@ -814,6 +814,16 @@ three-digit score-unit counter supports `0` through `999`, displayed as `0000`
 through `9990`, and wraps on overflow. Those values fit in one 14-bit ER1400
 word. A zero score word marks an unused table entry; zero scores are never
 inserted. Loaded words above `999` are also treated as unused.
+An award that crosses `9990` wraps modulo `10000`: for example, `9980` plus
+`30` becomes `0010`. Qualification uses that wrapped value, not the pre-rollover
+score; a result of `0000` never qualifies.
+
+The game reads all 14 ER1400 bits rather than masking off the highest bit.
+Its AVO reader enables output before the first shift edge and samples in the
+following low half-cycle, allowing the chip's 20-microsecond propagation delay.
+This avoids accepting out-of-range words such as `8193` as a score of `10`.
+The stock terminal-settings reader in the base ROM is unchanged. Physical
+ER1400 timing acceptance remains part of the hardware checklist.
 
 Initials are stored as one compact 30-character stream, not as padded per-entry
 records. Entry `n` consumes characters `n*3` through `n*3+2` in that stream.
@@ -847,8 +857,10 @@ reloads the table after preparing its 80-column screen.
 
 After the game-over presentation, the current score is compared once against
 the cached table. A qualifying non-zero score is inserted, lower entries are
-shifted down, initials
-for the new entry are cleared to spaces, and the high-score prompt is shown.
+shifted down, and the lowest entry is evicted if the table is full. Equal scores
+stay ahead of the new entry, which can qualify below them if a lower score
+exists. A tie with a full table's lowest score does not qualify. Initials for
+the new entry are cleared to spaces, and the high-score prompt is shown.
 The prompt temporarily routes key input through the stock firmware keycode to
 ASCII path. `inv_ascii_to_initial_code` clears bit 5 for characters with bit 6
 set, folding ASCII columns 6 and 7 into columns 4 and 5, then rejects values
@@ -1346,6 +1358,21 @@ frames. Both it and the demo-state test compare the complete seeded NVR file
 before and after MAME runs; demo play must leave it byte-for-byte unchanged.
 The real-game high-score test still verifies initials entry and saved NVR words.
 
+The high-score edge-case and invalid-data tests use `high-score-cases.json`
+fixtures with distinct scores and initials. They check all ten entries after
+top, middle, and last-place insertion, eviction, ties, rejection, repeated
+confirmation, and SET-UP cancellation. Real alien hits exercise displayed-score
+rollover and qualification of the wrapped result. Invalid 14-bit score words
+and zero entries must load as unused, with stale initials cleared.
+
+`run-high-score-test.cmake` runs the existing MAME driver twice for each fixture.
+The second process starts from the first process's private saved NVR file, not
+a new seed. Each run checks all 100 words, including unchanged terminal settings
+at 0-50 and unused words at 76-99; the reload run also checks the complete file
+hash. Lua verifies every packed score/initial write and reloads the chip after
+each operation. The driver uses the existing `asm8080` tool to emit binary NVR
+fixtures, preserving NUL and LF bytes without Windows text-mode conversion.
+
 ### Screenshot Regression
 
 Screenshot tests should use a small set of deterministic frames:
@@ -1468,36 +1495,6 @@ Remove each slice only when its implementation and verification are complete;
 do not renumber the remaining slices. Keep game state in byte-wide screen RAM
 and all new game code within the existing AVO ROM budget. Additional visual
 effects, a UFO siren, and other new gameplay features are outside this list.
-
-### 9. High-Score And Rollover Edge Cases
-
-Extend the existing high-score MAME tests beyond insertion into an empty table.
-Use deterministic tables containing ten distinct descending scores and
-different three-character initials. Cover insertion at the top, middle, and
-last position, eviction of the lowest entry, a nonqualifying score, and zero.
-Preserve the existing strict-comparison rule: equal scores remain ahead of the
-new entry, which may qualify below them if a lower score exists; a tie with a
-full table's lowest score does not qualify. Assert all ten score/initial pairs
-after each operation, including packing across NVR word boundaries.
-
-Exercise repeated insertion and confirmation, cancellation with SET-UP, and
-reload after saving. Compare the complete NVR image so terminal words 0-50 and
-unused words 76-99 remain unchanged. Run a second MAME process against the
-first process's private saved NVR file to verify persistence through an actual
-emulator restart, without substituting a freshly seeded file. Keep all state
-under the test build directory; never use the manual MAME NVR file.
-
-Explicitly test the existing four-digit displayed-score rollover after `9990`,
-including an award that crosses the boundary, and verify how the resulting
-score qualifies. Preserve rollover behavior in this slice rather than silently
-changing it to saturation or adding digits. Test zero/unused NVR entries,
-out-of-range score words, and stale initials associated with unused entries.
-Fix defects exposed by these cases within the existing score representation
-and storage format; do not add NVR metadata or change the format speculatively.
-
-Register any added fixtures through the existing CMake test driver and CTest,
-conditional on `MAME_COMMAND`. Run focused high-score/scoring tests and then
-`cmake --workflow --preset invaders`.
 
 ### 10. Documentation Close-Out
 

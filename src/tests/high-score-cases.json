@@ -1,0 +1,28 @@
+{
+  "edges": {
+    "scores": [900, 800, 700, 600, 500, 400, 300, 200, 100, 50],
+    "initials": ["A!0", "B\"1", "C#2", "D$3", "E%4", "F&5", "G'6", "H(7", "I)8", "J*9"],
+    "operations": [
+      {"score": 950, "slot": 0, "initials": "A!B"},
+      {"score": 550, "slot": 5, "initials": "B!A"},
+      {"score": 250, "slot": 9, "initials": "AB!"},
+      {"score": 600, "slot": 5, "initials": "A B"},
+      {"score": 300, "slot": -1},
+      {"score": 299, "slot": -1},
+      {"score": 0, "slot": -1},
+      {"score": 950, "slot": 1, "initials": "B! "},
+      {"score": 999, "slot": 0, "initials": "AB!", "cancel": true},
+      {"score": 999, "award": 1, "slot": -1},
+      {"score": 998, "award": 3, "slot": -1}
+    ]
+  },
+  "invalid": {
+    "scores": [999, 1, 0, 1000, 8191, 8192, 8193, 9191, 16382, 16383],
+    "initials": ["MAX", "MIN", "OLD", "BAD", "BAD", "BAD", "BAD", "BAD", "BAD", "BAD"],
+    "operations": [
+      {"score": 999, "award": 1, "slot": -1},
+      {"score": 998, "award": 3, "slot": 2, "initials": "A!B"},
+      {"score": 998, "award": 1, "slot": 1, "initials": "B!A"}
+    ]
+  }
+}
