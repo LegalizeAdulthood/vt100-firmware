@@ -21,7 +21,8 @@ The patched firmware requires AVO with byte-wide screen RAM at
 fallback for missing hardware. MAME tests use `vt102` because its `vt100`
 machine does not load that expansion ROM. This emulator workaround does not
 change the physical VT100 requirements. Physical-hardware acceptance and the
-50/60 Hz timing decision remain pending in implementation slice 11.
+50/60 Hz timing decision remain pending under
+[To Do: Test on Real Hardware](#to-do-test-on-real-hardware).
 
 The implementation is in [invaders-avo.asm](../src/invaders-avo.asm), with the
 base-ROM trampoline addresses in [invaders-abi.asm](../src/invaders-abi.asm).
@@ -339,7 +340,8 @@ have their own state; they do not rely on a 16-bit global frame count.
 Timers use refresh frames without 50 Hz compensation. The same frame counts
 therefore take longer in wall-clock time on a 50 Hz terminal. Hardware pacing
 checks and the decision to accept this difference or add compensation remain
-pending in slice 11; MAME regression results do not establish hardware acceptance.
+pending under [To Do: Test on Real Hardware](#to-do-test-on-real-hardware);
+MAME regression results do not establish hardware acceptance.
 
 ## Main Game Loop
 
@@ -1475,7 +1477,8 @@ twenty MAME tests. The gate is:
 
 No gate substitutes for physical checks of keyboard feel, CRT brightness,
 AVO attributes, speaker sound, ER1400 timing, or 50/60 Hz pacing. Those checks
-and the timing decision remain pending in slice 11 below.
+and the timing decision remain pending under
+[To Do: Test on Real Hardware](#to-do-test-on-real-hardware).
 
 # Implementation
 
@@ -1502,42 +1505,205 @@ Attract-mode demo work should add orchestration only where possible. Reuse
 `inv_draw_high_score_table`, and the existing sprite/collision routines rather
 than creating parallel demo renderers.
 
-The remaining close-out slices continue after completed attract-mode slice 5.
-Remove each slice only when its implementation and verification are complete;
-do not renumber the remaining slices. Keep game state in byte-wide screen RAM
-and all new game code within the existing AVO ROM budget. Additional visual
-effects, a UFO siren, and other new gameplay features are outside this list.
+There are no remaining implementation slices. Hardware acceptance is tracked
+separately below. Keep game state in byte-wide screen RAM and all new game code
+within the existing AVO ROM budget. Additional visual effects, a UFO siren, and
+other new gameplay features remain outside the completed implementation scope.
 
-### 11. Physical-Hardware Acceptance And Timing Decision
+# To Do: Test on Real Hardware
 
-Add a reproducible manual acceptance checklist and results record to
-`docs/invaders.md`, recording the terminal/AVO configuration, ROM revision,
-refresh rate, checks performed, and any limitations. Perform the checks on a
-physical VT100 with the required expansion ROM and byte-wide screen RAM; MAME
-results do not substitute for this gate. Keep stock firmware and a backup of
-terminal settings available before the hardware trial.
+Physical-hardware acceptance is pending. Perform these checks on a physical
+VT100 with the required expansion ROM and byte-wide screen RAM; MAME results
+do not substitute for this gate.
 
-Check cold boot, SET-UP launch, attract play, repeated real games, invasion,
-game over with and without a qualifying score, initials correction and
-cancellation, and exit back to normal terminal operation. Include entry from
-80- and 132-column configurations. Confirm the documented 80-column return
-behavior, restored cursor/LED state, local typing, and serial receive/transmit
-after exit. Check simultaneous movement/fire, key release, and keyboard feel.
+## Preparing Physical ROMs
 
-Evaluate the turret underline and existing sprites on the CRT at practical
-brightness settings, heartbeat pacing, and death sound including the final
-life. Save multiple high scores, exit normally, power-cycle the terminal, and
-verify scores and initials while confirming ordinary terminal settings remain
-unchanged. These checks must use the real keyboard speaker and ER1400 rather
-than emulator approximations.
+Build the physical images without requiring MAME:
 
-Compare play at 50 and 60 Hz where available. Record the current refresh-based
-timing difference and obtain an explicit decision to accept it as a documented
-limitation or require compensation. Do not silently rescale gameplay timers;
-if compensation is requested, add a separately scoped implementation slice
-with pacing and regression tests before claiming timing acceptance.
+```bat
+cmake --preset default
+cmake --build --preset default --target invaders-rom
+```
+
+The files are under `<BuildDir>\src`. Install both the modified base firmware
+and the expansion from the same build; the base-ROM trampolines require the
+expansion even before launching the game.
+
+| Image | Size | CPU Address Range | Physical Destination |
+|---|---:|---|---|
+| `invaders-1.bin` | 2 KiB | `0000h-07ffh` | Base ROM 0, replacing `23-031E2` or `23-061E2` |
+| `invaders-2.bin` | 2 KiB | `0800h-0fffh` | Base ROM 1, replacing `23-032E2` |
+| `invaders-3.bin` | 2 KiB | `1000h-17ffh` | Base ROM 2, replacing `23-033E2` |
+| `invaders-4.bin` | 2 KiB | `1800h-1fffh` | Base ROM 3, replacing `23-034E2` |
+| `invaders.bin` | 8 KiB | `0000h-1fffh` | Instead of the four images above, for a controller configured for one 8 KiB ROM |
+| `invaders-avo.bin` | 8 KiB | `8000h-9fffh` | AVO expansion, normally the 8 KiB configuration of socket `E8` |
+
+Identify the controller revision and original ROM labels before choosing parts.
+Do not use MAME's filename suffixes as a physical socket-placement guide. Leave
+the stock character generator installed; Invaders does not need a new font ROM.
+The detailed pinouts and select-polarity tables are in
+[ROM Options](rom-options.md). DEC's
+[VT100 Technical Manual](https://bitsavers.org/pdf/dec/terminal/vt100/EK-VT100-TM-003_VT100_Technical_Manual_Jul82.pdf),
+sections 4.2.5, 5.5, and 6.2.3, is the board-configuration reference.
+
+### Base-ROM Overlays And The E8 Conflict
+
+AVO patch ROMs can override the original base ROMs without removing them.
+However, the current trampolines occupy ROMs 0, 2, and 3, not the first three
+consecutive blocks. Comparison with the stock build shows:
+
+| Base Block | Image | Trampoline Addresses | AVO Patch Socket / Jumper |
+|---|---|---|---|
+| ROM 0, `0000h-07ffh` | `invaders-1.bin` | `00f6h` reset, `01ffh` initials cursor, `03aeh` idle | `E19` / `W1` |
+| ROM 1, `0800h-0fffh` | `invaders-2.bin` | None; the entire image is unchanged | `E17` / `W2`, not needed |
+| ROM 2, `1000h-17ffh` | `invaders-3.bin` | `14b1h` keyboard sound status | `E13` / `W3` |
+| ROM 3, `1800h-1fffh` | `invaders-4.bin` | `1b60h` SET-UP game entry | `E8` / `W4` plus its 2 KiB configuration |
+
+The changed blocks also contain their updated checksum bytes. Patching ROM 3
+through the AVO conflicts with the 8 KiB expansion: both need `E8`.
+
+For the current build on a four-ROM controller, a minimal main-board-change
+route is to put `invaders-1.bin` in AVO `E19` and `invaders-3.bin` in `E13`,
+enable their base overlays with `W1` and `W3`, and leave the original ROM 1
+active. Replace only main-board ROM 3 with `invaders-4.bin` on a correctly
+configured 2316/8316E carrier. Reserve AVO `E8` for `invaders-avo.bin`, using
+the 8 KiB expansion configuration below; `E17` can remain empty.
+
+Thus the existing build still needs one main-board replacement despite only
+three modified blocks. Leaving every original base ROM in service would require
+moving the SET-UP entry trampoline out of ROM 3, with matching checksum and
+regression updates. That firmware change has not been made. Alternatively,
+replace the changed base ROMs directly and use the AVO only for expansion.
+
+### Using Period Parts
+
+The original DEC mask ROMs cannot be erased and reprogrammed. Preserve them
+and use programmable replacements:
+
+- For a controller already configured for a single 24-pin 8 KiB ROM, a
+  Motorola `MCM68766-35` is a period EPROM candidate for `invaders.bin`.
+  A second device can hold `invaders-avo.bin` in the AVO's 8 KiB `E8` socket.
+  Confirm the 2364/2664-style pinout and active-low select on both boards.
+  The [Motorola data sheet](https://bitsavers.org/pdf/ibm/system23/firmware/MCM68766.pdf)
+  specifies 350 ns for the `-35` version; the unsuffixed 450 ns version does
+  not meet DEC's 350 ns expansion-ROM requirement. Do not assume every
+  `MCM68764`/`MCM68766` speed grade is suitable.
+- For the AVO overlay route above, Intel-compatible `2716`/`27C16` EPROMs
+  hold `invaders-1.bin` in `E19` and `invaders-3.bin` in `E13`. These AVO
+  sockets support the 2716 read-mode pinout, unlike the main-board sockets.
+- For direct replacement on the original four-ROM controller,
+  Intel-compatible `2716`/`27C16` EPROMs can hold the changed split base
+  images, but require adapters that
+  translate each socket's 8316E/2316E chip-select signals. They are not bare
+  drop-ins: pin 21 is a select input on the mask ROM and `VPP` on a 2716.
+  Match the individual block's select polarities using the
+  [main-board socket details](rom-options.md#original-four-2k-x-8-version).
+- The AVO also supports four Intel-compatible 2716 EPROMs as an alternative
+  to its single 8 KiB device. Split `invaders-avo.bin` into consecutive 2048-byte
+  chunks at file offsets `0000h`, `0800h`, `1000h`, and `1800h`, and program
+  them at device offset zero for sockets `E19`, `E17`, `E13`, and `E8`,
+  respectively. Configure them as expansion at `8000h-9fffh`, not base-ROM
+  patches, following DEC section 6.2.3 and the
+  [AVO 2 KiB configuration](rom-options.md#avo-2k-patch-or-expansion-sockets).
+  This consumes all four AVO sockets, leaving none for base overlays, so the
+  changed base ROMs must be replaced on the controller. These extra split
+  expansion files are not current CMake build outputs.
+
+Use a programmer explicitly supporting the exact EPROM and its programming
+algorithm/voltage; socket fit or support for a generic 2764 is not sufficient
+for the Motorola parts. UV-erase used EPROMs, blank-check, program, and verify
+them outside the terminal. Cover their windows after verification.
+
+### Using Carrier Boards
+
+Carrier boards allow newer EPROMs or EEPROMs to present the required old ROM
+pinout. Choose the carrier by socket type, not just by memory capacity:
+
+- For original base sockets that must be replaced, use configurable
+  2316/8316E adapters.
+  The [RETRO Innovations 23XX Adapter](https://www.go4retro.com/products/23xx-adapter/)
+  accepts 28-pin JEDEC memories and decodes selectable chip-select polarities.
+  Configure each for its particular base-ROM block; identically configured
+  adapters will not decode different blocks correctly. Program one split image
+  per adapter, using a supported device such as a 28C64 or 27C64. The hybrid
+  overlay route needs just the ROM 3 carrier on the main board.
+- For a single-8 KiB controller socket and AVO `E8` in 8 KiB mode, use
+  2364/2664-compatible carriers. The same 23XX adapter can be configured for
+  this role. The
+  [VT100-Hax carrier design](https://github.com/LegalizeAdulthood/VT100-Hax/tree/master/ROM-Carrier)
+  instead uses an SOIC-28 `AT28C64B` on a 24-pin carrier, with active-low
+  select. Program `invaders.bin` for the controller and `invaders-avo.bin`
+  for the AVO. That carrier is not a direct replacement for the original
+  four 2 KiB sockets. See [carrier compatibility](rom-options.md#vt100-hax-rom-carrier).
+
+Program removable chips in their native programmer socket before fitting the
+carrier. For soldered EEPROM carriers, use their specified programming adapter
+or programming interface, not an assumed 24-pin EPROM programmer profile.
+On larger memories, select the programmed bank or repeat the image to fill
+the device, and strap unused address inputs to defined levels. For example,
+repeat a 2 KiB image four times in an 8 KiB device, or an 8 KiB image four
+times in a 32 KiB device. Keep write-enable inactive during terminal operation.
+Check access time including adapter decode delay; none of these combinations
+has yet passed this project's physical-hardware acceptance.
+
+### Configuring And Installing The ROMs
+
+For the single-8 KiB AVO expansion route, DEC section 6.2.3 lists `W7`, `W10`,
+`W12`, and `W13` for `8000h-9fffh` at `E8`. This is the active-low select
+configuration used by the carrier above. DEC permits `W15` in place of `W10`
+for an active-high device. Match the actual board revision: later AVOs use
+switches instead of wire jumpers, so consult the board drawing and schematic
+rather than treating switch numbers as jumper numbers. The four-2716 route
+uses a different configuration; do not apply the 8 KiB jumper set to it.
+
+Do not select `a000h-bfffh` for this build: the expansion is linked at `8000h`.
+Also, `E8` cannot simultaneously overlay the base 8 KiB and hold the expansion.
+Replacing all base firmware solely with the AVO's 8 KiB overlay therefore does
+not provide the two ROM regions Invaders needs.
+
+1. Record the original ROM locations, orientations, and jumper/switch settings;
+   retain the stock chips and a backup of terminal settings for rollback.
+2. Program raw binary images starting at device offset zero, with any required
+   bank repetition. CMake has already fixed the base-ROM checksums. Read the
+   devices back and compare their contents with the intended images, then
+   label each with its address range and build revision.
+3. Switch off and unplug the terminal. Follow DEC's logic-board removal
+   procedure and ESD precautions. A CRT terminal can retain dangerous voltages
+   when unplugged; keep clear of the CRT and power-supply circuitry and use a
+   qualified technician if unfamiliar with servicing this equipment.
+4. Fit the base replacements and expansion, checking pin 1, select polarity,
+   socket engagement, and carrier clearance from adjacent boards. Do not power
+   up the patched base firmware without its expansion. Reassemble before use.
+5. Cold-boot and check self-test before entering SET-UP. If it fails, switch off
+   and check programming, placement, and decoding, or restore the stock ROMs
+   and original configuration. Then perform the acceptance checks below.
+
+## Acceptance Checklist
+
+- [ ] Record the terminal/AVO configuration, ROM revision, refresh rate,
+  checks performed, and any limitations. Keep stock firmware and a backup of
+  terminal settings available before the hardware trial.
+- [ ] Check cold boot, SET-UP launch, attract play, repeated real games,
+  invasion, game over with and without a qualifying score, initials correction
+  and cancellation, and exit back to normal terminal operation. Include entry
+  from 80- and 132-column configurations.
+- [ ] Confirm the documented 80-column return behavior, restored cursor/LED
+  state, local typing, and serial receive/transmit after exit. Check simultaneous
+  movement/fire, key release, and keyboard feel.
+- [ ] Evaluate the turret underline and existing sprites on the CRT at
+  practical brightness settings, heartbeat pacing, and death sound including
+  the final life. Use the real keyboard speaker rather than emulator sound.
+- [ ] Save multiple high scores, exit normally, power-cycle the terminal,
+  and verify scores and initials while confirming ordinary terminal settings
+  remain unchanged. These checks must use the real ER1400.
+- [ ] Compare play at 50 and 60 Hz where available. Record the current
+  refresh-based timing difference and obtain an explicit decision to accept it
+  as a documented limitation or require compensation. Do not silently rescale
+  gameplay timers; if compensation is requested, add a separately scoped
+  implementation slice with pacing and regression tests before claiming
+  timing acceptance.
 
 Record actual observations and fixes, rerunning the `invaders` workflow after
 any firmware change. Leave unavailable configurations or equipment marked as
-untested, and keep this slice pending until the hardware checks and timing
+untested, and keep this work pending until the hardware checks and timing
 decision are complete or the user explicitly accepts a documented limitation.
