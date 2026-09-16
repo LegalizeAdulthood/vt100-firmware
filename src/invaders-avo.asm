@@ -4148,11 +4148,17 @@ inv_clear_row:
         inx     h
         push    h
         xchg
+        mov     a,h
+        adi     10h
+        mov     d,a
+        mov     e,l
         mvi     c,inv_screen_cols
-        xra     a
+        mvi     a,inv_attr_normal
 inv_clear_col:
-        mov     m,a
+        mvi     m,0
+        stax    d
         inx     h
+        inx     d
         dcr     c
         jnz     inv_clear_col
         pop     h
