@@ -1,0 +1,8 @@
+{
+  "plugin": {
+    "name": "vt100invadersbunkers",
+    "description": "VT100 Invaders bunker overrun test",
+    "type": "plugin",
+    "start": "false"
+  }
+}

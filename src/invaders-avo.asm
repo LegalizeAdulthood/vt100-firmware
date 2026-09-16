@@ -1271,6 +1271,39 @@ inv_no_shield_cell:
         xra     a
         ret
 ;
+; BC is the alien rectangle's top-left cell. Preserve it for the renderer.
+;
+inv_crush_shield_cells:
+        mov     a,b
+        cpi     inv_shield_top_row+inv_shield_h
+        rnc
+        adi     inv_alien_h
+        cpi     inv_shield_top_row+1
+        rc
+        push    b
+        mvi     d,inv_alien_h
+inv_crush_shield_row:
+        push    d
+        push    b
+        mvi     d,inv_alien_w
+inv_crush_shield_cell:
+        push    d
+        call    inv_shield_cell_addr
+        jz      inv_crush_shield_next
+        mvi     m,inv_cell_blank
+inv_crush_shield_next:
+        pop     d
+        inr     c
+        dcr     d
+        jnz     inv_crush_shield_cell
+        pop     b
+        inr     b
+        pop     d
+        dcr     d
+        jnz     inv_crush_shield_row
+        pop     b
+        ret
+;
 inv_try_shield_collision:
         call    inv_shield_cell_addr
         rz
@@ -3679,6 +3712,7 @@ inv_draw_alien:
         mov     c,a
         call    inv_get_alien_y
         mov     b,a
+        call    inv_crush_shield_cells
         pop     d
         lda     inv_alien_anim_phase
         ora     a
