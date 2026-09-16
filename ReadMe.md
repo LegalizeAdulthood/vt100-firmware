@@ -1,7 +1,15 @@
 # vt100-firmware
 
-Support files for [The Annotated VT100 Firmware](https://vt100.net/dec/vt100/rom/), including
-the bare source file, which can be built with [asm8080](https://github.com/begoon/asm8080).
+This repository is a fork of
+[The Annotated VT100 Firmware](https://vt100.net/dec/vt100/rom/). It builds on
+the upstream annotated assembly source, adding preset-based CMake/vcpkg builds,
+ROM regression tests, and MAME integration.
+
+This fork also adds [VT100 Invaders](docs/invaders.md), a firmware-resident
+Space Invaders-style game that uses the AVO program expansion ROM. The stock
+VT100 and Invaders ROMs are built separately from shared base firmware using
+[asm8080](https://github.com/begoon/asm8080); building the stock ROMs does not
+enable the game.
 
 ## Requirements
 
