@@ -567,6 +567,12 @@ inv_play_frame:
         call    inv_update_turret_death
         rnz
         call    inv_update_aliens
+        lda     inv_attract_mode
+        ora     a
+        jnz     inv_play_objects
+        call    inv_check_alien_landed
+        jnc     inv_end_invasion
+inv_play_objects:
         call    inv_update_heartbeat
         call    inv_update_ufo
         call    inv_update_enemy_fire
@@ -640,12 +646,7 @@ inv_demo_frame:
         lda     inv_game_over
         ora     a
         jnz     inv_demo_end
-        call    inv_get_alien_last
-        cpi     inv_alien_count
-        rnc
-        mov     b,a
-        call    inv_get_alien_y
-        cpi     inv_ground_row-inv_alien_h+1
+        call    inv_check_alien_landed
         rc
 inv_demo_end:
         mvi     a,inv_level_pause_frames
@@ -655,6 +656,24 @@ inv_demo_pause:
         dcr     a
         sta     inv_level_timer
         jz      inv_restart_demo
+        ret
+;
+; Test only the last moved live alien. Carry means no alien has landed.
+;
+inv_check_alien_landed:
+        call    inv_get_alien_last
+        cpi     inv_alien_count
+        jnc     inv_no_alien_landed
+        mov     b,a
+        call    inv_alien_live_addr
+        mov     a,m
+        ora     a
+        jz      inv_no_alien_landed
+        call    inv_get_alien_y
+        cpi     inv_ground_row-inv_alien_h+1
+        ret
+inv_no_alien_landed:
+        stc
         ret
 ;
 inv_prepare_screen:
@@ -2266,6 +2285,13 @@ inv_start_death_sound:
         sta     inv_death_sound_timer
         ret
 ;
+inv_end_invasion:
+        xra     a
+        sta     inv_gunners
+        call    inv_update_gunner_leds
+        call    inv_clear_laser
+        call    inv_clear_active_missiles
+        call    inv_reset_sound
 inv_set_game_over:
         mvi     a,0ffh
         sta     inv_game_over

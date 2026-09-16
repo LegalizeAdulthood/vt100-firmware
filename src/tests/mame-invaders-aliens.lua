@@ -9,6 +9,7 @@ local test = dofile(script_directory .. "/mame-test.lua")
 
 local M = {}
 local frame_subscription
+local game_over_tap
 
 local function make_aliens_step()
     local binary_directory = test.required_env("VT100_INVADERS_BINARY_DIRECTORY")
@@ -22,10 +23,23 @@ local function make_aliens_step()
     local inv_test_result = test.required_equate(equates, "inv_test_result")
     local inv_frame_lo = test.required_equate(equates, "inv_frame_lo")
     local inv_frame_hi = test.required_equate(equates, "inv_frame_hi")
+    local inv_game_over = test.required_equate(equates, "inv_game_over")
+    local inv_gunners = test.required_equate(equates, "inv_gunners")
+    local inv_initial_gunners = test.required_equate(equates, "inv_initial_gunners")
+    local inv_turret_death_timer = test.required_equate(equates, "inv_turret_death_timer")
+    local inv_ground_row = test.required_equate(equates, "inv_ground_row")
+    local inv_score0 = test.required_equate(equates, "inv_score0")
+    local inv_score1 = test.required_equate(equates, "inv_score1")
+    local inv_score2 = test.required_equate(equates, "inv_score2")
+    local inv_high_score_digit_base = test.required_equate(equates, "inv_high_score_digit_base")
+    local inv_high_score_digits = test.required_equate(equates, "inv_high_score_digits")
+    local inv_high_score_dirty = test.required_equate(equates, "inv_high_score_dirty")
+    local led_state = test.required_equate(equates, "led_state")
     local inv_alien_rows = test.required_equate(equates, "inv_alien_rows")
     local inv_alien_cols = test.required_equate(equates, "inv_alien_cols")
     local inv_alien_count = test.required_equate(equates, "inv_alien_count")
     local inv_alien_w = test.required_equate(equates, "inv_alien_w")
+    local inv_alien_h = test.required_equate(equates, "inv_alien_h")
     local inv_alien_slot_w = test.required_equate(equates, "inv_alien_slot_w")
     local inv_alien_slot_h = test.required_equate(equates, "inv_alien_slot_h")
     local inv_alien_start_x = test.required_equate(equates, "inv_alien_start_x")
@@ -64,6 +78,12 @@ local function make_aliens_step()
 
     local scan_i = 0x16
     local mem = test.program_space()
+    local game_over_events = 0
+    local inv_set_game_over = test.required_symbol(symbols, "inv_set_game_over")
+    game_over_tap = mem:install_read_tap(inv_set_game_over, inv_set_game_over,
+        "invaders-landing-game-over", function()
+            game_over_events = game_over_events + 1
+        end)
 
     local function read_u8(address)
         return mem:read_u8(address)
@@ -218,6 +238,8 @@ local function make_aliens_step()
     local single_frame = nil
     local single_x_before = nil
     local single_y_before = nil
+    local landing_x = nil
+    local landing_y = inv_ground_row - inv_alien_h + 1
     local moved_once_alien = 18
     local skipped_alien = 21
     local edge_alien = inv_alien_count - 1
@@ -447,12 +469,67 @@ local function make_aliens_step()
                         single_x_before - 1,
                         single_y_before,
                         "single alien horizontal move")
-                    test.pass()
+
+                    -- A dead alien on the ground must not affect the live survivor.
+                    write_nibble_pair(inv_alien_y_lo_base + skipped_alien,
+                        inv_alien_y_hi_base + skipped_alien, landing_y)
+                    write_alien_last(skipped_alien)
+                    write_nibble_pair(inv_alien_y_lo_base + single_alien,
+                        inv_alien_y_hi_base + single_alien, landing_y - 1)
+                    write_u8(inv_alien_reverse, 0)
+                    write_u8(inv_alien_y_delta, 0)
+                    single_x_before = alien_x(single_alien)
+                    single_frame = game_frame()
+                    enter_stage("above-ground")
                     return
                 end
                 if game_frame() > single_frame + 4 then
                     fail_timeout("single alien horizontal move")
                 end
+                return
+            end
+
+            if stage == "above-ground" then
+                if game_frame() ~= single_frame then
+                    assert_alien_position(single_alien, single_x_before - 1,
+                        landing_y - 1, "survivor above ground")
+                    test.assert_eq(read_u8(inv_game_over), 0, "above ground is not game over")
+                    test.assert_eq(game_over_events, 0, "dead alien cannot end game")
+                    test.assert_eq(read_u8(inv_gunners), inv_initial_gunners, "gunners before landing")
+
+                    -- Make the score nonqualifying so the stopped playfield stays visible.
+                    for offset = 0, inv_high_score_digits - 1 do
+                        write_u8(inv_high_score_digit_base + offset, 9)
+                    end
+                    write_u8(inv_score0, 3)
+                    write_u8(inv_score1, 2)
+                    write_u8(inv_score2, 1)
+                    landing_x = alien_x(single_alien) + 1
+                    write_u8(inv_alien_reverse, 1)
+                    enter_stage("landing")
+                    return
+                end
+                if frame - stage_frame > 12 then
+                    fail_timeout("survivor above ground")
+                end
+                return
+            end
+
+            if stage == "landing" then
+                if frame - stage_frame >= 12 then
+                    assert_alien_position(single_alien, landing_x, landing_y, "landed alien stops")
+                    test.assert_eq(read_u8(inv_game_over), 0xff, "landing ends game")
+                    test.assert_eq(game_over_events, 1, "landing ends game exactly once")
+                    test.assert_eq(read_u8(inv_gunners), 0, "landing consumes all gunners")
+                    test.assert_eq(read_u8(led_state) % 16, 0, "landing clears gunner LEDs")
+                    test.assert_eq(read_u8(inv_turret_death_timer), 0, "landing cannot respawn turret")
+                    test.assert_eq(read_u8(inv_score0), 3, "landing preserves tens")
+                    test.assert_eq(read_u8(inv_score1), 2, "landing preserves hundreds")
+                    test.assert_eq(read_u8(inv_score2), 1, "landing preserves thousands")
+                    test.assert_eq(read_u8(inv_high_score_dirty), 0, "nonqualifying score skips initials")
+                    test.pass()
+                end
+                return
             end
         end)
 
