@@ -129,8 +129,9 @@ emulator details.
 
 Physical VT100 operation requires AVO, its byte-wide screen RAM, and the
 program expansion ROM at `8000h`; selecting `vt102` is only a MAME workaround.
-Physical-hardware acceptance and the 50/60 Hz timing decision remain pending
-in the [implementation plan](docs/invaders.md#implementation).
+Invaders targets 60 Hz operation; 50 Hz support is outside this project's
+scope. Physical-hardware acceptance remains pending in
+[To Do: Test on Real Hardware](docs/invaders.md#to-do-test-on-real-hardware).
 
 ## Configuration Variables
 
