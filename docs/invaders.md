@@ -1004,7 +1004,7 @@ resets the first-appearance countdown.
 
 ## Shield Damage
 
-`inv_shield_cell_addr` converts a projectile's row and column into one of the
+`inv_shield_cell_addr` converts a screen row and column into one of the
 84 shield cells. Only a nonblank cell registers a hit. Both the player laser
 and enemy missiles call `inv_try_shield_collision`, which damages the entire
 column through `inv_damage_shield_column`.
@@ -1023,6 +1023,19 @@ cells that were already blank. The original bottom opening therefore remains
 open. Damage does not spread into neighboring columns and does not use separate
 above/below erosion transforms. `inv_reset_shields` restores both cell codes and
 damage counters at the start of a new game/demo; level changes retain damage.
+
+Before drawing an alien, `inv_crush_shield_cells` clears any nonblank bunker
+cells within its four-column, two-row rectangle, including sprite padding.
+It uses `inv_shield_cell_addr` and skips rectangles outside the bunker rows.
+Horizontal movement and descent therefore remove collision material before
+the alien covers it on screen, without changing adjacent cells or column
+damage counters.
+
+Column redraws skip these newly blank cells just as they skip the original
+bottom opening, so later hits cannot restore crushed material or paint bunker
+glyphs over the alien. Moving away or dying leaves the covered cells blank.
+Level changes preserve those gaps; a new game or demo restores the original
+bunkers through `inv_reset_shields`.
 
 ## Collision Strategy
 
@@ -1303,6 +1316,15 @@ forced descent ends the game exactly once despite multiple remaining gunners.
 They verify frozen movement and firing, erased projectiles and UFO, preserved
 scores, and both nonqualifying and qualifying high-score paths.
 
+The bunker test keeps an expected cell-and-column-damage model while aliens
+cross all four bunkers in both directions and descend into their roof and body
+rows. It compares collision state and visible screen cells at every step,
+including intact and partially damaged columns, padding, edges, and openings.
+It checks that column redraws leave a covering alien intact, that both projectile
+types cross crushed gaps and still damage surviving material, and that killing
+an alien over a bunker does not restore cells. Level transitions retain the
+destruction, while fresh demo and game initialization restore cells and hit points.
+
 The game-over plugin advances its test sequence at `inv_frame` calls and supplies
 complete keyboard scans at `inv_read_keys`, including continuously held RETURN.
 It verifies all 90 presentation frames, unchanged playfield cells in screen
@@ -1446,30 +1468,6 @@ Remove each slice only when its implementation and verification are complete;
 do not renumber the remaining slices. Keep game state in byte-wide screen RAM
 and all new game code within the existing AVO ROM budget. Additional visual
 effects, a UFO siren, and other new gameplay features are outside this list.
-
-### 8. Aliens Crush Bunker Material
-
-When an alien moves into bunker rows, remove the bunker cells covered by its
-sprite rectangle from `inv_shield_cells_base` before drawing the alien. The
-collision representation and display must agree: an alien must not erase
-visible material while leaving an invisible obstacle for later projectiles.
-Use the existing alien rectangle convention, including padding cells, and the
-existing shield-address helpers. Handle both horizontal movement and descent.
-
-Remove only overlapped cells, preserving adjacent material, the existing bottom
-openings, and the per-column hit-point model for surviving cells. Crushed cells
-remain blank when later projectile hits redraw their column and when the next
-level preserves shield damage. Do not redraw a bunker over a live alien or
-restore crushed material when that alien moves away or dies. New-game and demo
-initialization still restore the original bunkers through `inv_reset_shields`.
-
-Extend the alien/shield MAME coverage with intact and partially damaged
-bunkers. Move aliens across a roof, body, opening, and bunker edge in both
-directions, then descend through them. Compare screen cells with collision
-state after the alien leaves; fire both projectile types through crushed gaps
-and at surviving material. Verify that column damage cannot resurrect a
-crushed cell, level changes retain destruction, and a new game restores the
-bunkers. Retain attract-overlay clipping coverage and run the full workflow.
 
 ### 9. High-Score And Rollover Edge Cases
 
