@@ -96,6 +96,34 @@ cmake --build --preset default --target mame
 See [Running MAME](docs/mame.md) for emulator setup and keyboard bindings, and
 [Invaders](docs/invaders.md) for the game design and test harness.
 
+## How To Play
+
+Press SET-UP, then `i` or `I` to launch the animated attract screen. Press
+RETURN to start a fresh game with four lives. Use Left and Right to move and
+Space to fire; the four keyboard LEDs show the remaining lives. SET-UP exits
+from any game screen to a cleared 80-column terminal, restoring the saved
+cursor rendition and LEDs but not the previous screen or 132-column layout.
+
+After a qualifying nonzero score, enter one to three initials using upper-case
+letters, digits, or punctuation. Left and Right move within the field, typing
+replaces a character, and Backspace moves back and clears it. RETURN confirms
+after at least one character; SET-UP cancels without saving. The animated
+attract screen returns after game over or confirmation. Release RETURN before
+pressing it again to start the next game.
+
+With default MAME paths, manual high scores and terminal settings are saved in
+`<MAMEDir>/nvram/vt102/nvr`. Exit MAME normally to write the file. Rebuilding
+or running `run-invaders` does not overwrite it, and automated tests use
+isolated state. See [NVRAM Settings](docs/mame.md#nvram-settings),
+[Keyboard Bindings](docs/mame.md#keyboard-bindings), and
+[Machine Configuration Menu](docs/mame.md#machine-configuration-menu) for
+emulator details.
+
+Physical VT100 operation requires AVO, its byte-wide screen RAM, and the
+program expansion ROM at `8000h`; selecting `vt102` is only a MAME workaround.
+Physical-hardware acceptance and the 50/60 Hz timing decision remain pending
+in the [implementation plan](docs/invaders.md#implementation).
+
 ## Configuration Variables
 
 Pass cache variables with `-D` to `cmake --preset default` or
@@ -138,3 +166,7 @@ directory.
 | `invaders-rom` | Combined 8 KiB `invaders.bin`, four 2 KiB images `invaders-1.bin` through `invaders-4.bin`, and the 8 KiB `invaders-avo.bin`. |
 | `mame` | Builds and copies the stock ROMs and character generator to `<MAMEDir>/roms/vt100` with MAME's expected filenames. |
 | `mame-invaders` | Builds and copies the combined Invaders base ROM, AVO ROM, and character generator to `<MAMEDir>/roms/vt102` with MAME's expected filenames. |
+
+The four split Invaders images are the physical base-ROM outputs. MAME's
+`vt102` machine uses the combined image instead; see the
+[ROM staging table](docs/invaders.md#build-and-rom-preparation).

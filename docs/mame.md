@@ -1,18 +1,18 @@
-# Running `vt100.bin` in MAME on Windows
+# Running VT100 Firmware In MAME On Windows
 
 This note explains how to build this repository's VT100 firmware, prepare it
 as a MAME ROM set, and run it with the official Windows MAME binary.
 
-MAME's current upstream Windows source-build instructions use MSYS2/GNU make,
-not CMake. This document therefore does not build MAME from source. It uses the
-prebuilt `mame.exe` release instead.
+This document uses the prebuilt `mame.exe` release; it does not build MAME from
+source. `<SourceDir>` is this repository's root, `<BuildDir>` is the build
+directory selected by the preset, and `<MAMEDir>` is the MAME installation.
 
-## Build the Firmware
+## Build The Firmware
 
 From Command Prompt, or from a `.bat` file:
 
 ```bat
-cd /d <RepoDir>
+cd /d "<SourceDir>"
 cmake --workflow --preset default
 ```
 
@@ -57,7 +57,7 @@ The MAME executable should then be:
 <MAMEDir>\mame.exe
 ```
 
-## Prepare the ROM Set
+## Prepare The ROM Set
 
 MAME's `vt100` driver does not load a single file named `vt100.bin`. It expects
 the main CPU firmware as four 2 KiB ROM images with the DEC part/location names
@@ -84,7 +84,7 @@ If `mame.exe` is already on `PATH`, configure normally. Otherwise, set
 `MAME_COMMAND` when configuring:
 
 ```bat
-cmake --preset default -DMAME_COMMAND=<MAMEDir>\mame.exe
+cmake --preset default "-DMAME_COMMAND=<MAMEDir>\mame.exe"
 ```
 
 Then build the `mame` target:
@@ -106,18 +106,33 @@ to update after each firmware rebuild.
 From Command Prompt:
 
 ```bat
-cd /d <MAMEDir>
+cd /d "<MAMEDir>"
 mame.exe vt100 -rompath roms -window
 ```
 
 For the Invaders ROM, the `run-invaders` target stages the ROM images under
 `<MAMEDir>\roms\vt102` using MAME's expected `vt102` filenames, then launches
-MAME as `vt102` from `<MAMEDir>` with `-rompath roms`, `-window`, `-uimodekey
-F12`, and `-skip_gameinfo`:
+MAME as `vt102` from `<MAMEDir>` with `-rompath roms`, `-uimodekey F12`, and
+`-skip_gameinfo`. It does not force windowed mode. After
+[configuring the Invaders preset](../ReadMe.md#build-and-run-invaders-under-mame),
+run this command from `<SourceDir>`:
 
 ```bat
 cmake --build --preset invaders --target run-invaders
 ```
+
+The equivalent emulator invocation, after staging, is:
+
+```bat
+cd /d "<MAMEDir>"
+mame.exe vt102 -rompath roms -uimodekey F12 -skip_gameinfo
+```
+
+On Windows the target uses `cmd /c start` to open MAME independently of the
+build process. The staged files are the combined base ROM
+`23-226e4-00.e71`, expansion ROM `23-225e4-00.e69`, and character generator
+`23-018e2-00.e3`, all under `roms\vt102`. The four split Invaders base images
+remain build outputs for physical ROMs, not files used by this MAME machine.
 
 The `vt100` system is still flagged by MAME as not working and having imperfect
 graphics, so expect the startup warning screen. Type `OK` when MAME asks for
@@ -128,7 +143,9 @@ needs the AVO program expansion ROM. This is a MAME `vt100` driver limitation,
 not a VT100 hardware limitation: a real VT100 can use an AVO board with an
 expansion ROM, but MAME's `vt100` machine currently loads only the base CPU ROMs
 and does not expose the AVO expansion ROM at `8000h`; MAME's `vt102` machine
-does.
+does. The Invaders firmware requires the expansion ROM and AVO's byte-wide
+screen RAM on physical hardware; it is not a stock VT100 ROM replacement that
+can run without that expansion. Physical-hardware acceptance is still pending.
 
 ### Machine Configuration Menu
 
@@ -142,7 +159,7 @@ If the keyboard does not have a `Scroll Lock` key, choose a different MAME UI
 mode key on the command line:
 
 ```bat
-cd /d <MAMEDir>
+cd /d "<MAMEDir>"
 mame.exe vt100 -rompath roms -window -uimodekey F12
 ```
 
@@ -152,17 +169,26 @@ the menus so normal key presses go to the VT100 again.
 
 ## NVRAM Settings
 
-MAME stores the VT100's non-volatile settings in the machine's NVRAM directory:
+MAME stores non-volatile settings separately for each machine. With default
+paths and MAME launched from `<MAMEDir>`, the files are:
 
-```text
-<MAMEDir>\nvram\vt100\nvr
-```
+| Machine | NVRAM File | Contents |
+|---|---|---|
+| `vt100` | `<MAMEDir>\nvram\vt100\nvr` | Stock terminal settings |
+| `vt102` running Invaders | `<MAMEDir>\nvram\vt102\nvr` | Terminal settings and the Invaders high-score table |
 
 MAME derives this path from `homepath` and `nvram_directory`; check the active
 values with `mame.exe -showconfig`. In the default Windows configuration,
 `homepath` is `.` and `nvram_directory` is `nvram`, so the file is written
-relative to the directory where MAME is run as `nvram\vt100\nvr` unless the
-configuration overrides it.
+relative to the directory where MAME is run unless the configuration overrides
+it. The two machines do not share a settings file.
+
+Invaders writes confirmed high scores to the emulated ER1400, and MAME saves
+that state to its `nvr` file on normal exit. `mame-invaders` and `run-invaders`
+stage ROMs only; they do not seed or overwrite this file. Automated tests use
+disposable directories under `<BuildDir>\src\mame-test\<TestName>` instead of
+the manual game's settings and scores. See
+[Persistent High Scores](invaders.md#persistent-high-scores) for the NVR layout.
 
 ## Keyboard Bindings
 
@@ -270,7 +296,7 @@ The socket is a raw serial byte stream, not a Telnet protocol server. A telnet
 client is fine for simple local typing, but a client with a raw TCP mode avoids
 Telnet option-negotiation bytes if those become visible on the VT100.
 
-### Connecting to SIMH
+### Connecting To SIMH
 
 [OpenSIMH](https://github.com/open-simh/simh) can move a simulated machine's console
 from the SIMH process window to a TCP port. Add these commands to the SIMH
@@ -310,7 +336,7 @@ Connect MAME to that port with the same `-rs232 null_modem -bitbanger
 socket.127.0.0.1:<SIMHPort>` command. The simulated operating system must also
 be configured to use that terminal line.
 
-### Connecting to the Internet
+### Connecting To The Internet
 
 MAME's socket bitbanger can open a raw outbound TCP connection, but it is not a
 Telnet or SSH client. For BBSs or remote hosts, run a local bridge program that
