@@ -26,6 +26,8 @@ local function make_enemy_fire_step()
     local inv_gunners = test.required_equate(equates, "inv_gunners")
     local inv_initial_gunners = test.required_equate(equates, "inv_initial_gunners")
     local inv_game_over = test.required_equate(equates, "inv_game_over")
+    local inv_game_over_frames = test.required_equate(equates, "inv_game_over_frames")
+    local inv_game_over_timer = test.required_equate(equates, "inv_game_over_timer")
     local inv_ground_row = test.required_equate(equates, "inv_ground_row")
     local inv_score0 = test.required_equate(equates, "inv_score0")
     local inv_score1 = test.required_equate(equates, "inv_score1")
@@ -616,9 +618,10 @@ local function make_enemy_fire_step()
             end
 
             if stage == "wait-invasion-high-score" then
-                if frame - stage_frame >= 12 then
+                if read_u8(inv_high_score_dirty) ~= 0 then
                     test.assert_eq(read_u8(inv_game_over), 0xff, "qualifying invasion ends game")
                     test.assert_eq(game_over_events, 3, "qualifying invasion ends game once")
+                    test.assert_eq(read_u8(inv_game_over_timer), 0, "presentation finished before initials")
                     test.assert_eq(read_u8(inv_high_score_dirty), 0xff, "invasion prompts for initials")
                     test.assert_eq(read_u8(inv_high_score_slot), 0, "invasion inserts first score")
                     test.assert_eq(read_u8(inv_high_score_digit_base), 3, "inserted score tens")
@@ -626,6 +629,9 @@ local function make_enemy_fire_step()
                     test.assert_eq(read_u8(inv_high_score_digit_base + 2), 1, "inserted score thousands")
                     test.assert_eq(read_u8(inv_high_score_digit_base + 3), 0, "score inserted only once")
                     test.pass()
+                end
+                if frame - stage_frame > inv_game_over_frames + 30 then
+                    fail_timeout("invasion high-score entry")
                 end
                 return
             end

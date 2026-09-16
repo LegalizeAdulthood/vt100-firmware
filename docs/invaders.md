@@ -285,8 +285,8 @@ Keep new game code within the 8 KiB expansion window; changing the RAM layout
 does not increase ROM capacity. Mutable storage is allocated with address
 equates, not `db` or `ds` directives that would emit storage into the ROM image.
 
-The current allocation occupies 647 bytes at `2d79h`-`2fffh`, including the
-high-score cache and test state, leaving 377 bytes free above `2c00h`. The
+The current allocation occupies 649 bytes at `2d77h`-`2fffh`, including the
+high-score cache and test state, leaving 375 bytes free above `2c00h`. The
 80-column display plus its extra SET-UP row ends just before `2aebh`, so neither
 overlaps game state. The unused object-map and dirty-queue reservations have
 been removed; rendering and collisions do not use those buffers.
@@ -333,7 +333,8 @@ therefore take longer in wall-clock time on a 50 Hz terminal.
 ## Main Game Loop
 
 `inv_frame` checks the active guard, then dispatches attract mode to
-`inv_demo_frame` or runs the optional test hook before `inv_play_frame`.
+`inv_demo_frame` or runs the optional test hook. A real game that has ended
+runs `inv_update_game_over` instead of `inv_play_frame`.
 The shared play loop runs in this order:
 
 1. Handle a pending level reset; pause ordinary updates while its timer runs.
@@ -765,8 +766,8 @@ Status row 24: SCORE 0000  LEVEL 1
 
 The ground line spans the 60-column playfield on display row 22, behind the
 turret's top row. Gunners are shown on the keyboard LEDs. All lines are
-single-width. A qualifying game-over score opens initials entry; there is no
-separate `GAME OVER` text sprite for a nonqualifying score.
+single-width. Every real game ends with a centered `GAME OVER` message on the
+stopped playfield before either initials entry or a return to attract mode.
 
 ## Entity State
 
@@ -776,7 +777,7 @@ image. The important groups are:
 
 | State | Current representation |
 |---|---|
-| Mode and input | Active guard, attract/game-over flags, and left/right/fire flags |
+| Mode and input | Active guard, attract/game-over flags, game-over timer, RETURN-release latch, and left/right/fire flags |
 | Logical frame | `inv_frame_lo` and `inv_frame_hi`, one nibble each |
 | Score | Three decimal digits, `inv_score0` through `inv_score2`, in units of 10 |
 | Lives and level | `inv_gunners` starts at 4; `inv_level` starts at 1 |
@@ -844,8 +845,9 @@ attract screen is drawn. Normal screen clearing or 132-column terminal activity
 may have overwritten the cache, so the game treats NVR as the authority and
 reloads the table after preparing its 80-column screen.
 
-When a game ends, the current score is compared against the cached table. A
-qualifying non-zero score is inserted, lower entries are shifted down, initials
+After the game-over presentation, the current score is compared once against
+the cached table. A qualifying non-zero score is inserted, lower entries are
+shifted down, initials
 for the new entry are cleared to spaces, and the high-score prompt is shown.
 The prompt temporarily routes key input through the stock firmware keycode to
 ASCII path. `inv_ascii_to_initial_code` clears bit 5 for characters with bit 6
@@ -858,9 +860,10 @@ back and clears the corrected character. RETURN confirms the entry only after
 at least one initial has been entered, regardless of the cursor position;
 moving through empty positions does not count as entering an initial. Unused
 positions are saved as spaces, and addresses 51 through 75 are written back to
-NVR. The cursor is visible only during entry and is hidden before returning to
-attract mode. SET-UP can cancel unconfirmed entry and leave the game without
-writing that pending score.
+NVR. The cursor is visible only during entry and is hidden before starting a
+fresh animated demo through `inv_start_demo`. SET-UP can cancel unconfirmed
+entry and leave the game without writing that pending score. Re-entering from
+SET-UP reloads the saved table, discarding the unconfirmed RAM entry.
 
 For manual MAME runs, persistent words are saved in
 `<MAMEDir>\nvram\vt102\nvr` with the default path settings. `run-invaders`
@@ -949,9 +952,22 @@ or after reaching the top row; there is no sparkle phase or explosion delay.
 blast, starts death sound, and immediately decrements the gunner count and
 updates LEDs. With gunners remaining, gameplay pauses for 55 frames before
 erasing the blast and respawning the turret at column 36. With none remaining,
-it enters game over immediately while allowing the death sound to finish.
-A qualifying score opens initials entry; otherwise the game remains stopped
-until SET-UP exits.
+it enters the shared game-over sequence while allowing the death sound to finish.
+
+`inv_set_game_over` clears projectiles and the UFO, draws `GAME OVER` once at
+zero-based row 11, and starts a 90-refresh-frame presentation. Ordinary gameplay
+stops, but keyboard status output and interrupts continue. `inv_update_game_over`
+waits for both the presentation timer and any outstanding death sound before
+comparing the final score once. A qualifying nonzero score opens initials entry;
+a zero or nonqualifying score starts a clean animated demo immediately. Confirmed
+initials are saved once before taking the same demo initialization path.
+
+SET-UP exits immediately from either the presentation or initials entry. A held
+RETURN cannot skip initials or start a game when the demo appears. On post-game
+return to the demo, `inv_return_blocked` is set until a complete keyboard scan
+contains neither RETURN scan code. A fresh RETURN then starts the next game
+without a SET-UP round trip. The initial launch from SET-UP does not require
+this post-game release latch.
 
 After each formation update, real gameplay checks the last moved live alien
 with `inv_check_alien_landed`. Its bottom row reaching or passing the ground
@@ -1270,8 +1286,8 @@ attached to the emulator frame loop. These tests are run with
 
 Temporal tests use MAME's plugin mechanism. Each plugin-backed test has a
 small directory such as `src/tests/vt100invaderslaser` containing `plugin.json`
-and `init.lua`. The plugin's `exports.startplugin()` function loads the shared
-test module from `src/tests`, then that module registers MAME callbacks such as
+and `init.lua`. The plugin's `exports.startplugin()` function registers callbacks
+directly or loads a test module from `src/tests` that registers callbacks such as
 `emu.register_prestart` and `emu.add_machine_frame_notifier`. This lets the test
 wait for boot, enter SET-UP, inject keys at precise frames, observe game state,
 and exit MAME when the assertions pass or fail.
@@ -1286,6 +1302,15 @@ alien at ground level and a lone survivor moving horizontally above it. A
 forced descent ends the game exactly once despite multiple remaining gunners.
 They verify frozen movement and firing, erased projectiles and UFO, preserved
 scores, and both nonqualifying and qualifying high-score paths.
+
+The game-over plugin advances its test sequence at `inv_frame` calls and supplies
+complete keyboard scans at `inv_read_keys`, including continuously held RETURN.
+It verifies all 90 presentation frames, unchanged playfield cells in screen
+RAM, one message draw, ongoing keyboard status output, and delayed qualification
+while a death sound is still pending. It covers zero, nonqualifying, and qualifying
+scores, final-turret death and invasion, moving demos after game over or a save,
+fresh RETURN, and SET-UP cancellation. Call counters check qualification and save
+counts, and the CMake driver verifies that only the confirmed score reached NVR.
 
 The demo-state test watches screen-RAM writes throughout demo play and restarts
 so even transient writes into the overlay boxes fail. An autopilot-fired laser
@@ -1421,38 +1446,6 @@ Remove each slice only when its implementation and verification are complete;
 do not renumber the remaining slices. Keep game state in byte-wide screen RAM
 and all new game code within the existing AVO ROM budget. Additional visual
 effects, a UFO siren, and other new gameplay features are outside this list.
-
-### 7. Complete The Game-Over Loop
-
-Introduce one real-game end sequence for final-turret death and invasion.
-Display a centered `GAME OVER` message over the stopped playfield for 90 refresh
-frames, and do not leave this presentation until any outstanding death sound
-has finished. Keep keyboard status output and interrupts running throughout;
-use state and timers rather than a blocking delay. Draw the message once using
-the existing renderer and clear projectiles without leaving trails.
-
-After the presentation, compare the final score with the high-score table once.
-A qualifying nonzero score enters the existing initials editor. A zero score
-or a score that does not qualify returns directly to the animated attract
-screen. Confirming initials saves once and then enters the same attract path.
-Use `inv_start_demo` and the shared initialization/rendering routines so both
-paths start a clean demo with the current high-score table and correct overlay
-clipping. Do not add a separate post-game renderer or duplicate the editor.
-
-SET-UP must still exit immediately from the presentation or initials entry.
-RETURN must not bypass required initials entry or accidentally start a new
-game using a key held during the transition. Once attract mode is ready, a
-fresh RETURN starts a clean game without a SET-UP round trip. Hide the initials
-cursor on every completion/cancellation path and preserve the existing rule
-that cancelling unconfirmed initials does not save that pending score.
-
-Add frame-driven MAME coverage for zero-score, nonqualifying, and qualifying
-game overs, plus the invasion path from slice 6. Assert presentation duration,
-completion of final-life sound, frozen gameplay, exactly one qualification/save
-attempt, and return to a moving demo. Exercise confirmation, cancellation,
-held/released RETURN, and starting another game. Update existing game-over
-tests to wait for the documented states without weakening their sound,
-persistence, cursor, or freeze assertions. Run the full `invaders` workflow.
 
 ### 8. Aliens Crush Bunker Material
 

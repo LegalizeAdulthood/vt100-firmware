@@ -204,6 +204,8 @@ function(assert_mutable_state_layout EQUATE_FILE RAM_START RAM_TOP DATA_FLOOR)
         inv_level 1
         inv_saved_led_state 1
         inv_game_over 1
+        inv_game_over_timer 1
+        inv_return_blocked 1
         inv_attract_mode 1
         inv_level_timer 1
         inv_turret_death_timer 1
@@ -397,7 +399,7 @@ read_symbol("${INVADERS_AVO_SYMBOLS}" inv_move_alien INV_MOVE_ALIEN)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_update_aliens INV_UPDATE_ALIENS)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_update_turret INV_UPDATE_TURRET)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_draw_static_screen INV_DRAW_STATIC_SCREEN)
-read_symbol("${INVADERS_AVO_SYMBOLS}" inv_draw_attract_screen INV_DRAW_ATTRACT_SCREEN)
+read_symbol("${INVADERS_AVO_SYMBOLS}" inv_update_game_over INV_UPDATE_GAME_OVER)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_clear_gunner_leds INV_CLEAR_GUNNER_LEDS)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_clear_playfield INV_CLEAR_PLAYFIELD)
 read_symbol("${INVADERS_AVO_SYMBOLS}" inv_test_render_probe INV_TEST_RENDER_PROBE)
@@ -520,7 +522,7 @@ assert_address_in_window(inv_move_alien "${INV_MOVE_ALIEN}")
 assert_address_in_window(inv_update_aliens "${INV_UPDATE_ALIENS}")
 assert_address_in_window(inv_update_turret "${INV_UPDATE_TURRET}")
 assert_address_in_window(inv_draw_static_screen "${INV_DRAW_STATIC_SCREEN}")
-assert_address_in_window(inv_draw_attract_screen "${INV_DRAW_ATTRACT_SCREEN}")
+assert_address_in_window(inv_update_game_over "${INV_UPDATE_GAME_OVER}")
 assert_address_in_window(inv_clear_gunner_leds "${INV_CLEAR_GUNNER_LEDS}")
 assert_address_in_window(inv_clear_playfield "${INV_CLEAR_PLAYFIELD}")
 assert_address_in_window(inv_test_render_probe "${INV_TEST_RENDER_PROBE}")

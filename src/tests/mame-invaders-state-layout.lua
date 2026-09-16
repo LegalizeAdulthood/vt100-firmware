@@ -35,6 +35,8 @@ test.run(function()
         { "inv_level", 1 },
         { "inv_saved_led_state", 1 },
         { "inv_game_over", 1 },
+        { "inv_game_over_timer", 1 },
+        { "inv_return_blocked", 1 },
         { "inv_attract_mode", 1 },
         { "inv_level_timer", 1 },
         { "inv_turret_death_timer", 1 },
