@@ -41,6 +41,9 @@ local function make_demo_state_step()
     local inv_level_pause_frames = test.required_equate(equates, "inv_level_pause_frames")
     local inv_turret_death_timer = test.required_equate(equates, "inv_turret_death_timer")
     local inv_turret_top_row = test.required_equate(equates, "inv_turret_top_row")
+    local inv_turret_w = test.required_equate(equates, "inv_turret_w")
+    local inv_attr_normal = test.required_equate(equates, "inv_attr_normal")
+    local inv_attr_underline = test.required_equate(equates, "inv_attr_underline")
     local inv_alien_h = test.required_equate(equates, "inv_alien_h")
     local inv_high_score_dirty = test.required_equate(equates, "inv_high_score_dirty")
     local inv_high_initial_index = test.required_equate(equates, "inv_high_initial_index")
@@ -407,6 +410,17 @@ local function make_demo_state_step()
             cell(inv_ground_row, inv_play_left + inv_play_width - 1),
             sg("q"),
             description .. " ground right")
+        for row = 0, inv_screen_rows - 1 do
+            for column = 0, inv_screen_cols - 1 do
+                local expected = inv_attr_normal
+                if row == inv_turret_top_row + 1 and column > inv_turret_start_x
+                    and column < inv_turret_start_x + inv_turret_w - 1 then
+                    expected = inv_attr_underline
+                end
+                test.assert_eq(read_nibble(row_address(row) + column + 0x1000), expected,
+                    description .. " attribute at " .. tostring(row) .. "," .. tostring(column))
+            end
+        end
     end
 
     local function assert_overlay()
@@ -759,6 +773,19 @@ local function make_demo_state_step()
                         end
                         test.assert_eq(overlay_turret_moved and 1 or 0, 1, "autopilot moved behind prompt")
                         test.assert_eq(laser_shots(), 1, "autopilot fired the overlay shot")
+                        local exposed_underline = 0
+                        for column = 0, inv_screen_cols - 1 do
+                            if column <= inv_turret_start_x
+                                or column >= inv_turret_start_x + inv_turret_w - 1 then
+                                local attribute = read_nibble(row_address(inv_turret_top_row + 1)
+                                    + column + 0x1000)
+                                if attribute == inv_attr_underline then
+                                    exposed_underline = exposed_underline + 1
+                                end
+                            end
+                        end
+                        test.assert_between(exposed_underline, 1, inv_turret_w - 2,
+                            "demo underline outside the new turret before ENTER")
                         mutate_demo_state()
                         enter_stage("enter-key")
                     end
