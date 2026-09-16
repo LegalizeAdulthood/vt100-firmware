@@ -1383,8 +1383,10 @@ as CTest tests, and exercise the complete implementation with
 `cmake --workflow --preset invaders`. CTest entries should run CMake driver
 scripts from `src/tests`. For MAME-backed tests, those CMake scripts set the
 working directory to `<MAMEDir>`, run `mame.exe` against the staged ROMs, and
-pass the matching Lua script with `-autoboot_script`. MAME Lua test scripts and
-shared Lua helpers also live under `src/tests`.
+pass the matching Lua script with `-autoboot_script` or load its plugin for
+frame-driven tests. MAME Lua test scripts and shared Lua helpers also live under
+`src/tests`. Register MAME tests only when `MAME_COMMAND` is non-empty. Read
+equates from generated `.equ` files and labels from generated `.sym` files.
 
 The base ROM is space constrained. Invaders changes in `base.asm` must remain
 same-size trampoline replacements of existing bytes with calls into the AVO ROM.
@@ -1398,3 +1400,183 @@ Attract-mode demo work should add orchestration only where possible. Reuse
 `inv_update_turret`, `inv_update_laser`, `inv_draw_static_screen`,
 `inv_draw_high_score_table`, and the existing sprite/collision routines rather
 than creating parallel demo renderers.
+
+The remaining close-out slices continue after completed attract-mode slice 5.
+Remove each slice only when its implementation and verification are complete;
+do not renumber the remaining slices. Keep game state in byte-wide screen RAM
+and all new game code within the existing AVO ROM budget. Additional visual
+effects, a UFO siren, and other new gameplay features are outside this list.
+
+### 6. Invasion Ends The Game
+
+Add the missing real-game loss condition when a live alien's bottom row reaches
+the ground row. Use the same boundary as the existing demo check:
+`alien_y + inv_alien_h - 1 >= inv_ground_row`. Check the alien just updated by
+the shared formation routine, before later gameplay updates can move other
+objects or award points. Do not scan the full formation on every frame.
+
+Landing ends the entire game, regardless of remaining gunners; it is not an
+ordinary turret hit followed by a respawn. Clear the remaining-gunner LEDs,
+stop formation movement and firing, and erase active projectiles and the UFO.
+Preserve the final score and use the existing game-over and high-score paths.
+Keep demo landing on its existing restart path, without initials entry or NVR
+writes. Reuse the boundary calculation where practical rather than maintaining
+different real-game and demo definitions of landing.
+
+Extend the alien/enemy-fire MAME tests under `src/tests` to place a live alien
+just above the boundary, force a descent, and verify that landing ends the game
+exactly once with multiple gunners still available. Verify that an alien above
+the boundary does not end play, a dead alien cannot trigger landing, and a lone
+survivor still moves horizontally between descents. Check score preservation,
+projectile cleanup, stopped updates, and the existing demo landing restart.
+Run the complete `invaders` workflow, including stock-ROM regression tests.
+
+### 7. Complete The Game-Over Loop
+
+Introduce one real-game end sequence for final-turret death and invasion.
+Display a centered `GAME OVER` message over the stopped playfield for 90 refresh
+frames, and do not leave this presentation until any outstanding death sound
+has finished. Keep keyboard status output and interrupts running throughout;
+use state and timers rather than a blocking delay. Draw the message once using
+the existing renderer and clear projectiles without leaving trails.
+
+After the presentation, compare the final score with the high-score table once.
+A qualifying nonzero score enters the existing initials editor. A zero score
+or a score that does not qualify returns directly to the animated attract
+screen. Confirming initials saves once and then enters the same attract path.
+Use `inv_start_demo` and the shared initialization/rendering routines so both
+paths start a clean demo with the current high-score table and correct overlay
+clipping. Do not add a separate post-game renderer or duplicate the editor.
+
+SET-UP must still exit immediately from the presentation or initials entry.
+RETURN must not bypass required initials entry or accidentally start a new
+game using a key held during the transition. Once attract mode is ready, a
+fresh RETURN starts a clean game without a SET-UP round trip. Hide the initials
+cursor on every completion/cancellation path and preserve the existing rule
+that cancelling unconfirmed initials does not save that pending score.
+
+Add frame-driven MAME coverage for zero-score, nonqualifying, and qualifying
+game overs, plus the invasion path from slice 6. Assert presentation duration,
+completion of final-life sound, frozen gameplay, exactly one qualification/save
+attempt, and return to a moving demo. Exercise confirmation, cancellation,
+held/released RETURN, and starting another game. Update existing game-over
+tests to wait for the documented states without weakening their sound,
+persistence, cursor, or freeze assertions. Run the full `invaders` workflow.
+
+### 8. Aliens Crush Bunker Material
+
+When an alien moves into bunker rows, remove the bunker cells covered by its
+sprite rectangle from `inv_shield_cells_base` before drawing the alien. The
+collision representation and display must agree: an alien must not erase
+visible material while leaving an invisible obstacle for later projectiles.
+Use the existing alien rectangle convention, including padding cells, and the
+existing shield-address helpers. Handle both horizontal movement and descent.
+
+Remove only overlapped cells, preserving adjacent material, the existing bottom
+openings, and the per-column hit-point model for surviving cells. Crushed cells
+remain blank when later projectile hits redraw their column and when the next
+level preserves shield damage. Do not redraw a bunker over a live alien or
+restore crushed material when that alien moves away or dies. New-game and demo
+initialization still restore the original bunkers through `inv_reset_shields`.
+
+Extend the alien/shield MAME coverage with intact and partially damaged
+bunkers. Move aliens across a roof, body, opening, and bunker edge in both
+directions, then descend through them. Compare screen cells with collision
+state after the alien leaves; fire both projectile types through crushed gaps
+and at surviving material. Verify that column damage cannot resurrect a
+crushed cell, level changes retain destruction, and a new game restores the
+bunkers. Retain attract-overlay clipping coverage and run the full workflow.
+
+### 9. High-Score And Rollover Edge Cases
+
+Extend the existing high-score MAME tests beyond insertion into an empty table.
+Use deterministic tables containing ten distinct descending scores and
+different three-character initials. Cover insertion at the top, middle, and
+last position, eviction of the lowest entry, a nonqualifying score, and zero.
+Preserve the existing strict-comparison rule: equal scores remain ahead of the
+new entry, which may qualify below them if a lower score exists; a tie with a
+full table's lowest score does not qualify. Assert all ten score/initial pairs
+after each operation, including packing across NVR word boundaries.
+
+Exercise repeated insertion and confirmation, cancellation with SET-UP, and
+reload after saving. Compare the complete NVR image so terminal words 0-50 and
+unused words 76-99 remain unchanged. Run a second MAME process against the
+first process's private saved NVR file to verify persistence through an actual
+emulator restart, without substituting a freshly seeded file. Keep all state
+under the test build directory; never use the manual MAME NVR file.
+
+Explicitly test the existing four-digit displayed-score rollover after `9990`,
+including an award that crosses the boundary, and verify how the resulting
+score qualifies. Preserve rollover behavior in this slice rather than silently
+changing it to saturation or adding digits. Test zero/unused NVR entries,
+out-of-range score words, and stale initials associated with unused entries.
+Fix defects exposed by these cases within the existing score representation
+and storage format; do not add NVR metadata or change the format speculatively.
+
+Register any added fixtures through the existing CMake test driver and CTest,
+conditional on `MAME_COMMAND`. Run focused high-score/scoring tests and then
+`cmake --workflow --preset invaders`.
+
+### 10. Documentation Close-Out
+
+Reconcile `docs/invaders.md`, `docs/mame.md`, and `ReadMe.md` with the completed
+implementation and the authoritative CMake targets. Correct the manual
+Invaders staging table to describe the combined base ROM and character ROM
+under `vt102`, while retaining the four split images as physical-ROM outputs.
+Use the actual `run-invaders` command options, remove its stale `-window` claim,
+and repair direct test-driver examples to supply every required variable.
+Use `<MAMEDir>`, `<SourceDir>`, and `<BuildDir>`, not machine-specific paths.
+
+Replace already-completed "future" test descriptions and resolved open
+questions with current behavior. Document the game-over and bunker-overrun
+rules from the preceding slices, turret underline, score rollover, and the
+chosen terminal-exit behavior. State the physical AVO/expansion-ROM requirement
+and distinguish it from MAME's need to select `vt102`. Keep 50 Hz timing and
+physical-hardware acceptance explicitly pending until slice 11 resolves them;
+do not describe unperformed hardware checks as passing.
+
+Add a compact "How To Play" section to `ReadMe.md`: SET-UP then `i`/`I`, RETURN
+to start, arrows to move, Space to fire, SET-UP to exit, keyboard LEDs for lives,
+and initials editing/confirmation. Explain where manual MAME high scores are
+saved and that automated tests use isolated state. Link to the detailed MAME
+setup rather than duplicating its keyboard/UI instructions.
+
+Validate target names, ROM filenames, options, and example variables against
+`src/CMakeLists.txt` and `src/tests/run-mame-test.cmake`. Exercise repaired
+automated examples against the configured build, review local links and title
+casing, and run the `invaders` workflow. The manual launch example may be
+checked through its generated command without starting an unattended GUI.
+
+### 11. Physical-Hardware Acceptance And Timing Decision
+
+Add a reproducible manual acceptance checklist and results record to
+`docs/invaders.md`, recording the terminal/AVO configuration, ROM revision,
+refresh rate, checks performed, and any limitations. Perform the checks on a
+physical VT100 with the required expansion ROM and byte-wide screen RAM; MAME
+results do not substitute for this gate. Keep stock firmware and a backup of
+terminal settings available before the hardware trial.
+
+Check cold boot, SET-UP launch, attract play, repeated real games, invasion,
+game over with and without a qualifying score, initials correction and
+cancellation, and exit back to normal terminal operation. Include entry from
+80- and 132-column configurations. Confirm the documented 80-column return
+behavior, restored cursor/LED state, local typing, and serial receive/transmit
+after exit. Check simultaneous movement/fire, key release, and keyboard feel.
+
+Evaluate the turret underline and existing sprites on the CRT at practical
+brightness settings, heartbeat pacing, and death sound including the final
+life. Save multiple high scores, exit normally, power-cycle the terminal, and
+verify scores and initials while confirming ordinary terminal settings remain
+unchanged. These checks must use the real keyboard speaker and ER1400 rather
+than emulator approximations.
+
+Compare play at 50 and 60 Hz where available. Record the current refresh-based
+timing difference and obtain an explicit decision to accept it as a documented
+limitation or require compensation. Do not silently rescale gameplay timers;
+if compensation is requested, add a separately scoped implementation slice
+with pacing and regression tests before claiming timing acceptance.
+
+Record actual observations and fixes, rerunning the `invaders` workflow after
+any firmware change. Leave unavailable configurations or equipment marked as
+untested, and keep this slice pending until the hardware checks and timing
+decision are complete or the user explicitly accepts a documented limitation.
