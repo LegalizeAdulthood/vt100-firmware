@@ -20,8 +20,9 @@ The patched firmware requires AVO with byte-wide screen RAM at
 `8000h`-`9fffh`. Its base-ROM hooks call the expansion directly; there is no
 fallback for missing hardware. MAME tests use `vt102` because its `vt100`
 machine does not load that expansion ROM. This emulator workaround does not
-change the physical VT100 requirements. Physical-hardware acceptance and the
-50/60 Hz timing decision remain pending under
+change the physical VT100 requirements. Invaders targets 60 Hz operation;
+50 Hz support is outside this project's scope. Physical-hardware acceptance
+remains pending under
 [To Do: Test on Real Hardware](#to-do-test-on-real-hardware).
 
 The implementation is in [invaders-avo.asm](../src/invaders-avo.asm), with the
@@ -337,11 +338,11 @@ in two four-bit locations, `inv_frame_lo` and `inv_frame_hi`. It carries at 16,
 uses descending addresses, and wraps after 256 frames. Longer gameplay timers
 have their own state; they do not rely on a 16-bit global frame count.
 
-Timers use refresh frames without 50 Hz compensation. The same frame counts
-therefore take longer in wall-clock time on a 50 Hz terminal. Hardware pacing
-checks and the decision to accept this difference or add compensation remain
-pending under [To Do: Test on Real Hardware](#to-do-test-on-real-hardware);
-MAME regression results do not establish hardware acceptance.
+Timers use refresh frames and target 60 Hz operation. There is no 50 Hz
+compensation; adapting and testing gameplay for 50 Hz is outside this project's
+scope. Physical 60 Hz pacing checks remain pending under
+[To Do: Test on Real Hardware](#to-do-test-on-real-hardware); MAME regression
+results do not establish hardware acceptance.
 
 ## Main Game Loop
 
@@ -1476,8 +1477,8 @@ twenty MAME tests. The gate is:
   preserving terminal settings and unused words.
 
 No gate substitutes for physical checks of keyboard feel, CRT brightness,
-AVO attributes, speaker sound, ER1400 timing, or 50/60 Hz pacing. Those checks
-and the timing decision remain pending under
+AVO attributes, speaker sound, ER1400 timing, or 60 Hz gameplay pacing. Those
+checks remain pending under
 [To Do: Test on Real Hardware](#to-do-test-on-real-hardware).
 
 # Implementation
@@ -1513,8 +1514,9 @@ other new gameplay features remain outside the completed implementation scope.
 # To Do: Test on Real Hardware
 
 Physical-hardware acceptance is pending. Perform these checks on a physical
-VT100 with the required expansion ROM and byte-wide screen RAM; MAME results
-do not substitute for this gate.
+VT100 configured for 60 Hz, with the required expansion ROM and byte-wide
+screen RAM; MAME results do not substitute for this gate. Supporting or testing
+50 Hz operation is outside this project's scope.
 
 ## Preparing Physical ROMs
 
@@ -1696,14 +1698,9 @@ not provide the two ROM regions Invaders needs.
 - [ ] Save multiple high scores, exit normally, power-cycle the terminal,
   and verify scores and initials while confirming ordinary terminal settings
   remain unchanged. These checks must use the real ER1400.
-- [ ] Compare play at 50 and 60 Hz where available. Record the current
-  refresh-based timing difference and obtain an explicit decision to accept it
-  as a documented limitation or require compensation. Do not silently rescale
-  gameplay timers; if compensation is requested, add a separately scoped
-  implementation slice with pacing and regression tests before claiming
-  timing acceptance.
+- [ ] Evaluate gameplay pacing at 60 Hz and record any timing problems.
 
 Record actual observations and fixes, rerunning the `invaders` workflow after
 any firmware change. Leave unavailable configurations or equipment marked as
-untested, and keep this work pending until the hardware checks and timing
-decision are complete or the user explicitly accepts a documented limitation.
+untested, and keep this work pending until the 60 Hz hardware checks are
+complete or the user explicitly accepts a documented limitation.
