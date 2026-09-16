@@ -338,7 +338,8 @@ The shared play loop runs in this order:
 
 1. Handle a pending level reset; pause ordinary updates while its timer runs.
 2. Handle turret death or game over; pause ordinary updates during that state.
-3. Call `inv_update_aliens` to spawn one alien or move one live alien.
+3. Call `inv_update_aliens` to spawn one alien or move one live alien. In real
+   gameplay, end the game immediately if the moved alien has reached the ground.
 4. Update heartbeat, UFO, and enemy fire, including active missiles.
 5. Stop this frame if an enemy missile caused turret death or game over.
 6. In attract mode, synthesize the demo's movement and fire input.
@@ -950,8 +951,16 @@ updates LEDs. With gunners remaining, gameplay pauses for 55 frames before
 erasing the blast and respawning the turret at column 36. With none remaining,
 it enters game over immediately while allowing the death sound to finish.
 A qualifying score opens initials entry; otherwise the game remains stopped
-until SET-UP exits. There is no separate real-game landing-to-game-over check
-in the shared play loop; the demo has its own bottom-row restart condition.
+until SET-UP exits.
+
+After each formation update, real gameplay checks the last moved live alien
+with `inv_check_alien_landed`. Its bottom row reaching or passing the ground
+(`alien_y + inv_alien_h - 1 >= inv_ground_row`) ends the entire game before
+other objects move or award points. `inv_end_invasion` clears every remaining
+gunner and its LED, erases projectiles, silences the heartbeat, and enters the
+existing game-over path, which clears the UFO and handles the unchanged final
+score. There is no turret death or respawn on invasion. The demo uses the same
+landing check but keeps its pause-and-restart path without initials or NVR writes.
 
 ## UFO Update
 
@@ -1272,6 +1281,12 @@ entry through SET-UP, frame advancement, rendering after boot, static screen
 state, keyboard input, laser movement, collisions, missiles, and game-over
 behavior. Use direct scripts for ROM layout and memory layout probes.
 
+The alien and enemy-fire tests cover the invasion boundary, including a dead
+alien at ground level and a lone survivor moving horizontally above it. A
+forced descent ends the game exactly once despite multiple remaining gunners.
+They verify frozen movement and firing, erased projectiles and UFO, preserved
+scores, and both nonqualifying and qualifying high-score paths.
+
 The demo-state test watches screen-RAM writes throughout demo play and restarts
 so even transient writes into the overlay boxes fail. An autopilot-fired laser
 crosses all three rectangles, appears in the gaps, and leaves no trail. The
@@ -1406,30 +1421,6 @@ Remove each slice only when its implementation and verification are complete;
 do not renumber the remaining slices. Keep game state in byte-wide screen RAM
 and all new game code within the existing AVO ROM budget. Additional visual
 effects, a UFO siren, and other new gameplay features are outside this list.
-
-### 6. Invasion Ends The Game
-
-Add the missing real-game loss condition when a live alien's bottom row reaches
-the ground row. Use the same boundary as the existing demo check:
-`alien_y + inv_alien_h - 1 >= inv_ground_row`. Check the alien just updated by
-the shared formation routine, before later gameplay updates can move other
-objects or award points. Do not scan the full formation on every frame.
-
-Landing ends the entire game, regardless of remaining gunners; it is not an
-ordinary turret hit followed by a respawn. Clear the remaining-gunner LEDs,
-stop formation movement and firing, and erase active projectiles and the UFO.
-Preserve the final score and use the existing game-over and high-score paths.
-Keep demo landing on its existing restart path, without initials entry or NVR
-writes. Reuse the boundary calculation where practical rather than maintaining
-different real-game and demo definitions of landing.
-
-Extend the alien/enemy-fire MAME tests under `src/tests` to place a live alien
-just above the boundary, force a descent, and verify that landing ends the game
-exactly once with multiple gunners still available. Verify that an alien above
-the boundary does not end play, a dead alien cannot trigger landing, and a lone
-survivor still moves horizontally between descents. Check score preservation,
-projectile cleanup, stopped updates, and the existing demo landing restart.
-Run the complete `invaders` workflow, including stock-ROM regression tests.
 
 ### 7. Complete The Game-Over Loop
 

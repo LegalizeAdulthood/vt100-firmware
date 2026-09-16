@@ -9,6 +9,7 @@ local test = dofile(script_directory .. "/mame-test.lua")
 
 local M = {}
 local frame_subscription
+local game_over_tap
 
 local function make_enemy_fire_step()
     local binary_directory = test.required_env("VT100_INVADERS_BINARY_DIRECTORY")
@@ -25,6 +26,20 @@ local function make_enemy_fire_step()
     local inv_gunners = test.required_equate(equates, "inv_gunners")
     local inv_initial_gunners = test.required_equate(equates, "inv_initial_gunners")
     local inv_game_over = test.required_equate(equates, "inv_game_over")
+    local inv_ground_row = test.required_equate(equates, "inv_ground_row")
+    local inv_score0 = test.required_equate(equates, "inv_score0")
+    local inv_score1 = test.required_equate(equates, "inv_score1")
+    local inv_score2 = test.required_equate(equates, "inv_score2")
+    local inv_high_score_digit_base = test.required_equate(equates, "inv_high_score_digit_base")
+    local inv_high_score_digits = test.required_equate(equates, "inv_high_score_digits")
+    local inv_high_score_dirty = test.required_equate(equates, "inv_high_score_dirty")
+    local inv_high_score_slot = test.required_equate(equates, "inv_high_score_slot")
+    local inv_ufo_state = test.required_equate(equates, "inv_ufo_state")
+    local inv_ufo_state_active = test.required_equate(equates, "inv_ufo_state_active")
+    local inv_ufo_x = test.required_equate(equates, "inv_ufo_x")
+    local inv_ufo_row = test.required_equate(equates, "inv_ufo_row")
+    local inv_ufo_w = test.required_equate(equates, "inv_ufo_w")
+    local inv_ufo_h = test.required_equate(equates, "inv_ufo_h")
     local inv_turret_death_timer = test.required_equate(equates, "inv_turret_death_timer")
     local inv_turret_death_frames = test.required_equate(equates, "inv_turret_death_frames")
     local inv_turret_x_lo = test.required_equate(equates, "inv_turret_x_lo")
@@ -42,6 +57,8 @@ local function make_enemy_fire_step()
     local inv_alien_cols = test.required_equate(equates, "inv_alien_cols")
     local inv_alien_count = test.required_equate(equates, "inv_alien_count")
     local inv_alien_h = test.required_equate(equates, "inv_alien_h")
+    local inv_alien_reverse = test.required_equate(equates, "inv_alien_reverse")
+    local inv_alien_y_delta = test.required_equate(equates, "inv_alien_y_delta")
     local inv_alien_slot_w = test.required_equate(equates, "inv_alien_slot_w")
     local inv_alien_slot_h = test.required_equate(equates, "inv_alien_slot_h")
     local inv_alien_start_x = test.required_equate(equates, "inv_alien_start_x")
@@ -91,6 +108,12 @@ local function make_enemy_fire_step()
 
     local scan_i = 0x16
     local mem = test.program_space()
+    local game_over_events = 0
+    local inv_set_game_over = test.required_symbol(symbols, "inv_set_game_over")
+    game_over_tap = mem:install_read_tap(inv_set_game_over, inv_set_game_over,
+        "invaders-enemy-fire-game-over", function()
+            game_over_events = game_over_events + 1
+        end)
 
     local function read_u8(address)
         return mem:read_u8(address)
@@ -517,8 +540,92 @@ local function make_enemy_fire_step()
                 if frame - stage_frame >= 12 then
                     test.assert_eq(alien_last(), frozen_alien_last, "aliens stopped by game over")
                     test.assert_eq(read_u8(inv_game_over), 0xff, "game over remains set")
-                    test.pass()
+                    test.assert_eq(game_over_events, 1, "final turret hit ends game once")
+
+                    -- Rearm a real game already beyond the landing boundary. Keep its
+                    -- score below a full table so cleanup can be seen on the playfield.
+                    write_u8(inv_game_over, 0)
+                    write_u8(inv_gunners, inv_initial_gunners)
+                    write_u8(led_state, read_u8(led_state) | 0x0f)
+                    write_u8(inv_alien_reverse, 0)
+                    write_u8(inv_alien_y_delta, 0)
+                    prepare_single_shooter(0, 25, inv_ground_row - inv_alien_h + 2)
+                    write_u8(inv_score0, 3)
+                    write_u8(inv_score1, 2)
+                    write_u8(inv_score2, 1)
+                    for offset = 0, inv_high_score_digits - 1 do
+                        write_u8(inv_high_score_digit_base + offset, 9)
+                    end
+                    force_next_enemy_fire()
+                    for slot = 0, inv_missile_count - 1 do
+                        write_u8(inv_missile_active_base + slot, 0xff)
+                        write_u8(inv_missile_row_base + slot, 5)
+                        write_u8(inv_missile_col_base + slot, 74 + slot)
+                        write_cell(5, 74 + slot, inv_missile_glyph)
+                    end
+                    write_u8(inv_missile_active_count, inv_missile_count)
+                    active_laser_row, active_laser_col = seed_active_laser()
+                    write_u8(inv_ufo_state, inv_ufo_state_active)
+                    write_u8(inv_ufo_x, 25)
+                    for row = inv_ufo_row, inv_ufo_row + inv_ufo_h - 1 do
+                        for column = 25, 25 + inv_ufo_w - 1 do
+                            write_cell(row, column, sg("a"))
+                        end
+                    end
+                    enter_stage("wait-invasion-cleanup")
                     return
+                end
+                return
+            end
+
+            if stage == "wait-invasion-cleanup" then
+                if frame - stage_frame >= 12 then
+                    test.assert_eq(read_u8(inv_game_over), 0xff, "invasion ends game")
+                    test.assert_eq(game_over_events, 2, "invasion ends game once")
+                    test.assert_eq(read_u8(inv_gunners), 0, "invasion clears all gunners")
+                    test.assert_eq(led_bits(), 0, "invasion clears LEDs")
+                    test.assert_eq(read_u8(inv_turret_death_timer), 0, "invasion skips respawn")
+                    test.assert_eq(read_u8(inv_laser_active), 0, "invasion clears laser")
+                    test.assert_eq(cell(active_laser_row, active_laser_col), 0, "invasion erases laser")
+                    assert_all_missiles_inactive()
+                    for slot = 0, inv_missile_count - 1 do
+                        test.assert_eq(cell(5, 74 + slot), 0, "invasion erases missile")
+                    end
+                    test.assert_eq(read_u8(inv_missile_tick_timer), 0, "invasion stops missile updates")
+                    test.assert_eq(read_u8(inv_missile_fire_timer), 0, "invasion stops firing updates")
+                    test.assert_eq(read_u8(inv_ufo_state), 0, "invasion clears UFO")
+                    for row = inv_ufo_row, inv_ufo_row + inv_ufo_h - 1 do
+                        for column = 25, 25 + inv_ufo_w - 1 do
+                            test.assert_eq(cell(row, column), 0, "invasion erases UFO")
+                        end
+                    end
+                    test.assert_eq(read_u8(inv_score0), 3, "invasion preserves tens")
+                    test.assert_eq(read_u8(inv_score1), 2, "invasion preserves hundreds")
+                    test.assert_eq(read_u8(inv_score2), 1, "invasion preserves thousands")
+                    test.assert_eq(read_u8(inv_high_score_dirty), 0, "invasion skips nonqualifying score")
+
+                    -- Repeat with an empty table to exercise the existing initials path.
+                    for offset = 0, inv_high_score_digits - 1 do
+                        write_u8(inv_high_score_digit_base + offset, 0)
+                    end
+                    write_u8(inv_game_over, 0)
+                    write_u8(inv_gunners, inv_initial_gunners)
+                    enter_stage("wait-invasion-high-score")
+                end
+                return
+            end
+
+            if stage == "wait-invasion-high-score" then
+                if frame - stage_frame >= 12 then
+                    test.assert_eq(read_u8(inv_game_over), 0xff, "qualifying invasion ends game")
+                    test.assert_eq(game_over_events, 3, "qualifying invasion ends game once")
+                    test.assert_eq(read_u8(inv_high_score_dirty), 0xff, "invasion prompts for initials")
+                    test.assert_eq(read_u8(inv_high_score_slot), 0, "invasion inserts first score")
+                    test.assert_eq(read_u8(inv_high_score_digit_base), 3, "inserted score tens")
+                    test.assert_eq(read_u8(inv_high_score_digit_base + 1), 2, "inserted score hundreds")
+                    test.assert_eq(read_u8(inv_high_score_digit_base + 2), 1, "inserted score thousands")
+                    test.assert_eq(read_u8(inv_high_score_digit_base + 3), 0, "score inserted only once")
+                    test.pass()
                 end
                 return
             end
