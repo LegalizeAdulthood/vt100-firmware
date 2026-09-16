@@ -1,0 +1,8 @@
+{
+  "plugin": {
+    "name": "vt100invadersgameover",
+    "description": "VT100 Invaders game-over loop test",
+    "type": "plugin",
+    "start": "false"
+  }
+}

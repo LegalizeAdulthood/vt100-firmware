@@ -60,6 +60,9 @@ inv_missile_empty_delay equ     4
 inv_missile_glyph       equ     18h
 inv_missile_shoot_order_count equ 76
 inv_turret_death_frames equ     55
+inv_game_over_frames    equ     90
+inv_game_over_row       equ     11
+inv_game_over_col       equ     34
 inv_ufo_row             equ     0
 inv_ufo_w               equ     7
 inv_ufo_h               equ     2
@@ -208,7 +211,9 @@ inv_gunners             equ     inv_score2-1
 inv_level               equ     inv_gunners-1
 inv_saved_led_state     equ     inv_level-1
 inv_game_over           equ     inv_saved_led_state-1
-inv_attract_mode        equ     inv_game_over-1
+inv_game_over_timer     equ     inv_game_over-1
+inv_return_blocked      equ     inv_game_over_timer-1
+inv_attract_mode        equ     inv_return_blocked-1
 inv_level_timer         equ     inv_attract_mode-1
 inv_turret_death_timer  equ     inv_level_timer-1
 inv_missile_tick_timer  equ     inv_turret_death_timer-1
@@ -349,8 +354,13 @@ inv_enter_impl:
         call    inv_disable_game_cursor
         call    inv_save_leds
         call    inv_load_high_scores
+        xra     a
+        sta     inv_return_blocked
         jmp     inv_start_demo
 ;
+inv_return_to_demo:
+        mvi     a,0ffh
+        sta     inv_return_blocked
 inv_start_demo:
         call    inv_reset_for_attract
         call    inv_init_play_state
@@ -382,6 +392,7 @@ inv_reset_for_attract:
         sta     inv_score1
         sta     inv_score2
         sta     inv_game_over
+        sta     inv_game_over_timer
         sta     inv_attract_mode
         sta     inv_level_timer
         sta     inv_high_score_dirty
@@ -433,6 +444,7 @@ inv_idle_impl:
         ret
 ;
 inv_read_keys:
+        call    inv_check_return_release
         xra     a
         sta     inv_left_pressed
         sta     inv_right_pressed
@@ -517,8 +529,36 @@ inv_return_pressed:
         lda     inv_attract_mode
         ora     a
         jz      inv_next_key
+        lda     inv_return_blocked
+        ora     a
+        jnz     inv_next_key
         call    inv_start_game
         jmp     clear_keyboard
+;
+; Only a complete scan without either RETURN code releases the start latch.
+;
+inv_check_return_release:
+        lda     key_flags
+        ani     key_flag_eos
+        rz
+        lda     key_flags
+        ani     7
+        jz      inv_return_released
+        mov     b,a
+        lxi     h,key_silo
+inv_find_return:
+        mov     a,m
+        cpi     inv_scan_return_a
+        rz
+        cpi     inv_scan_return_b
+        rz
+        inx     h
+        dcr     b
+        jnz     inv_find_return
+inv_return_released:
+        xra     a
+        sta     inv_return_blocked
+        ret
 ;
 inv_setup_pressed:
         call    inv_exit
@@ -561,6 +601,9 @@ inv_frame:
         lda     inv_active
         cpi     inv_active_value
         rnz
+        lda     inv_game_over
+        ora     a
+        jnz     inv_update_game_over
 inv_play_frame:
         call    inv_update_level_reset
         rnz
@@ -2289,16 +2332,43 @@ inv_end_invasion:
         xra     a
         sta     inv_gunners
         call    inv_update_gunner_leds
-        call    inv_clear_laser
-        call    inv_clear_active_missiles
         call    inv_reset_sound
 inv_set_game_over:
         mvi     a,0ffh
         sta     inv_game_over
         xra     a
         sta     inv_turret_death_timer
-        call    inv_maybe_add_high_score
+        call    inv_clear_laser
+        call    inv_clear_active_missiles
         call    inv_clear_ufo
+        lda     inv_attract_mode
+        ora     a
+        rnz
+        mvi     a,inv_game_over_frames
+        sta     inv_game_over_timer
+        mvi     b,inv_game_over_row
+        mvi     c,inv_game_over_col
+        lxi     h,inv_game_over_text
+        jmp     inv_puts_glyphs
+;
+inv_update_game_over:
+        lda     inv_high_score_dirty
+        ora     a
+        rnz                     ; qualification has already opened the editor
+        lda     inv_game_over_timer
+        ora     a
+        jz      inv_game_over_sound
+        dcr     a
+        sta     inv_game_over_timer
+        rnz
+inv_game_over_sound:
+        lda     inv_death_sound_timer
+        ora     a
+        rnz
+        call    inv_maybe_add_high_score
+        lda     inv_high_score_dirty
+        ora     a
+        jz      inv_return_to_demo
         ret
 ;
 inv_update_heartbeat:
@@ -2790,14 +2860,7 @@ inv_store_initial_char_at:
 inv_finish_high_initials:
         call    inv_finish_high_initial_cursor
         call    inv_store_high_scores
-        xra     a
-        sta     inv_high_score_dirty
-        sta     inv_high_initial_index
-        sta     inv_high_initial_used
-        call    inv_draw_attract_screen
-        mvi     a,0ffh
-        sta     inv_attract_mode
-        ret
+        jmp     inv_return_to_demo
 ;
 inv_clear_high_score_initials:
         call    inv_high_initial_lo_addr
@@ -3787,11 +3850,6 @@ inv_draw_static_screen:
         call    inv_update_gunner_leds
         ret
 ;
-inv_draw_attract_screen:
-        call    inv_clear_playfield
-        call    inv_clear_gunner_leds
-        jmp     inv_draw_attract_overlay
-;
 inv_draw_attract_overlay:
         mvi     b,inv_attract_title_row-1
         mvi     c,inv_attract_title_col-1
@@ -4330,6 +4388,8 @@ inv_turret_explosion_top:
         db      '*','a','a','a','a','a','*',0
 inv_turret_explosion_bottom:
         db      'a','*','a','*','a','*','a',0
+inv_game_over_text:
+        db      ' GAME OVER ',0
 ;
 inv_ufo_top:
         db      '_','l','q','q','q','k','_',0
@@ -4358,6 +4418,8 @@ inv_exit_impl:
         sta     inv_right_pressed
         sta     inv_fire_pressed
         sta     inv_game_over
+        sta     inv_game_over_timer
+        sta     inv_return_blocked
         sta     inv_attract_mode
         sta     inv_level_timer
         sta     inv_turret_death_timer

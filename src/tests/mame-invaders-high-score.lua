@@ -271,6 +271,7 @@ local function make_high_score_step()
     local setup_action_index = 1
     local setup_action_repeats = 0
     local initial_brightness
+    local final_cursor_visible_frame
 
     local function enter_stage(next_stage)
         stage = next_stage
@@ -551,12 +552,20 @@ local function make_high_score_step()
             end
 
             if stage == "wait-final-life-cursor" then
-                if frame - stage_frame < 12 then
+                if read_u8(inv_high_score_dirty) == 0 then
+                    if frame - stage_frame > 120 then
+                        fail_timeout("final life presentation")
+                    end
                     inject_key(inv_scan_space, 0)
                     return
                 end
                 if read_u8(inv_high_score_dirty) ~= 0 and read_u8(curs_char_rend) ~= 0
                     and read_u8(cursor_visible) ~= 0 then
+                    -- Let both interlaced display fields catch up with the RAM cursor.
+                    final_cursor_visible_frame = final_cursor_visible_frame or frame
+                    if frame - final_cursor_visible_frame < 2 then
+                        return
+                    end
                     test.assert_eq(read_u8(inv_high_initial_index), 0, "final life initial index")
                     test.assert_eq(read_u8(inv_high_initial_used), 0, "final life initials empty")
                     assert_initial_cursor(0, "final life initials")
@@ -570,6 +579,7 @@ local function make_high_score_step()
                     enter_stage("release-fire-key")
                     return
                 end
+                final_cursor_visible_frame = nil
                 if frame - stage_frame > 120 then
                     fail_timeout("final life initial cursor")
                 end
