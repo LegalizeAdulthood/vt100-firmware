@@ -11,6 +11,8 @@ VT100 and Invaders ROMs are built separately from shared base firmware using
 [asm8080](https://github.com/begoon/asm8080); building the stock ROMs does not
 enable the game.
 
+![VT100 Invaders gameplay preview](invaders.gif)
+
 ## Requirements
 
 - CMake 3.25 or newer, required by the version 6 presets and workflow presets.
