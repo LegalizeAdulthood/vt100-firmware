@@ -1178,6 +1178,14 @@ The `invaders-rom` target assembles and checksum-patches the 8 KiB
 assembles `invaders-avo.bin` as a full 8 KiB expansion image. MAME's `vt102`
 machine uses the combined base image, not those four split files.
 
+asm8080 assembles absolute images and does not provide object files, exported
+symbols, external references, or a linker. The base ROM and AVO ROM therefore
+cannot share symbols directly across separate assembler runs. The build first
+assembles `invaders.asm`, then converts the generated `invaders.lst` labels and
+equates into `invaders-base.inc` using `lst_to_asm_equ.cmake`. `invaders-avo.asm`
+includes that generated file so AVO code can call base-ROM routines and refer to
+base-ROM RAM locations using addresses from the exact base ROM build.
+
 The `mame-invaders` target builds the ROMs and stages this manual ROM set:
 
 | Input File | Destination Under `<MAMEDir>\roms` |
